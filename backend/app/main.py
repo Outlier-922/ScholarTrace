@@ -1,0 +1,320 @@
+"""FastAPI entry point for ScholarTrace's first development milestone."""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import importlib
+import json
+import logging
+import multiprocessing
+import os
+import sqlite3
+import threading
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
+
+import pymupdf as fitz
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+
+from . import __version__, store
+from .parser import parse_document
+
+logger = logging.getLogger(__name__)
+_upload_lock = threading.Lock()
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    store.init_db()
+    store.cleanup_deleted_files()
+    workers = max(1, min(4, int(os.environ.get("SCHOLARTRACE_PARSE_WORKERS", "2"))))
+    # PyMuPDF must not run concurrently in multiple threads. Each parse worker
+    # has its own interpreter/native state; SQLite remains shared via WAL.
+    executor = ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn"))
+    app.state.parse_workers = workers
+    app.state.pool_lock = threading.Lock()
+    app.state.parse_executor = executor
+    for document_id in store.resumable_documents():
+        _submit_parse(app, document_id)
+    yield
+    app.state.parse_executor.shutdown(wait=True, cancel_futures=True)
+
+
+def _submit_parse(application: FastAPI, document_id: str) -> bool:
+    try:
+        with application.state.pool_lock:
+            try:
+                future = application.state.parse_executor.submit(parse_document, document_id)
+            except BrokenProcessPool:
+                # The old pool can never accept work again after a native crash.
+                # Replace it once; original uploads remain available for retry.
+                application.state.parse_executor.shutdown(wait=False, cancel_futures=True)
+                application.state.parse_executor = ProcessPoolExecutor(
+                    max_workers=application.state.parse_workers,
+                    mp_context=multiprocessing.get_context("spawn"))
+                future = application.state.parse_executor.submit(parse_document, document_id)
+    except Exception as exc:
+        logger.error("Cannot schedule PDF job %s: %s", document_id, type(exc).__name__)
+        document = store.get_document(document_id)
+        if document:
+            message = "暂时无法启动解析进程；原 PDF 已保留，可稍后重试。"
+            store.update_document(document_id, status="failed", error=message)
+            store.set_run_status(document["parse_run_id"], "failed")
+            store.update_job(document["job_id"], "failed", message, error=type(exc).__name__)
+        return False
+
+    def completed(result):
+        if result.cancelled():
+            return  # A queued job remains resumable after server shutdown.
+        error = result.exception()
+        document = store.get_document(document_id)
+        if error is not None and document:
+            logger.error("PDF worker stopped for %s: %s", document_id, type(error).__name__)
+            message = "解析进程异常退出；可重试任务，若持续失败请检查文件与日志。"
+            store.update_document(document_id, status="failed", error=message)
+            store.set_run_status(document["parse_run_id"], "failed")
+            store.update_job(document["job_id"], "failed", message, error=type(error).__name__)
+
+    future.add_done_callback(completed)
+    return True
+
+
+app = FastAPI(title="ScholarTrace · 研迹", version=__version__, lifespan=lifespan,
+              description="版本化文献与可定位原文证据。第一阶段：本地开发版。")
+origins = os.environ.get("SCHOLARTRACE_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173")
+app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in origins.split(",") if o.strip()],
+                   allow_credentials=False, allow_methods=["GET", "POST", "PATCH", "DELETE"],
+                   allow_headers=["Content-Type", "Last-Event-ID"])
+
+
+@app.get("/api/health")
+def health() -> dict[str, Any]:
+    return {"status": "ok", "version": __version__, "edition": "local-development",
+            "stage": "source-grounded-foundation",
+            "model_configured": all(os.environ.get(key, "").strip()
+                                    for key in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL")),
+            "capabilities": {"pdf_upload": True, "native_pdf_parsing": True, "source_anchors": True,
+                             "content_dedup_baseline": True, "page_checkpoint": True,
+                             "ocr": False, "formula_latex": False, "semantic_tables": False,
+                             "citation_graph": False, "full_translation": False,
+                             "multi_user_auth": False}}
+
+
+@app.get("/api/stats")
+def stats() -> dict[str, int]:
+    return store.stats()
+
+
+@app.get("/api/documents")
+def documents() -> dict[str, Any]:
+    return {"items": store.list_documents()}
+
+
+def _require_document(document_id: str) -> dict[str, Any]:
+    document = store.get_document(document_id)
+    if not document:
+        raise HTTPException(404, "文献不存在或已删除")
+    return document
+
+
+async def _accept_upload(upload: UploadFile, request: Request) -> dict[str, Any]:
+    filename = (upload.filename or "document.pdf").replace("\\", "/").rsplit("/", 1)[-1][:255]
+    filename = "".join(character for character in filename if ord(character) >= 32)
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(422, "仅支持 PDF 文件")
+    max_bytes = max(1, int(os.environ.get("SCHOLARTRACE_MAX_UPLOAD_MB", "100"))) * 1024 * 1024
+    max_pages = max(1, int(os.environ.get("SCHOLARTRACE_MAX_PAGES", "1500")))
+    path = store.data_dir() / "uploads" / f"{store.new_id('asset')}.pdf"
+    total, digest, first_chunk = 0, hashlib.sha256(), b""
+    persisted_document_id = None
+    try:
+        with path.open("xb") as target:
+            while chunk := await upload.read(1024 * 1024):
+                if not first_chunk:
+                    first_chunk = chunk[:1024]
+                total += len(chunk)
+                if total > max_bytes:
+                    raise HTTPException(413, f"文件超过 {max_bytes // (1024 * 1024)} MB 限制")
+                digest.update(chunk)
+                target.write(chunk)
+        if not total or not first_chunk.lstrip().startswith(b"%PDF-"):
+            raise HTTPException(422, "文件不是有效的 PDF")
+        try:
+            with fitz.open(path) as pdf:
+                if pdf.needs_pass:
+                    raise HTTPException(422, "暂不支持加密 PDF，请先提供可读取的版本")
+                page_count = len(pdf)
+                if page_count == 0:
+                    raise HTTPException(422, "PDF 没有可读取的页面")
+                if page_count > max_pages:
+                    raise HTTPException(413, f"PDF 超过 {max_pages} 页限制")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(422, "PDF 损坏或无法读取") from exc
+        # Serialize the small hash-check/insert window; file I/O and parsing are
+        # outside this lock. Unique SHA256 also protects cross-process races.
+        with _upload_lock:
+            previous = store.find_by_hash(digest.hexdigest())
+            if previous:
+                path.unlink(missing_ok=True)
+                return {**previous, "duplicate_of": previous["id"], "duplicate_kind": "exact_file",
+                        "version_recommendation": "该文件已存在，已复用原有解析结果。", "upload_outcome": "reused"}
+            try:
+                document = store.create_document(filename, str(path.resolve()), digest.hexdigest(), page_count)
+                persisted_document_id = document["id"]
+            except sqlite3.IntegrityError:
+                previous = store.find_by_hash(digest.hexdigest())
+                if not previous:
+                    raise
+                path.unlink(missing_ok=True)
+                return {**previous, "duplicate_of": previous["id"], "duplicate_kind": "exact_file",
+                        "version_recommendation": "该文件已存在，已复用原有解析结果。", "upload_outcome": "reused"}
+        if not _submit_parse(request.app, document["id"]):
+            raise HTTPException(503, {"message": "解析服务暂不可用，原 PDF 已保留，请重试该任务。",
+                                      "document_id": document["id"]})
+        return {**document, "upload_outcome": "created"}
+    except Exception:
+        if persisted_document_id is None:
+            path.unlink(missing_ok=True)
+        raise
+    finally:
+        await upload.close()
+
+
+@app.post("/api/documents", status_code=201)
+async def upload_documents(request: Request, files: list[UploadFile] = File(...)) -> dict[str, Any]:
+    if len(files) > 20:
+        for upload in files:
+            await upload.close()
+        raise HTTPException(422, "每批最多上传 20 个 PDF")
+    items, errors = [], []
+    for upload in files:
+        try:
+            items.append(await _accept_upload(upload, request))
+        except HTTPException as exc:
+            errors.append({"filename": upload.filename, "status": exc.status_code, "message": exc.detail})
+    if not items and errors:
+        raise HTTPException(errors[0]["status"], {"message": errors[0]["message"], "errors": errors})
+    return {"items": items, "errors": errors}
+
+
+@app.get("/api/documents/{document_id}")
+def document_detail(document_id: str) -> dict[str, Any]:
+    return _require_document(document_id)
+
+
+class DocumentPatch(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    authors: list[str] | None = None
+
+
+@app.patch("/api/documents/{document_id}")
+def update_document(document_id: str, patch: DocumentPatch) -> dict[str, Any]:
+    document = _require_document(document_id)
+    if document["status"] in {"queued", "processing"}:
+        raise HTTPException(409, "请等待解析完成后修改元数据")
+    values = patch.model_dump(exclude_none=True)
+    if "title" in values:
+        values["title"] = values["title"].strip()
+        if not values["title"]:
+            raise HTTPException(422, "标题不能为空")
+    if "authors" in values:
+        if len(values["authors"]) > 200 or any(len(author) > 300 for author in values["authors"]):
+            raise HTTPException(422, "作者信息过长")
+        values["authors"] = [author.strip() for author in values["authors"] if author.strip()]
+    store.update_document(document_id, **values)
+    return _require_document(document_id)
+
+
+@app.delete("/api/documents/{document_id}")
+def remove_document(document_id: str) -> dict[str, Any]:
+    _require_document(document_id)
+    if not store.delete_document(document_id):
+        raise HTTPException(404, "文献不存在")
+    return {"deleted": True, "document_id": document_id}
+
+
+@app.get("/api/documents/{document_id}/structure")
+def document_structure(document_id: str, page: int | None = Query(default=None, ge=1)) -> dict[str, Any]:
+    document = _require_document(document_id)
+    if page is not None and page > document["page_count"]:
+        raise HTTPException(404, "页码超出文档范围")
+    structure = store.get_structure(document_id, page=page)
+    if structure is None:
+        raise HTTPException(404, "文献不存在或已删除")
+    return structure
+
+
+@app.get("/api/documents/{document_id}/pdf")
+def document_pdf(document_id: str) -> FileResponse:
+    document = store.get_internal_document(document_id)
+    if not document:
+        raise HTTPException(404, "文献不存在或已删除")
+    path = Path(document["file_path"]).resolve()
+    if not path.is_relative_to((store.data_dir() / "uploads").resolve()) or not path.is_file():
+        raise HTTPException(404, "原始 PDF 不可用")
+    return FileResponse(path, media_type="application/pdf", filename=document["filename"],
+                        content_disposition_type="inline")
+
+
+@app.get("/api/jobs/{job_id}")
+def job_detail(job_id: str) -> dict[str, Any]:
+    job = store.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "任务不存在")
+    return job
+
+
+@app.get("/api/jobs/{job_id}/events")
+async def job_events(job_id: str, request: Request) -> StreamingResponse:
+    if not store.get_job(job_id):
+        raise HTTPException(404, "任务不存在")
+
+    async def events():
+        previous = None
+        while not await request.is_disconnected():
+            job = store.get_job(job_id)
+            if job is None:
+                yield "event: deleted\ndata: {}\n\n"
+                break
+            serialized = json.dumps(job, ensure_ascii=False)
+            if serialized != previous:
+                yield f"event: progress\ndata: {serialized}\n\n"
+                previous = serialized
+            if job["status"] in {"ready", "partial", "failed"}:
+                break
+            await asyncio.sleep(.5)
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/api/documents/{document_id}/retry")
+def retry_document(document_id: str, request: Request) -> dict[str, Any]:
+    document = _require_document(document_id)
+    if document["status"] != "failed":
+        raise HTTPException(409, "仅失败任务可以重试；等待 OCR 的页面需要后续 OCR 模块")
+    store.update_document(document_id, status="queued", error=None)
+    store.update_job(document["job_id"], "queued", "等待重试")
+    if not _submit_parse(request.app, document_id):
+        raise HTTPException(503, "解析进程暂不可用，原 PDF 已保留，请稍后重试")
+    return _require_document(document_id)
+
+
+try:
+    qa = importlib.import_module(f"{__package__}.qa")
+except ModuleNotFoundError as exc:
+    if exc.name != f"{__package__}.qa":
+        raise
+else:
+    app.include_router(qa.router)
