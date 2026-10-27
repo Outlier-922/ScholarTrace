@@ -40,6 +40,7 @@ async def lifespan(app: FastAPI):
     translation.resume_jobs()
     literature.start()
     graph.repo.init_db()
+    studio.repo.init_db()
     store.cleanup_deleted_files()
     workers = max(1, min(4, int(os.environ.get("SCHOLARTRACE_PARSE_WORKERS", "2"))))
     # PyMuPDF must not run concurrently in multiple threads. Each parse worker
@@ -112,7 +113,7 @@ def health() -> dict[str, Any]:
     ocr_status = ocr.runtime_status()
     embedding_status = semantic.runtime_status()
     return {"status": "ok", "version": __version__, "edition": "local-development",
-            "stage": "citation-graph-and-outline",
+            "stage": "writing-and-plotting",
             "model_configured": all(os.environ.get(key, "").strip()
                                     for key in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL")),
             "capabilities": {"pdf_upload": True, "native_pdf_parsing": True, "source_anchors": True,
@@ -124,6 +125,7 @@ def health() -> dict[str, Any]:
                              "structured_tables": importlib.util.find_spec(f"{__package__}.tables") is not None,
                              "formula_latex": False, "semantic_tables": False,
                              "citation_graph": True, "evidence_outline": True, "full_translation": False,
+                             "writing_plans": True, "csv_plotting": True, "architecture_diagrams": True,
                              "multi_user_auth": False, "comparison_matrix": True,
                              "citation_navigation": True, "translation": True,
                              "literature_search": True, "arxiv_import": True, "topic_tracking": True},
@@ -267,6 +269,7 @@ def remove_document(document_id: str) -> dict[str, Any]:
     research_store.purge_document(document_id)
     literature.repo.purge_document(document_id)
     graph.repo.purge_document(document_id)
+    studio.repo.purge_document(document_id)
     return {"deleted": True, "document_id": document_id}
 
 
@@ -378,9 +381,10 @@ except ModuleNotFoundError as exc:
 else:
     app.include_router(qa.router)
 
-from . import comparison, reading, research_store, translation, literature, graph
+from . import comparison, reading, research_store, translation, literature, graph, studio
 app.include_router(comparison.router)
 app.include_router(reading.router)
 app.include_router(translation.router)
 app.include_router(literature.router)
 app.include_router(graph.router)
+app.include_router(studio.router)
