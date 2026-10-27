@@ -15,6 +15,7 @@ export interface ResearchDocument {
   sha256: string;
   duplicate_of?: string | null;
   duplicate_kind?: string | null;
+  upload_outcome?: 'reused' | 'created';
   version_recommendation?: string | null;
   warnings: string[];
   pdf_url: string;

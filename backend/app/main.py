@@ -38,6 +38,7 @@ async def lifespan(app: FastAPI):
     store.init_db()
     research_store.init_db()
     translation.resume_jobs()
+    literature.start()
     store.cleanup_deleted_files()
     workers = max(1, min(4, int(os.environ.get("SCHOLARTRACE_PARSE_WORKERS", "2"))))
     # PyMuPDF must not run concurrently in multiple threads. Each parse worker
@@ -50,6 +51,7 @@ async def lifespan(app: FastAPI):
         _submit_parse(app, document_id)
     yield
     await translation.shutdown()
+    await literature.shutdown()
     app.state.parse_executor.shutdown(wait=True, cancel_futures=True)
 
 
@@ -109,7 +111,7 @@ def health() -> dict[str, Any]:
     ocr_status = ocr.runtime_status()
     embedding_status = semantic.runtime_status()
     return {"status": "ok", "version": __version__, "edition": "local-development",
-            "stage": "comparison-and-linked-reading",
+            "stage": "literature-discovery",
             "model_configured": all(os.environ.get(key, "").strip()
                                     for key in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL")),
             "capabilities": {"pdf_upload": True, "native_pdf_parsing": True, "source_anchors": True,
@@ -122,7 +124,8 @@ def health() -> dict[str, Any]:
                              "formula_latex": False, "semantic_tables": False,
                              "citation_graph": False, "full_translation": False,
                              "multi_user_auth": False, "comparison_matrix": True,
-                             "citation_navigation": True, "translation": True},
+                             "citation_navigation": True, "translation": True,
+                             "literature_search": True, "arxiv_import": True, "topic_tracking": True},
             "ocr_status": {key: value for key, value in ocr_status.items() if key != "model_dir"},
             "embedding_status": embedding_status}
 
@@ -261,6 +264,7 @@ def remove_document(document_id: str) -> dict[str, Any]:
         raise HTTPException(404, "文献不存在")
     semantic.purge_document(document_id)
     research_store.purge_document(document_id)
+    literature.repo.purge_document(document_id)
     return {"deleted": True, "document_id": document_id}
 
 
@@ -372,7 +376,8 @@ except ModuleNotFoundError as exc:
 else:
     app.include_router(qa.router)
 
-from . import comparison, reading, research_store, translation
+from . import comparison, reading, research_store, translation, literature
 app.include_router(comparison.router)
 app.include_router(reading.router)
 app.include_router(translation.router)
+app.include_router(literature.router)

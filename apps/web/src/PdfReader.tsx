@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, FileText, Layers, Link2, LoaderCircle, Minus, Plus, ScanLine, Target, TextSelect } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, FileText, Layers, Link2, LoaderCircle, Minus, Plus, ScanLine, Search, Target, TextSelect } from 'lucide-react';
 import { getDocument, GlobalWorkerOptions, TextLayer } from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -27,9 +27,10 @@ interface Props {
   ocrReady?: boolean;
   onRequestReprocess?: () => void;
   modelConfigured?: boolean;
+  onFindReference?: (text: string) => void;
 }
 
-export default function PdfReader({ document, structure, page, onPage, selectedBlock, onSelectBlock, ocrReady = false, onRequestReprocess, modelConfigured = false }: Props) {
+export default function PdfReader({ document, structure, page, onPage, selectedBlock, onSelectBlock, ocrReady = false, onRequestReprocess, modelConfigured = false, onFindReference }: Props) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -61,11 +62,11 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
 
   useEffect(() => {
     setCitations(null); setCitationError(''); setReadingHistory([]); setActiveCitation(null);
-    if (!structure?.parse_run_id) return;
+    if (!structure?.parse_run_id || (!['ready', 'partial'].includes(document.status) && structure.parse_run_id === document.parse_run_id)) return;
     const controller = new AbortController();
     void request<CitationMap>(`/documents/${document.id}/citations?parse_run_id=${encodeURIComponent(structure.parse_run_id)}`, { signal: controller.signal }).then(setCitations).catch(() => { if (!controller.signal.aborted) setCitationError('引用映射暂不可用'); });
     return () => controller.abort();
-  }, [document.id, structure?.parse_run_id]);
+  }, [document.id, structure?.parse_run_id, document.status]);
 
   useEffect(() => setPageInput(String(page)), [page]);
 
@@ -254,7 +255,7 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
       {view === 'parallel' && <div className="parallel-options"><label><input type="checkbox" checked={linked} onChange={event => setLinked(event.target.checked)} />按段落联动滚动</label><span>公式和代码保留原文；自动翻译请核验。</span></div>}
       {ocrBlocks.length > 0 && <div className="ocr-reader-bar"><span><ScanLine size={13} />本页含 OCR 文字 · {ocrBlocks.length} 个区域</span><button className={ocrSelection ? 'active' : ''} onClick={() => setOcrSelection(!ocrSelection)} aria-pressed={ocrSelection}><TextSelect size={13} />{ocrSelection ? '文字选择已开启' : '开启文字选择'}</button></div>}
       <div className={`reader-split ${view === 'parallel' ? 'is-parallel' : ''}`}><div className="pdf-scroll" ref={scrollRef} onScroll={syncFromPdf} onWheel={() => { suppressUntil.current = 0; }} onPointerDown={() => { suppressUntil.current = 0; }}>
-        {view === 'references' ? <div className="reference-list"><h3>References 原文条目</h3><p>数字引用可双向跳转；作者年份格式暂保留列表。</p>{citationError && <p role="alert">{citationError}</p>}{citations?.references.map(reference => <article key={reference.id}><strong>{reference.marker ? `[${reference.marker}]` : '未编号条目'}</strong><p>{reference.text}</p><button onClick={() => { onSelectBlock(sourceBlock(reference)); setView('pdf'); }}><Target size={12} />原文条目 · 第{reference.page}页</button><div>{reference.backlinks.map(link => <button key={link.id} title={link.context} onClick={() => { onSelectBlock(sourceBlock(link)); setView('pdf'); }}>正文引用 · 第{link.page}页</button>)}</div></article>)}{citations && !citations.references.length && <p>当前解析未识别出参考文献条目。</p>}</div> : error ? <div className="reader-error"><FileText size={28} /><h3>原文暂时无法显示</h3><p>{error}</p><a href={`/api/documents/${document.id}/pdf`} target="_blank" rel="noreferrer">直接打开 PDF</a></div> : (view === 'pdf' || view === 'parallel') ? (
+        {view === 'references' ? <div className="reference-list"><h3>References 原文条目</h3><p>数字引用可双向跳转；作者年份格式暂保留列表。</p>{citationError && <p role="alert">{citationError}</p>}{citations?.references.map(reference => <article key={reference.id}><strong>{reference.marker ? `[${reference.marker}]` : '未编号条目'}</strong><p>{reference.text}</p>{onFindReference && <button onClick={() => onFindReference(reference.text)}><Search size={12} />查找书目</button>}<button onClick={() => { onSelectBlock(sourceBlock(reference)); setView('pdf'); }}><Target size={12} />原文条目 · 第{reference.page}页</button><div>{reference.backlinks.map(link => <button key={link.id} title={link.context} onClick={() => { onSelectBlock(sourceBlock(link)); setView('pdf'); }}>正文引用 · 第{link.page}页</button>)}</div></article>)}{citations && !citations.references.length && <p>当前解析未识别出参考文献条目。</p>}</div> : error ? <div className="reader-error"><FileText size={28} /><h3>原文暂时无法显示</h3><p>{error}</p><a href={`/api/documents/${document.id}/pdf`} target="_blank" rel="noreferrer">直接打开 PDF</a></div> : (view === 'pdf' || view === 'parallel') ? (
           <>
             {loading && <div className="pdf-loading"><LoaderCircle className="spin" size={23} /><span>正在渲染原文</span></div>}
             <div className="pdf-paper" style={pageSize.width ? { width: pageSize.width, height: pageSize.height } : undefined}>
