@@ -14,7 +14,7 @@ from fastapi import APIRouter,HTTPException,Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel,ConfigDict,Field
 from starlette.concurrency import run_in_threadpool
-from . import graph_store as repo,literature,literature_store,qa,reading,store
+from . import graph_store as repo,literature,literature_store,qa,reading,store,source_scope
 
 router=APIRouter(prefix='/api',tags=['citation-graph'])
 ARXIV_SCAN=re.compile(r'\b(?:\d{4}\.\d{4,5}|[a-z][a-z.-]+/\d{7})(?:v\d+)?\b',re.I)
@@ -241,6 +241,7 @@ class GraphRequest(BaseModel):
     model_config=ConfigDict(extra='forbid')
     document_ids:list[str]=Field(min_length=1,max_length=20)
     selected_versions:dict[str,str]=Field(default_factory=dict)
+    parse_runs:dict[str,str]=Field(default_factory=dict,max_length=20)
     topic:str=Field(default='研究方法与局限',min_length=2,max_length=200)
     resolve_metadata:bool=False
     resolution_budget:int=Field(default=60,ge=1,le=100)
@@ -249,9 +250,15 @@ class GraphRequest(BaseModel):
 
 @router.post('/graphs')
 async def build_graph(body:GraphRequest):
+    return await execute_graph(body)
+
+
+async def execute_graph(body:GraphRequest,artifact_id=None):
+    if artifact_id and (existing:=repo.get(artifact_id)):return existing
     documents=[store.get_document(identity) for identity in dict.fromkeys(body.document_ids)]
     if any(document is None for document in documents):raise HTTPException(404,'文献不存在或已删除')
     if any(document['status'] not in {'ready','partial'} for document in documents):raise HTTPException(409,'请等待文献解析完成')
+    documents=source_scope.pin(documents,body.parse_runs)
     try:
         chosen=choose_sources(documents,body.selected_versions)
         sources,units=await run_in_threadpool(collect_sources,chosen)
@@ -259,6 +266,7 @@ async def build_graph(body:GraphRequest):
     keys=[key for unit in units for key,_ in unit['identifiers']]
     index,warnings=await resolve_identifiers(keys,body.resolution_budget) if body.resolve_metadata else (registry_index(cached_records()),['本次未请求外部注册源，只使用已缓存的元数据。'])
     result=assemble(sources,units,index,body.topic,body.max_nodes);result['warnings']+=warnings
+    if artifact_id:result['id']=artifact_id
     try:repo.save(result)
     except ValueError:raise HTTPException(409,'构图期间来源已删除')
     return result

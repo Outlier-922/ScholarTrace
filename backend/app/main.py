@@ -41,6 +41,10 @@ async def lifespan(app: FastAPI):
     literature.start()
     graph.repo.init_db()
     studio.repo.init_db()
+    workflow.repo.init_db()
+    model_status.init_db()
+    workflow.start()
+    workflow.repo.recover()
     store.cleanup_deleted_files()
     workers = max(1, min(4, int(os.environ.get("SCHOLARTRACE_PARSE_WORKERS", "2"))))
     # PyMuPDF must not run concurrently in multiple threads. Each parse worker
@@ -52,6 +56,7 @@ async def lifespan(app: FastAPI):
     for document_id in store.resumable_documents():
         _submit_parse(app, document_id)
     yield
+    await workflow.shutdown()
     await translation.shutdown()
     await literature.shutdown()
     app.state.parse_executor.shutdown(wait=True, cancel_futures=True)
@@ -113,7 +118,7 @@ def health() -> dict[str, Any]:
     ocr_status = ocr.runtime_status()
     embedding_status = semantic.runtime_status()
     return {"status": "ok", "version": __version__, "edition": "local-development",
-            "stage": "writing-and-plotting",
+            "stage": "intent-workflow-and-model-readiness",
             "model_configured": all(os.environ.get(key, "").strip()
                                     for key in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL")),
             "capabilities": {"pdf_upload": True, "native_pdf_parsing": True, "source_anchors": True,
@@ -126,6 +131,7 @@ def health() -> dict[str, Any]:
                              "formula_latex": False, "semantic_tables": False,
                              "citation_graph": True, "evidence_outline": True, "full_translation": False,
                              "writing_plans": True, "csv_plotting": True, "architecture_diagrams": True,
+                             "intent_workflow": True, "model_diagnostics": True,
                              "multi_user_auth": False, "comparison_matrix": True,
                              "citation_navigation": True, "translation": True,
                              "literature_search": True, "arxiv_import": True, "topic_tracking": True},
@@ -270,6 +276,7 @@ def remove_document(document_id: str) -> dict[str, Any]:
     literature.repo.purge_document(document_id)
     graph.repo.purge_document(document_id)
     studio.repo.purge_document(document_id)
+    workflow.repo.purge_document(document_id)
     return {"deleted": True, "document_id": document_id}
 
 
@@ -381,10 +388,12 @@ except ModuleNotFoundError as exc:
 else:
     app.include_router(qa.router)
 
-from . import comparison, reading, research_store, translation, literature, graph, studio
+from . import comparison, reading, research_store, translation, literature, graph, studio, workflow, model_status
 app.include_router(comparison.router)
 app.include_router(reading.router)
 app.include_router(translation.router)
 app.include_router(literature.router)
 app.include_router(graph.router)
 app.include_router(studio.router)
+app.include_router(workflow.router)
+app.include_router(model_status.router)

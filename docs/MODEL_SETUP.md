@@ -1,6 +1,8 @@
 # 模型接入：OpenAI 与 DeepSeek
 
-本作品当前实现的是后端 API Key 接入，三个字段由 `.env` 读取，密钥不会送到浏览器。2026-10-27 检查时，本机尚未配置密钥，未向真实生成模型发送论文内容。
+本作品当前实现的是后端 API Key 接入，三个字段由 `.env` 读取，密钥不会送到浏览器。2026-10-27—28，本机已配置 DeepSeek 并通过连接检查，完成少量真实论文段落检查；质量范围见 STAGE7_TEST_REPORT.md。其他机器仍须使用自己的配置。
+
+优先使用项目根目录的“配置模型.cmd”，步骤见 [双击操作](模型配置_双击操作.md)。不需要手动改文件；已配置后无需重复输入。
 
 ## ChatGPT 能不能用
 
@@ -18,7 +20,7 @@ LLM_API_KEY=填写你自己的API密钥
 LLM_MODEL=填写你账号可用且支持Chat Completions与JSON输出的模型名
 ```
 
-模型名不预填，避免把 ChatGPT 界面模型名或不适用的型号误当成 API 型号。当前通用适配器使用 `temperature=0`、`max_tokens`、`response_format=json_object`；若选用的模型要求不同参数，需要补充对应适配，不能保证所有 OpenAI 型号开箱即用。
+模型名不预填，避免把 ChatGPT 界面模型名或不适用的型号误当成 API 型号。当前按接口配置分流：OpenAI 官方端点使用 max_completion_tokens 并省略固定 temperature；兼容接口保留 max_tokens。两者使用 JSON object 输出，业务结果再做来源与字段校验。LLM_API_PROFILE 可设 auto/openai/compatible；特定模型的参数和 JSON 支持仍需检查，不能保证所有型号开箱即用。[官方参数说明](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)。
 
 ## DeepSeek 接入步骤
 
