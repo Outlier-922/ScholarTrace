@@ -1,4 +1,4 @@
-"""FastAPI entry point for ScholarTrace's first development milestone."""
+"""FastAPI entry point for ScholarTrace's local research workspace."""
 
 from __future__ import annotations
 
@@ -36,6 +36,8 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     store.init_db()
+    research_store.init_db()
+    translation.resume_jobs()
     store.cleanup_deleted_files()
     workers = max(1, min(4, int(os.environ.get("SCHOLARTRACE_PARSE_WORKERS", "2"))))
     # PyMuPDF must not run concurrently in multiple threads. Each parse worker
@@ -47,6 +49,7 @@ async def lifespan(app: FastAPI):
     for document_id in store.resumable_documents():
         _submit_parse(app, document_id)
     yield
+    await translation.shutdown()
     app.state.parse_executor.shutdown(wait=True, cancel_futures=True)
 
 
@@ -94,7 +97,7 @@ def _submit_parse(application: FastAPI, document_id: str) -> bool:
 
 
 app = FastAPI(title="ScholarTrace · 研迹", version=__version__, lifespan=lifespan,
-              description="版本化文献与可定位原文证据。第一阶段：本地开发版。")
+              description="版本化文献与可定位原文证据。本地开发版：多文对比与联读。")
 origins = os.environ.get("SCHOLARTRACE_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173")
 app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in origins.split(",") if o.strip()],
                    allow_credentials=False, allow_methods=["GET", "POST", "PATCH", "DELETE"],
@@ -106,7 +109,7 @@ def health() -> dict[str, Any]:
     ocr_status = ocr.runtime_status()
     embedding_status = semantic.runtime_status()
     return {"status": "ok", "version": __version__, "edition": "local-development",
-            "stage": "multimodal-evidence",
+            "stage": "comparison-and-linked-reading",
             "model_configured": all(os.environ.get(key, "").strip()
                                     for key in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL")),
             "capabilities": {"pdf_upload": True, "native_pdf_parsing": True, "source_anchors": True,
@@ -118,7 +121,8 @@ def health() -> dict[str, Any]:
                              "structured_tables": importlib.util.find_spec(f"{__package__}.tables") is not None,
                              "formula_latex": False, "semantic_tables": False,
                              "citation_graph": False, "full_translation": False,
-                             "multi_user_auth": False},
+                             "multi_user_auth": False, "comparison_matrix": True,
+                             "citation_navigation": True, "translation": True},
             "ocr_status": {key: value for key, value in ocr_status.items() if key != "model_dir"},
             "embedding_status": embedding_status}
 
@@ -256,6 +260,7 @@ def remove_document(document_id: str) -> dict[str, Any]:
     if not store.delete_document(document_id):
         raise HTTPException(404, "文献不存在")
     semantic.purge_document(document_id)
+    research_store.purge_document(document_id)
     return {"deleted": True, "document_id": document_id}
 
 
@@ -366,3 +371,8 @@ except ModuleNotFoundError as exc:
         raise
 else:
     app.include_router(qa.router)
+
+from . import comparison, reading, research_store, translation
+app.include_router(comparison.router)
+app.include_router(reading.router)
+app.include_router(translation.router)
