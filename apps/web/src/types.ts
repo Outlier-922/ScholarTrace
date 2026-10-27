@@ -19,6 +19,22 @@ export interface ResearchDocument {
   warnings: string[];
   pdf_url: string;
   job_id: string;
+  parse_run_id?: string;
+}
+
+export interface BlockMetadata {
+  extraction?: string;
+  confidence?: number;
+  confidence_min?: number;
+  verification_status?: string;
+  rows?: (string | number | null)[][];
+  header?: unknown;
+  row_count?: number;
+  col_count?: number;
+  ocr_performed?: boolean;
+  low_confidence?: boolean;
+  lines?: { text: string; bbox: [number, number, number, number]; confidence?: number }[];
+  [key: string]: unknown;
 }
 
 export interface DocumentBlock {
@@ -30,10 +46,13 @@ export interface DocumentBlock {
   order: number;
   heading_level?: number | null;
   section_path?: string | string[];
+  parse_run_id?: string;
+  metadata?: BlockMetadata;
 }
 
 export interface DocumentStructure {
   document_id: string;
+  parse_run_id?: string;
   pages: { number: number; width: number; height: number; status: string }[];
   blocks: DocumentBlock[];
   outline: { id: string; title: string; level: number; page: number; block_id: string }[];
@@ -45,11 +64,14 @@ export interface Evidence {
   document_id: string;
   title: string;
   version_label?: string | null;
+  parse_run_id?: string;
   page: number;
   block_id: string;
   bbox: [number, number, number, number];
   text: string;
   score: number;
+  extraction?: string;
+  confidence?: number;
 }
 
 export interface AnswerResult {
@@ -60,6 +82,14 @@ export interface AnswerResult {
   missing_information: string[];
   steps: { label: string; status: string; detail: string }[];
   warnings: string[];
+  retrieval?: {
+    mode: 'bm25_dense_rrf' | 'bm25';
+    enabled?: boolean;
+    ready?: boolean;
+    used?: boolean;
+    model?: string;
+    reason?: string;
+  };
 }
 
 export interface Health {

@@ -1,13 +1,10 @@
-"""Native PDF baseline with page anchors and explicit unsupported-page states.
-
-OCR, semantic table reconstruction, and LaTeX recovery are intentionally not
-claimed by this first-stage parser. Candidate labels retain source rectangles.
-"""
+"""Versioned native/OCR parsing with source rectangles and explicit limits."""
 
 from __future__ import annotations
 
 import hashlib
 import logging
+import statistics
 import re
 from collections import Counter
 from difflib import SequenceMatcher
@@ -15,7 +12,7 @@ from typing import Any
 
 import pymupdf as fitz
 
-from . import store
+from . import ocr, store
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +79,38 @@ def _body_font(pdf: fitz.Document) -> float:
     return sizes.most_common(1)[0][0] if sizes else 10
 
 
+def _ocr_paragraphs(lines: list[dict[str, Any]], width: float, height: float) -> list[dict[str, Any]]:
+    """Group adjacent same-column OCR lines, retaining every original line box."""
+    ordered = _reading_order(lines, width)
+    grouped: list[dict[str, Any]] = []
+    body_size = statistics.median([line["font_size"] for line in lines]) if lines else 10
+    for line in ordered:
+        line_record = {"text": line["text"], "bbox": _normalized_bbox(line["rect"], width, height),
+                       "confidence": line["confidence"]}
+        level = _heading_level(line["text"], line["font_size"], body_size, False)
+        previous = grouped[-1] if grouped else None
+        merge = False
+        if previous and not level and not previous.get("ocr_heading"):
+            a, b = previous["rect"], line["rect"]
+            previous_height = max(1.0, previous["last_height"])
+            same_column = abs(a[0] - b[0]) < max(18, width * .025) and (a[0] < width / 2) == (b[0] < width / 2)
+            gap = b[1] - a[3]
+            similar_size = .8 <= line["font_size"] / max(previous["font_size"], 1) <= 1.2
+            new_reference = bool(re.match(r"^\[\d+\]", line["text"]))
+            merge = same_column and -previous_height * .15 <= gap <= previous_height * .9 and similar_size and not new_reference
+        if merge:
+            previous["text"] += "\n" + line["text"]
+            previous["rect"] = [min(previous["rect"][0], line["rect"][0]), min(previous["rect"][1], line["rect"][1]),
+                                max(previous["rect"][2], line["rect"][2]), max(previous["rect"][3], line["rect"][3])]
+            previous["ocr_lines"].append(line_record)
+            previous["confidence"] = sum(item["confidence"] for item in previous["ocr_lines"]) / len(previous["ocr_lines"])
+            previous["last_height"] = line["rect"][3] - line["rect"][1]
+        else:
+            grouped.append({**line, "ocr_lines": [line_record], "ocr_heading": bool(level),
+                            "body_size": body_size, "last_height": line["rect"][3] - line["rect"][1]})
+    return grouped
+
+
 def _guess_title(pdf: fitz.Document, first: list[dict[str, Any]]) -> str | None:
     metadata_title = (pdf.metadata or {}).get("title", "").strip()
     if metadata_title and len(metadata_title) > 4 and not re.search(r"^(untitled|microsoft|latex|document|word|powerpoint)", metadata_title, re.I):
@@ -102,7 +131,12 @@ def _heading_level(text: str, font_size: float, body_size: float, bold: bool) ->
         return None
     number = re.match(r"^(\d+(?:\.\d+){0,3})\.?\s+\S", flat)
     if number and len(flat) < 140 and not re.match(r"^\d+\s*[%=×+−-]", flat):
-        return min(3, number.group(1).count(".") + 1)
+        segments = number.group(1).split(".")
+        remainder = flat[number.end() - 1:]
+        layout_signal = bold or font_size >= body_size * 1.05
+        title_signal = bool(remainder and (remainder[0].isupper() or "\u4e00" <= remainder[0] <= "\u9fff"))
+        if all(len(segment) <= 2 for segment in segments) and int(segments[0]) > 0 and (layout_signal or title_signal):
+            return min(3, len(segments))
     if HEADING_WORDS.match(flat):
         return 1
     if len(flat) < 120 and font_size >= body_size * 1.13 and not flat.endswith((".", ",", ";")):
@@ -208,17 +242,44 @@ def _detect_duplicate(document_id: str, title: str, arxiv_id: str | None,
             "version_recommendation": recommendation, "work_id": best["work_id"]}
 
 
-def parse_document(document_id: str) -> None:
+def parse_document(document_id: str, expected_run_id: str | None = None) -> None:
     document = store.get_internal_document(document_id)
-    if not document:
+    if not document or (expected_run_id and document["parse_run_id"] != expected_run_id):
         return
     run_id, job_id = document["parse_run_id"], document["job_id"]
+    run = store.get_parse_run(document_id, run_id)
+    config = (run or {}).get("config", {})
+    perform_ocr = bool(config.get("ocr", False))
+    perform_tables = bool(config.get("tables", False))
     store.update_document(document_id, status="processing", error=None)
     store.set_run_status(run_id, "processing")
     store.update_job(job_id, "processing", "正在提取原生文字与页面坐标")
     try:
         with fitz.open(document["file_path"]) as pdf:
+            existing = store.get_structure(document_id, parse_run_id=run_id) or {"pages": [], "blocks": []}
+            completed = {p["number"] for p in existing["pages"]}
             first = _extract_raw(pdf[0])
+            first_ocr: list[dict[str, Any]] | None = None
+            ocr_errors: list[int] = []
+            table_errors: list[int] = []
+            stored_ocr = [block for block in existing["blocks"] if block["page"] == 1 and block["text"]
+                          and block.get("metadata", {}).get("extraction") == "rapidocr"]
+            if 1 in completed and stored_ocr:
+                width, height = float(pdf[0].cropbox.width), float(pdf[0].cropbox.height)
+                first_ocr = [{"text": block["text"],
+                              "rect": [coordinate * (width if i % 2 == 0 else height) for i, coordinate in enumerate(block["bbox"])],
+                              "font_size": block["metadata"].get("font_size", 10), "bold": False}
+                             for block in stored_ocr]
+                first = first_ocr
+            if 1 not in completed and perform_ocr and sum(len(block["text"]) for block in first) < 20 and pdf[0].get_image_info():
+                try:
+                    first_ocr = _ocr_paragraphs(ocr.extract_ocr(pdf[0]), float(pdf[0].cropbox.width), float(pdf[0].cropbox.height))
+                    if first_ocr:
+                        first = first_ocr
+                except Exception:
+                    first_ocr = []
+                    ocr_errors.append(1)
+                    logger.warning("OCR unavailable for document %s page 1", document_id, exc_info=True)
             title = _guess_title(pdf, first) or document["title"]
             author_text = (pdf.metadata or {}).get("author", "").strip()
             authors = [item.strip() for item in re.split(r";|\n", author_text) if item.strip()]
@@ -228,12 +289,11 @@ def parse_document(document_id: str) -> None:
             version = identity.group(2).lower() if identity and identity.group(2) else None
             store.update_document(document_id, title=title, authors=authors, page_count=len(pdf),
                                   arxiv_id=arxiv_id, version_label=version)
-            body_size = _body_font(pdf)
-            existing = store.get_structure(document_id) or {"pages": [], "blocks": []}
-            completed = {p["number"] for p in existing["pages"]}
+            body_size = statistics.median([b["font_size"] for b in first]) if first_ocr else _body_font(pdf)
             sections: list[str] = []
             for index, page in enumerate(pdf):
-                if not store.get_document(document_id):
+                current = store.get_document(document_id)
+                if not current or current["parse_run_id"] != run_id:
                     return
                 number = index + 1
                 if number in completed:
@@ -246,38 +306,64 @@ def parse_document(document_id: str) -> None:
                 # dimensions and keep page rotation separately for the viewer.
                 width, height = float(page.cropbox.width), float(page.cropbox.height)
                 raw = _reading_order(_extract_raw(page), width)
+                used_ocr = False
+                image_info = page.get_image_info()
+                if perform_ocr and sum(len(value["text"]) for value in raw) < 20 and image_info:
+                    try:
+                        recognized = first_ocr if number == 1 and first_ocr is not None else _ocr_paragraphs(ocr.extract_ocr(page), width, height)
+                        if recognized:
+                            raw, used_ocr = recognized, True
+                    except Exception:
+                        ocr_errors.append(number)
+                        logger.warning("OCR failed for document %s page %s", document_id, number, exc_info=True)
                 blocks = []
                 for order, value in enumerate(raw):
-                    level = _heading_level(value["text"], value["font_size"], body_size, value["bold"])
+                    page_body_size = value.get("body_size", body_size) if used_ocr else body_size
+                    level = _heading_level(value["text"], value["font_size"], page_body_size, value["bold"])
                     kind = _classify(value["text"], level, title, number)
                     if kind == "title":
                         level = 1
                     if kind == "heading":
                         sections = sections[:(level or 1) - 1] + [value["text"]]
+                    metadata = {"extraction": "rapidocr" if used_ocr else "native_pdf", "font_size": round(value["font_size"], 2),
+                                "is_candidate": kind.endswith("_candidate")}
+                    if used_ocr:
+                        metadata.update(confidence=round(value["confidence"], 6), lines=value.get("ocr_lines", []),
+                                        low_confidence=value["confidence"] < .8, verification_status="ocr_unverified")
                     blocks.append({"id": store.new_id("blk"), "page": number, "type": kind,
                                    "text": value["text"], "bbox": _normalized_bbox(value["rect"], width, height),
                                    "order": order, "heading_level": level if kind in {"heading", "title"} else None,
                                    "section_path": list(sections),
-                                   "metadata": {"extraction": "native_pdf", "font_size": round(value["font_size"], 2),
-                                                "is_candidate": kind.endswith("_candidate")}})
+                                   "metadata": metadata})
                 # Only store rectangles for figures; avoid holding image bytes.
                 image_count = 0
-                for image in page.get_image_info():
+                for image in image_info:
                     image_count += 1
                     blocks.append({"id": store.new_id("blk"), "page": number, "type": "figure",
                                    "text": "", "bbox": _normalized_bbox(image["bbox"], width, height),
                                    "order": len(blocks), "heading_level": None, "section_path": list(sections),
-                                   "metadata": {"extraction": "image_region", "ocr_performed": False}})
+                                   "metadata": {"extraction": "image_region", "ocr_performed": used_ocr}})
+                if perform_tables:
+                    try:
+                        from .tables import extract_tables
+                        for table in extract_tables(page):
+                            blocks.append({**table, "id": store.new_id("blk"), "page": number, "order": len(blocks),
+                                           "heading_level": None, "section_path": list(sections)})
+                    except Exception:
+                        table_errors.append(number)
+                        logger.warning("Table extraction failed for document %s page %s", document_id, number, exc_info=True)
                 char_count = sum(len(block["text"].strip()) for block in blocks)
                 status = "needs_ocr" if char_count < 20 and image_count else ("empty" if char_count == 0 else "ready")
+                if used_ocr:
+                    status = "ocr_ready" if char_count >= 20 else "needs_ocr"
                 store.save_page(document_id, run_id, number, width, height, page.rotation,
                                 list(page.cropbox), status, blocks)
                 store.update_job(job_id, "processing", f"已解析 {number}/{len(pdf)} 页", progress=number)
-            structure = store.get_structure(document_id)
+            structure = store.get_structure(document_id, parse_run_id=run_id)
             if not structure:
                 return
             references = _references(structure["blocks"])
-            store.save_references(document_id, references)
+            store.save_references(document_id, references, parse_run_id=run_id)
             in_references = False
             body = []
             for block in structure["blocks"]:
@@ -287,21 +373,30 @@ def parse_document(document_id: str) -> None:
                     body.append(block["text"])
             content_hash, hashes = _fingerprint("\n".join(body))
             scan_pages = [p["number"] for p in structure["pages"] if p["status"] == "needs_ocr"]
-            warnings = ["当前为原生 PDF 解析基线；公式/表格候选尚未做 LaTeX 恢复或语义表格重建。"]
+            warnings = ["公式尚未做 LaTeX 恢复；表格和参考文献结构仍需核对原文。"]
+            if any(p["status"] == "ocr_ready" for p in structure["pages"]):
+                warnings.append("部分文本由本地OCR识别，已保留行坐标和识别置信度；数字、符号和公式需要核对原图。")
             if scan_pages:
                 warnings.append(f"{len(scan_pages)} 页缺少可用文字层，需要 OCR；这些页尚不能用于文本问答。")
+            if ocr_errors:
+                warnings.append(f"{len(set(ocr_errors))} 页OCR未能执行，请检查本地模型准备状态或重试。")
+            if table_errors:
+                warnings.append(f"{len(set(table_errors))} 页表格提取失败，正文仍可使用。")
             if not authors:
                 warnings.append("PDF 元数据未提供作者；尚未自动核验作者与机构。")
-            status = "partial" if scan_pages else "ready"
+            status = "partial" if scan_pages or table_errors else "ready"
             store.finalize_document(document_id, status, warnings, content_hash, hashes,
                                     lambda candidates: _detect_duplicate(document_id, title, arxiv_id, version, hashes, candidates),
-                                    "原生解析完成；部分页面等待 OCR" if scan_pages else "原生解析完成")
+                                    "解析完成；部分页面或表格需要复核" if status == "partial" else "原文解析完成",
+                                    parse_run_id=run_id)
     except Exception as exc:
         logger.exception("PDF parse failed for document %s", document_id)
         message = "PDF 解析失败，请检查文件是否损坏或查看后端日志。"
-        store.update_document(document_id, status="failed", error=message)
         store.set_run_status(run_id, "failed")
         store.update_job(job_id, "failed", message, error=type(exc).__name__)
+        current = store.get_document(document_id)
+        if current and current["parse_run_id"] == run_id:
+            store.update_document(document_id, status="failed", error=message)
     finally:
         if not store.get_document(document_id):
             store.cleanup_deleted_files()

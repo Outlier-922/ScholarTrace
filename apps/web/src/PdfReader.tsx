@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, FileText, Layers, LoaderCircle, Minus, Plus, ScanLine } from 'lucide-react';
+import type { CSSProperties } from 'react';
+import { ChevronLeft, ChevronRight, ExternalLink, FileText, Layers, LoaderCircle, Minus, Plus, ScanLine, TextSelect } from 'lucide-react';
 import { getDocument, GlobalWorkerOptions, TextLayer } from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import 'pdfjs-dist/web/pdf_viewer.css';
 import type { DocumentBlock, DocumentStructure, ResearchDocument } from './types';
+import BlockContent, { isOcrBlock } from './BlockContent';
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -15,9 +17,11 @@ interface Props {
   onPage: (page: number) => void;
   selectedBlock: string | null;
   onSelectBlock: (block: DocumentBlock) => void;
+  ocrReady?: boolean;
+  onRequestReprocess?: () => void;
 }
 
-export default function PdfReader({ document, structure, page, onPage, selectedBlock, onSelectBlock }: Props) {
+export default function PdfReader({ document, structure, page, onPage, selectedBlock, onSelectBlock, ocrReady = false, onRequestReprocess }: Props) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -27,6 +31,7 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
   const [pageRotation, setPageRotation] = useState(0);
   const [showBlocks, setShowBlocks] = useState(false);
   const [view, setView] = useState<'pdf' | 'text'>('pdf');
+  const [ocrSelection, setOcrSelection] = useState(true);
   const [pageInput, setPageInput] = useState(String(page));
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
@@ -35,6 +40,8 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
   const pageBlocks = structure?.blocks.filter((block) => block.page === page) ?? [];
   const pageTotal = pdf?.numPages || document.page_count || 1;
   const pageStatus = structure?.pages.find((item) => item.number === page)?.status;
+  const ocrBlocks = pageBlocks.filter((block) => isOcrBlock(block) && block.text.trim());
+  const ocrLines = ocrBlocks.flatMap((block) => block.metadata?.lines?.length ? block.metadata.lines.map((line, index) => ({ ...line, id: `${block.id}_${index}` })) : [{ id: block.id, text: block.text, bbox: block.bbox }]);
 
   useEffect(() => setPageInput(String(page)), [page]);
 
@@ -147,6 +154,14 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
     return { left: `${left * 100}%`, top: `${top * 100}%`, width: `${Math.max(0.005, right - left) * 100}%`, height: `${Math.max(0.005, bottom - top) * 100}%` };
   }
 
+  function ocrLineStyle(box: DocumentBlock['bbox'], text: string): CSSProperties {
+    const rotation = ((pageRotation % 360) + 360) % 360;
+    const [x, y] = rotation === 90 ? [1 - box[1], box[0]] : rotation === 180 ? [1 - box[0], 1 - box[1]] : rotation === 270 ? [box[1], 1 - box[0]] : [box[0], box[1]];
+    const width = (box[2] - box[0]) * (rotation % 180 ? pageSize.height : pageSize.width);
+    const height = (box[3] - box[1]) * (rotation % 180 ? pageSize.width : pageSize.height);
+    return { left: `${x * 100}%`, top: `${y * 100}%`, width: `${width}px`, height: `${height}px`, fontSize: `${Math.max(2, Math.min(48, height / Math.max(1, text.split('\n').length) * 0.82))}px`, transform: `rotate(${rotation}deg)` };
+  }
+
   return (
     <section className="reader" aria-label="论文阅读器">
       <div className="reader-title">
@@ -174,6 +189,7 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
         </div>
         <button className={`icon-button block-toggle ${showBlocks ? 'is-on' : ''}`} disabled={view === 'text'} onClick={() => setShowBlocks(!showBlocks)} title="显示解析内容块" aria-label="显示解析内容块" aria-pressed={showBlocks}><ScanLine size={17} /></button>
       </div>
+      {ocrBlocks.length > 0 && <div className="ocr-reader-bar"><span><ScanLine size={13} />本页含 OCR 文字 · {ocrBlocks.length} 个区域</span><button className={ocrSelection ? 'active' : ''} onClick={() => setOcrSelection(!ocrSelection)} aria-pressed={ocrSelection}><TextSelect size={13} />{ocrSelection ? '文字选择已开启' : '开启文字选择'}</button></div>}
       <div className="pdf-scroll" ref={scrollRef}>
         {error ? <div className="reader-error"><FileText size={28} /><h3>原文暂时无法显示</h3><p>{error}</p><a href={`/api/documents/${document.id}/pdf`} target="_blank" rel="noreferrer">直接打开 PDF</a></div> : view === 'pdf' ? (
           <>
@@ -181,6 +197,7 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
             <div className="pdf-paper" style={pageSize.width ? { width: pageSize.width, height: pageSize.height } : undefined}>
               <canvas ref={canvasRef} />
               <div className="textLayer" ref={textRef} />
+              {ocrSelection && ocrLines.length > 0 && <div className="ocr-selection-layer" aria-label="OCR 识别文字层">{ocrLines.map((line) => <span key={line.id} className="ocr-selection-text" style={ocrLineStyle(line.bbox, line.text)} title="OCR 识别文字，可选中复制；请对照原图核验">{line.text}</span>)}</div>}
               <div className={`block-overlays ${showBlocks ? 'show-all' : ''}`}>
                 {pageBlocks.filter((block) => showBlocks || block.id === selectedBlock).map((block) => (
                   <button
@@ -195,17 +212,12 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
                 ))}
               </div>
             </div>
-            {pageStatus === 'needs_ocr' && <div className="scan-note"><ScanLine size={16} />当前页缺少可用文字层，OCR 将在下一阶段接入；原始图像可正常阅读。</div>}
+            {pageStatus === 'needs_ocr' && <div className="scan-note"><ScanLine size={16} /><span>当前页缺少可用文字层。{ocrReady ? '可重新解析，启用本地 OCR。' : 'OCR 模型尚未就绪，原始图像仍可阅读。'}</span>{ocrReady && onRequestReprocess && <button onClick={onRequestReprocess}>识别扫描文字</button>}</div>}
           </>
         ) : (
           <div className="structured-page">
             <div className="structured-page-label"><Layers size={15} /> 第 {page} 页 · 解析文本</div>
-            {pageBlocks.length ? pageBlocks.map((block) => (
-              <button className={`text-block ${block.id === selectedBlock ? 'active' : ''} ${block.type === 'heading' ? 'heading' : ''}`} key={block.id} onClick={() => onSelectBlock(block)}>
-                <span className="text-block-type">{block.type === 'heading' ? '标题' : block.type === 'reference' ? '参考文献' : block.type === 'table' ? '表格候选' : '正文'}</span>
-                <span>{block.text}</span>
-              </button>
-            )) : <div className="text-empty"><ScanLine size={26} /><p>{pageStatus === 'needs_ocr' ? '当前页需要 OCR，尚无可检索文本。' : '当前页尚无解析内容，请等待处理完成。'}</p></div>}
+            {pageBlocks.length ? pageBlocks.map((block) => <BlockContent key={block.id} block={block} selected={block.id === selectedBlock} onSelect={() => { onSelectBlock(block); setView('pdf'); }} />) : <div className="text-empty"><ScanLine size={26} /><p>{pageStatus === 'needs_ocr' ? '当前页需要 OCR，尚无可检索文本。' : '当前页尚无解析内容，请等待处理完成。'}</p></div>}
           </div>
         )}
       </div>

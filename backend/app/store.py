@@ -109,6 +109,22 @@ def init_db() -> None:
             error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
         );
         """)
+        # Additive migration: old parse snapshots remain addressable after OCR
+        # upgrades. New tables use explicit column inserts below.
+        for table, column, declaration in (
+            ("parse_runs", "config_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ("outlines", "parse_run_id", "TEXT"),
+            ("reference_entries", "parse_run_id", "TEXT"),
+        ):
+            existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+        for table in ("outlines", "reference_entries"):
+            conn.execute(f"""UPDATE {table} SET parse_run_id=(
+                SELECT blocks.parse_run_id FROM blocks WHERE blocks.id={table}.block_id)
+                WHERE parse_run_id IS NULL""")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_outlines_run ON outlines(document_id,parse_run_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_references_run ON reference_entries(document_id,parse_run_id)")
 
 
 def _document(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
@@ -158,11 +174,67 @@ def create_document(filename: str, path: str, sha256: str, page_count: int) -> d
              page_count, created_at, status, job_id)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)""",
             (document_id, work_id, version_id, run_id, filename, path, sha256, title, page_count, created, job_id))
-        conn.execute("INSERT INTO parse_runs VALUES (?, ?, 'PyMuPDF native baseline', '1', 'queued', ?, NULL)",
-                     (run_id, document_id, created))
+        conn.execute("""INSERT INTO parse_runs
+            (id,document_id,parser_name,parser_version,status,created_at,finished_at,config_json)
+            VALUES (?, ?, 'PyMuPDF + optional RapidOCR', '2', 'queued', ?, NULL, ?)""",
+                     (run_id, document_id, created, json.dumps(default_parse_config())))
         conn.execute("INSERT INTO jobs VALUES (?, ?, 'parse_pdf', 'queued', 0, ?, '等待解析', NULL, ?, ?)",
                      (job_id, document_id, page_count, created, created))
     return get_document(document_id)  # type: ignore[return-value]
+
+
+def default_parse_config() -> dict[str, bool]:
+    return {"ocr": os.getenv("SCHOLARTRACE_ENABLE_OCR", "false").lower() in {"1", "true", "yes"},
+            "tables": os.getenv("SCHOLARTRACE_ENABLE_TABLES", "false").lower() in {"1", "true", "yes"}}
+
+
+def get_parse_run(document_id: str, parse_run_id: str | None = None) -> dict[str, Any] | None:
+    document = get_document(document_id)
+    if not document:
+        return None
+    identity = parse_run_id or document["parse_run_id"]
+    with connection() as conn:
+        row = conn.execute("SELECT * FROM parse_runs WHERE id=? AND document_id=?", (identity, document_id)).fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    result["config"] = json.loads(result.pop("config_json") or "{}")
+    return result
+
+
+def list_parse_runs(document_id: str) -> list[dict[str, Any]]:
+    if not get_document(document_id):
+        return []
+    with connection() as conn:
+        rows = conn.execute("SELECT * FROM parse_runs WHERE document_id=? ORDER BY created_at DESC", (document_id,)).fetchall()
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["config"] = json.loads(item.pop("config_json") or "{}")
+        result.append(item)
+    return result
+
+
+def start_reprocess(document_id: str, config: dict[str, bool]) -> dict[str, Any] | None:
+    """Create a new active snapshot, retaining every old page/block/reference."""
+    with connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        document = conn.execute("SELECT * FROM documents WHERE id=? AND deleted=0", (document_id,)).fetchone()
+        if not document:
+            return None
+        if document["status"] in {"queued", "processing"}:
+            raise ValueError("document_busy")
+        run_id, job_id, created = new_id("parse"), new_id("job"), now()
+        conn.execute("""INSERT INTO parse_runs
+            (id,document_id,parser_name,parser_version,status,created_at,finished_at,config_json)
+            VALUES (?,?,'PyMuPDF + optional RapidOCR','2','queued',?,NULL,?)""",
+                     (run_id, document_id, created, json.dumps(config)))
+        conn.execute("INSERT INTO jobs VALUES (?,?,'parse_pdf','queued',0,?,'等待重新解析',NULL,?,?)",
+                     (job_id, document_id, document["page_count"], created, created))
+        conn.execute("""UPDATE documents SET parse_run_id=?,job_id=?,status='queued',
+                         progress_pages=0,blocks_count=0,error=NULL,warnings='[]' WHERE id=?""",
+                     (run_id, job_id, document_id))
+    return get_document(document_id)
 
 
 def update_document(document_id: str, **values: Any) -> None:
@@ -217,11 +289,11 @@ def save_page(document_id: str, parse_run_id: str, number: int, width: float, he
               rotation: int, cropbox: list[float], status: str, blocks: list[dict[str, Any]]) -> None:
     with connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        if not conn.execute("SELECT 1 FROM documents WHERE id=? AND deleted=0", (document_id,)).fetchone():
+        if not conn.execute("SELECT 1 FROM documents WHERE id=? AND parse_run_id=? AND deleted=0", (document_id, parse_run_id)).fetchone():
             return
         # Page replacement is atomic, so an interrupted page is safe to retry.
-        conn.execute("DELETE FROM reference_entries WHERE document_id=? AND page=?", (document_id, number))
-        conn.execute("DELETE FROM outlines WHERE document_id=? AND page=?", (document_id, number))
+        conn.execute("DELETE FROM reference_entries WHERE document_id=? AND parse_run_id=? AND page=?", (document_id, parse_run_id, number))
+        conn.execute("DELETE FROM outlines WHERE document_id=? AND parse_run_id=? AND page=?", (document_id, parse_run_id, number))
         conn.execute("DELETE FROM blocks WHERE document_id=? AND parse_run_id=? AND page=?",
                      (document_id, parse_run_id, number))
         conn.execute("INSERT OR REPLACE INTO pages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -234,9 +306,11 @@ def save_page(document_id: str, parse_run_id: str, number: int, width: float, he
                           json.dumps(block.get("section_path", []), ensure_ascii=False),
                           json.dumps(block.get("metadata", {}), ensure_ascii=False)))
             if block["type"] in {"heading", "title"}:
-                conn.execute("INSERT INTO outlines VALUES (?, ?, ?, ?, ?, ?, ?)",
+                conn.execute("""INSERT INTO outlines
+                    (id,document_id,title,level,page,block_id,order_index,parse_run_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                              (new_id("outline"), document_id, block["text"], block.get("heading_level") or 1,
-                              number, block["id"], block["order"]))
+                              number, block["id"], block["order"], parse_run_id))
         completed = conn.execute("SELECT count(*) FROM pages WHERE document_id=? AND parse_run_id=?",
                                  (document_id, parse_run_id)).fetchone()[0]
         count = conn.execute("SELECT count(*) FROM blocks WHERE document_id=? AND parse_run_id=?",
@@ -245,31 +319,41 @@ def save_page(document_id: str, parse_run_id: str, number: int, width: float, he
                      (completed, count, document_id))
 
 
-def save_references(document_id: str, references: list[dict[str, Any]]) -> None:
+def save_references(document_id: str, references: list[dict[str, Any]], parse_run_id: str | None = None) -> None:
     with connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        if not conn.execute("SELECT 1 FROM documents WHERE id=? AND deleted=0", (document_id,)).fetchone():
+        document = conn.execute("SELECT parse_run_id FROM documents WHERE id=? AND deleted=0", (document_id,)).fetchone()
+        if not document:
             return
-        conn.execute("DELETE FROM reference_entries WHERE document_id=?", (document_id,))
+        identity = parse_run_id or document["parse_run_id"]
+        if identity != document["parse_run_id"]:
+            return
+        conn.execute("DELETE FROM reference_entries WHERE document_id=? AND parse_run_id=?", (document_id, identity))
         for ref in references:
-            conn.execute("INSERT INTO reference_entries VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            conn.execute("""INSERT INTO reference_entries
+                (id,document_id,marker,text,page,block_id,doi,arxiv_id,parse_run_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                          (ref.get("id") or new_id("ref"), document_id, ref.get("marker"), ref["text"],
-                          ref["page"], ref["block_id"], ref.get("doi"), ref.get("arxiv_id")))
+                          ref["page"], ref["block_id"], ref.get("doi"), ref.get("arxiv_id"), identity))
 
 
-def get_structure(document_id: str, page: int | None = None) -> dict[str, Any] | None:
+def get_structure(document_id: str, page: int | None = None, parse_run_id: str | None = None) -> dict[str, Any] | None:
     document = get_document(document_id)
     if not document:
         return None
+    run = get_parse_run(document_id, parse_run_id)
+    if not run:
+        return None
+    identity = run["id"]
     with connection() as conn:
         pages = [dict(row) for row in conn.execute(
             "SELECT number,width,height,rotation,cropbox,status,text_length FROM pages WHERE document_id=? AND parse_run_id=? ORDER BY number",
-            (document_id, document["parse_run_id"]))]
+            (document_id, identity))]
         for page_record in pages:
             page_record["cropbox"] = json.loads(page_record["cropbox"] or "[]")
         blocks = []
         query = "SELECT * FROM blocks WHERE document_id=? AND parse_run_id=?"
-        parameters: list[Any] = [document_id, document["parse_run_id"]]
+        parameters: list[Any] = [document_id, identity]
         if page is not None:
             query += " AND page=?"
             parameters.append(page)
@@ -282,13 +366,13 @@ def get_structure(document_id: str, page: int | None = None) -> dict[str, Any] |
             block["order"] = block.pop("order_index")
             blocks.append(block)
         outlines = [dict(row) for row in conn.execute(
-            "SELECT id,title,level,page,block_id FROM outlines WHERE document_id=? ORDER BY page,order_index", (document_id,))]
+            "SELECT id,title,level,page,block_id FROM outlines WHERE document_id=? AND parse_run_id=? ORDER BY page,order_index", (document_id, identity))]
         references = [dict(row) for row in conn.execute(
-            "SELECT id,marker,text,page,block_id,doi,arxiv_id FROM reference_entries WHERE document_id=? ORDER BY page,rowid", (document_id,))]
+            "SELECT id,marker,text,page,block_id,doi,arxiv_id FROM reference_entries WHERE document_id=? AND parse_run_id=? ORDER BY page,rowid", (document_id, identity))]
         for reference in references:
             reference["is_candidate"] = True
             reference["verification_status"] = "unverified_native_candidate"
-    return {"document_id": document_id, "parse_run_id": document["parse_run_id"], "pages": pages,
+    return {"document_id": document_id, "parse_run_id": identity, "parse_run": run, "pages": pages,
             "blocks": blocks, "outline": outlines, "references": references}
 
 
@@ -322,7 +406,7 @@ def dedup_candidates(document_id: str) -> list[dict[str, Any]]:
 
 def finalize_document(document_id: str, status: str, warnings: list[str], content_hash: str,
                       hashes: list[str], resolve_duplicate: Callable[[list[dict[str, Any]]], dict[str, Any]],
-                      message: str) -> bool:
+                      message: str, parse_run_id: str | None = None) -> bool:
     """Atomically compare finished documents, merge identity, and become ready.
 
     BEGIN IMMEDIATE serializes completion across parse processes. A simultaneous
@@ -332,7 +416,7 @@ def finalize_document(document_id: str, status: str, warnings: list[str], conten
     with connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
         document = conn.execute("SELECT * FROM documents WHERE id=? AND deleted=0", (document_id,)).fetchone()
-        if not document:
+        if not document or (parse_run_id and document["parse_run_id"] != parse_run_id):
             return False
         duplicate = resolve_duplicate(_dedup_candidates(conn, document_id))
         values: dict[str, Any] = {"status": status, "warnings": json.dumps(warnings, ensure_ascii=False),

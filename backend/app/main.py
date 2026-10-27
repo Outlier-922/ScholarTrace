@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import importlib
+import importlib.util
 import json
 import logging
 import multiprocessing
@@ -24,7 +25,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from . import __version__, store
+from . import __version__, ocr, semantic, store
 from .parser import parse_document
 
 logger = logging.getLogger(__name__)
@@ -50,10 +51,14 @@ async def lifespan(app: FastAPI):
 
 
 def _submit_parse(application: FastAPI, document_id: str) -> bool:
+    scheduled_document = store.get_document(document_id)
+    if not scheduled_document:
+        return False
+    scheduled_run_id = scheduled_document["parse_run_id"]
     try:
         with application.state.pool_lock:
             try:
-                future = application.state.parse_executor.submit(parse_document, document_id)
+                future = application.state.parse_executor.submit(parse_document, document_id, scheduled_run_id)
             except BrokenProcessPool:
                 # The old pool can never accept work again after a native crash.
                 # Replace it once; original uploads remain available for retry.
@@ -61,11 +66,11 @@ def _submit_parse(application: FastAPI, document_id: str) -> bool:
                 application.state.parse_executor = ProcessPoolExecutor(
                     max_workers=application.state.parse_workers,
                     mp_context=multiprocessing.get_context("spawn"))
-                future = application.state.parse_executor.submit(parse_document, document_id)
+                future = application.state.parse_executor.submit(parse_document, document_id, scheduled_run_id)
     except Exception as exc:
         logger.error("Cannot schedule PDF job %s: %s", document_id, type(exc).__name__)
         document = store.get_document(document_id)
-        if document:
+        if document and document["parse_run_id"] == scheduled_run_id:
             message = "暂时无法启动解析进程；原 PDF 已保留，可稍后重试。"
             store.update_document(document_id, status="failed", error=message)
             store.set_run_status(document["parse_run_id"], "failed")
@@ -77,7 +82,7 @@ def _submit_parse(application: FastAPI, document_id: str) -> bool:
             return  # A queued job remains resumable after server shutdown.
         error = result.exception()
         document = store.get_document(document_id)
-        if error is not None and document:
+        if error is not None and document and document["parse_run_id"] == scheduled_run_id:
             logger.error("PDF worker stopped for %s: %s", document_id, type(error).__name__)
             message = "解析进程异常退出；可重试任务，若持续失败请检查文件与日志。"
             store.update_document(document_id, status="failed", error=message)
@@ -98,15 +103,24 @@ app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in origins.spl
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
+    ocr_status = ocr.runtime_status()
+    embedding_status = semantic.runtime_status()
     return {"status": "ok", "version": __version__, "edition": "local-development",
-            "stage": "source-grounded-foundation",
+            "stage": "multimodal-evidence",
             "model_configured": all(os.environ.get(key, "").strip()
                                     for key in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL")),
             "capabilities": {"pdf_upload": True, "native_pdf_parsing": True, "source_anchors": True,
                              "content_dedup_baseline": True, "page_checkpoint": True,
-                             "ocr": False, "formula_latex": False, "semantic_tables": False,
+                             "ocr": ocr_status["ready"], "ocr_supported": ocr_status["supported"],
+                             "ocr_enabled": ocr_status["enabled"], "ocr_ready": ocr_status["ready"],
+                             "dense_supported": embedding_status["supported"],
+                             "dense_enabled": embedding_status["enabled"], "dense_ready": embedding_status["ready"],
+                             "structured_tables": importlib.util.find_spec(f"{__package__}.tables") is not None,
+                             "formula_latex": False, "semantic_tables": False,
                              "citation_graph": False, "full_translation": False,
-                             "multi_user_auth": False}}
+                             "multi_user_auth": False},
+            "ocr_status": {key: value for key, value in ocr_status.items() if key != "model_dir"},
+            "embedding_status": embedding_status}
 
 
 @app.get("/api/stats")
@@ -241,18 +255,52 @@ def remove_document(document_id: str) -> dict[str, Any]:
     _require_document(document_id)
     if not store.delete_document(document_id):
         raise HTTPException(404, "文献不存在")
+    semantic.purge_document(document_id)
     return {"deleted": True, "document_id": document_id}
 
 
 @app.get("/api/documents/{document_id}/structure")
-def document_structure(document_id: str, page: int | None = Query(default=None, ge=1)) -> dict[str, Any]:
+def document_structure(document_id: str, page: int | None = Query(default=None, ge=1),
+                       parse_run_id: str | None = Query(default=None, max_length=100)) -> dict[str, Any]:
     document = _require_document(document_id)
     if page is not None and page > document["page_count"]:
         raise HTTPException(404, "页码超出文档范围")
-    structure = store.get_structure(document_id, page=page)
+    structure = store.get_structure(document_id, page=page, parse_run_id=parse_run_id)
     if structure is None:
         raise HTTPException(404, "文献不存在或已删除")
     return structure
+
+
+@app.get("/api/documents/{document_id}/parse-runs")
+def document_parse_runs(document_id: str) -> dict[str, Any]:
+    document = _require_document(document_id)
+    return {"items": store.list_parse_runs(document_id), "current_parse_run_id": document["parse_run_id"]}
+
+
+class ReprocessRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    ocr: bool = False
+    tables: bool = False
+
+
+@app.post("/api/documents/{document_id}/reprocess")
+def reprocess_document(document_id: str, options: ReprocessRequest, request: Request) -> dict[str, Any]:
+    document = _require_document(document_id)
+    if document["status"] in {"queued", "processing"}:
+        raise HTTPException(409, "文献正在处理中，请等待当前任务完成")
+    if options.ocr:
+        status = ocr.runtime_status()
+        if not status["ready"]:
+            raise HTTPException(503, status["reason"])
+    try:
+        document = store.start_reprocess(document_id, options.model_dump())
+    except ValueError as exc:
+        raise HTTPException(409, "文献正在处理中，请稍后重试") from exc
+    if document is None:
+        raise HTTPException(404, "文献不存在或已删除")
+    if not _submit_parse(request.app, document_id):
+        raise HTTPException(503, "解析进程暂不可用，原 PDF 和历史解析均已保留")
+    return document
 
 
 @app.get("/api/documents/{document_id}/pdf")

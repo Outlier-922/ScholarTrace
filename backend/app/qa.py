@@ -21,7 +21,8 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import store
+from . import semantic, store
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter(prefix="/api", tags=["evidence"])
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,6 +41,8 @@ CONCEPTS = {
     "训练": ["training"],
     "硬件": ["hardware", "gpu"],
     "显卡": ["gpu"],
+    "图形处理": ["gpu", "graphics", "hardware"],
+    "设备": ["hardware"],
     "参数量": ["parameters"],
     "上下文": ["context", "window"],
     "作者": ["authors"],
@@ -49,6 +52,8 @@ CONCEPTS = {
     "局限": ["limitations"],
     "未来工作": ["future", "work"],
 }
+TERM_FORMS = {"gpus": "gpu", "models": "model", "parameters": "parameter", "scores": "score",
+              "steps": "step", "tokens": "token", "authors": "author"}
 
 
 class AskRequest(BaseModel):
@@ -70,11 +75,11 @@ def _tokens(text: str, *, query: bool = False) -> list[str]:
             if len(token) > 1:
                 result.extend(token[i : i + 2] for i in range(len(token) - 1))
         elif len(token) > 1 or token.isdigit():
-            result.append(token)
+            result.append(TERM_FORMS.get(token, token))
     if query:
         for phrase, translated in CONCEPTS.items():
             if phrase in text:
-                result.extend(translated)
+                result.extend(TERM_FORMS.get(term, term) for term in translated)
     return result
 
 
@@ -90,10 +95,8 @@ def _is_reference(block: dict[str, Any]) -> bool:
     )
 
 
-def _retrieve(
-    question: str, documents: list[dict[str, Any]], limit: int
-) -> list[dict[str, Any]]:
-    candidates: list[tuple[dict[str, Any], dict[str, Any], list[str]]] = []
+def _collect_sources(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    sources = []
     for document in documents:
         structure = store.get_structure(document["id"])
         if not structure:
@@ -102,21 +105,35 @@ def _retrieve(
             text = str(block.get("text", "")).strip()
             if len(text) < 12 or _is_reference(block):
                 continue
-            terms = _tokens(text)
-            if terms:
-                candidates.append((document, block, terms))
+            metadata = block.get("metadata", {})
+            evidence_id = "ev_" + hashlib.sha256(f"{document['id']}:{block['id']}".encode()).hexdigest()[:20]
+            sources.append({"id": evidence_id, "document_id": document["id"], "title": document["title"],
+                            "version_label": document.get("version_label"), "page": block["page"],
+                            "block_id": block["id"], "parse_run_id": structure["parse_run_id"],
+                            "bbox": block["bbox"], "text": block["text"],
+                            "extraction": metadata.get("extraction", "native_pdf"),
+                            "confidence": metadata.get("confidence"), "block_type": block.get("type"),
+                            "metadata": metadata})
+    return sources
+
+
+def _retrieve(question: str, documents: list[dict[str, Any]], limit: int,
+              diagnostics: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    sources = _collect_sources(documents)
+    candidates = [(source, _tokens(source["text"])) for source in sources]
+    candidates = [(source, terms) for source, terms in candidates if terms]
     if not candidates:
         return []
     query = set(_tokens(question, query=True))
     if not query:
         return []
-    counts = [Counter(item[2]) for item in candidates]
+    counts = [Counter(item[1]) for item in candidates]
     document_frequency: Counter[str] = Counter()
     for count in counts:
         document_frequency.update(count.keys())
-    average_length = sum(map(lambda item: len(item[2]), candidates)) / len(candidates)
+    average_length = sum(len(item[1]) for item in candidates) / len(candidates)
     ranked: list[dict[str, Any]] = []
-    for (document, block, terms), count in zip(candidates, counts):
+    for (source, terms), count in zip(candidates, counts):
         score = 0.0
         for term in query:
             frequency = count.get(term, 0)
@@ -128,23 +145,20 @@ def _retrieve(
             score += inverse_frequency * frequency * 2.2 / denominator
         if score <= 0:
             continue
-        evidence_id = "ev_" + hashlib.sha256(
-            f"{document['id']}:{block['id']}".encode()
-        ).hexdigest()[:20]
-        ranked.append(
-            {
-                "id": evidence_id,
-                "document_id": document["id"],
-                "title": document["title"],
-                "version_label": document.get("version_label"),
-                "page": block["page"],
-                "block_id": block["id"],
-                "bbox": block["bbox"],
-                "text": block["text"],
-                "score": round(score, 6),
-            }
-        )
+        ranked.append({**source, "score": round(score, 6), "bm25_score": round(score, 6)})
     ranked.sort(key=lambda item: item["score"], reverse=True)
+    try:
+        dense, dense_details = semantic.search(question, sources, limit=max(30, limit * 3))
+    except Exception:
+        dense, dense_details = [], {"used": False, "reason": "本地语义索引不可用，已降级到 BM25；请检查服务端运行环境。"}
+    if diagnostics is not None:
+        diagnostics.update(dense_details)
+    if dense:
+        fused = semantic.reciprocal_rank_fusion([[item["id"] for item in ranked[:max(30, limit * 3)]], [identity for identity, score in dense]])
+        by_id = {item["id"]: item for item in sources}
+        sparse_scores = {item["id"]: item["score"] for item in ranked}
+        dense_scores = dict(dense)
+        ranked = [{**by_id[identity], "score": score, "bm25_score": sparse_scores.get(identity, 0.0), "dense_score": dense_scores.get(identity)} for identity, score in sorted(fused.items(), key=lambda item: item[1], reverse=True)]
     # Multi-document retrieval reserves one slot per paper with a hit, then fills
     # by score.  This prevents a long document from suppressing all other papers.
     selected: list[dict[str, Any]] = []
@@ -279,11 +293,17 @@ async def ask(request: AskRequest) -> dict[str, Any]:
     else:
         documents = all_documents
     documents = [item for item in documents if item.get("status") in ("ready", "partial")]
-    evidence = _retrieve(question, documents, request.limit)
-    warnings = ["当前检索为 BM25 词项基线，尚未接入语义向量、重排和完整的语义支持校验。"]
+    retrieval_details: dict[str, Any] = {}
+    evidence = await run_in_threadpool(_retrieve, question, documents, request.limit, retrieval_details)
+    retrieval_mode = "bm25_dense_rrf" if retrieval_details.get("used") else "bm25"
+    warnings = ["已使用 BM25 + 多语言语义向量 + RRF 融合；重排与完整语义支持核验尚待完善。" if retrieval_details.get("used") else "当前使用 BM25 检索；语义模型未启用、未准备或该文献尚需预索引。"]
+    if retrieval_details.get("reason") and not retrieval_details.get("used"):
+        warnings.append(retrieval_details["reason"])
+    if any(item.get("extraction") == "rapidocr" for item in evidence):
+        warnings.append("部分证据来自 OCR，识别分数不等于正确率；数字、公式和实验设置请核对原页。")
     steps = [
         {"label": "确定文献范围", "status": "completed", "detail": f"{len(documents)} 篇可检索文献"},
-        {"label": "检索原文证据", "status": "completed", "detail": f"BM25 检索返回 {len(evidence)} 个原文块，排除参考文献条目"},
+        {"label": "检索原文证据", "status": "completed", "detail": f"{'BM25 + Dense + RRF' if retrieval_details.get('used') else 'BM25'} 返回 {len(evidence)} 个原文块，排除参考文献条目"},
         {"label": "检查来源锚点", "status": "completed", "detail": "证据绑定具体文件、内容块、页码和坐标"},
     ]
     result: dict[str, Any] = {
@@ -295,6 +315,7 @@ async def ask(request: AskRequest) -> dict[str, Any]:
         "missing_information": [],
         "steps": steps,
         "warnings": warnings,
+        "retrieval": {"mode": retrieval_mode, **retrieval_details},
     }
     if not evidence:
         result["answer"] = "未检索到足以回答这个问题的原文证据。请检查文献范围、解析状态，或换用论文中的关键词。"

@@ -24,10 +24,13 @@ def sample_pdfs(tmp_path_factory):
 def client(tmp_path_factory):
     from fastapi.testclient import TestClient
 
-    variable_names = ("SCHOLARTRACE_DATA_DIR", "LLM_API_KEY")
+    variable_names = ("SCHOLARTRACE_DATA_DIR", "LLM_API_KEY", "SCHOLARTRACE_ENABLE_OCR", "SCHOLARTRACE_ENABLE_TABLES", "SCHOLARTRACE_ENABLE_DENSE")
     previous = {name: os.environ.get(name) for name in variable_names}
     os.environ["SCHOLARTRACE_DATA_DIR"] = str(tmp_path_factory.mktemp("scholartrace-data"))
     os.environ["LLM_API_KEY"] = ""
+    os.environ["SCHOLARTRACE_ENABLE_OCR"] = "false"
+    os.environ["SCHOLARTRACE_ENABLE_TABLES"] = "false"
+    os.environ["SCHOLARTRACE_ENABLE_DENSE"] = "false"
     from backend.app.main import app
 
     try:
