@@ -1,0 +1,610 @@
+{
+  "manifest": {
+    "pack_sha256": "7af858122f9de44994de77a3afbe18ba36c0d5af86678667235b13b9487e5a03",
+    "files": {
+      "backend/app/qa.py": "f09fa129e308906c7fd6d216f106560b0b8fe8a68e3cc71254101e49f890d63e",
+      "backend/app/model_client.py": "2dfa4a113add718f4d0425e814afd8a6effcfc1b9c8fee9f7c23d28e2ac2a8b2",
+      "backend/app/semantic.py": "0211122e980791a821a5d3e0b63f90341ba292eeabee3132e95b0829a14ecbd2",
+      "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+      "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+      "scripts/evaluate_qa.py": "924d10783ba1a0931bfb74131c8c83bd39710d49544b40368ec11000d06f5629"
+    },
+    "run_id": "20261027T181225Z-3d3f14ab",
+    "started_at": "2026-10-27T18:12:25.408230+00:00",
+    "api_health": {
+      "status": "ok",
+      "version": "0.7.0",
+      "edition": "local-development",
+      "stage": "intent-workflow-and-model-readiness",
+      "model_configured": true,
+      "capabilities": {
+        "pdf_upload": true,
+        "native_pdf_parsing": true,
+        "source_anchors": true,
+        "content_dedup_baseline": true,
+        "page_checkpoint": true,
+        "ocr": true,
+        "ocr_supported": true,
+        "ocr_enabled": true,
+        "ocr_ready": true,
+        "dense_supported": true,
+        "dense_enabled": true,
+        "dense_ready": true,
+        "structured_tables": true,
+        "formula_latex": false,
+        "semantic_tables": false,
+        "citation_graph": true,
+        "evidence_outline": true,
+        "full_translation": false,
+        "writing_plans": true,
+        "csv_plotting": true,
+        "architecture_diagrams": true,
+        "intent_workflow": true,
+        "model_diagnostics": true,
+        "multi_user_auth": false,
+        "comparison_matrix": true,
+        "citation_navigation": true,
+        "translation": true,
+        "literature_search": true,
+        "arxiv_import": true,
+        "topic_tracking": true
+      },
+      "ocr_status": {
+        "supported": true,
+        "enabled": true,
+        "ready": true,
+        "reason": "本地OCR模型已准备并完成CPU会话加载验证"
+      },
+      "embedding_status": {
+        "supported": true,
+        "enabled": true,
+        "ready": true,
+        "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "reason": "ready"
+      }
+    },
+    "git_commit": "3c9067d2c0bbcd51ee4b9108f111277b4fb92fec",
+    "git_dirty": true,
+    "live_model_requested": false,
+    "max_generation_requests": 0,
+    "max_reserved_output_tokens": 0,
+    "model": {
+      "profile": "compatible",
+      "endpoint_host": "api.deepseek.com",
+      "model": "deepseek-flash"
+    },
+    "scope": "20 answerable factual questions; 8 development / 12 work-disjoint holdout. No unanswerable accuracy is claimed.",
+    "case_ids": [
+      "D01",
+      "D02",
+      "D03",
+      "D04",
+      "D05",
+      "D06",
+      "D07",
+      "D08",
+      "H01",
+      "H02",
+      "H03",
+      "H04",
+      "H05",
+      "H06",
+      "H07",
+      "H08",
+      "H09",
+      "H10",
+      "H11",
+      "H12"
+    ],
+    "sources": {
+      "transformer": {
+        "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+        "document_id": "doc_a1482495af8e4aae8fef36a33fe1919c",
+        "version_label": "v7",
+        "parse_run_id": "parse_4f92d2b9321c4404bbb861a2e642f62f"
+      },
+      "bert": {
+        "sha256": "987545ffb087f1ece898142c403a516baeabeb70ce19089397fac6f7db12c3d4",
+        "document_id": "doc_6de9669edfe045dbba32a97ced6222e1",
+        "version_label": null,
+        "parse_run_id": "parse_d2984c376fee467db05c3316a56a436b"
+      },
+      "roberta": {
+        "sha256": "76a3872d244793563a5b000b818cbaf0ca8972ab1145d32be474c05b2a8f3070",
+        "document_id": "doc_ef43e7d20403429483a2bf4ad7d0d991",
+        "version_label": "v1",
+        "parse_run_id": "parse_086e1c5f3f9b4568a8b25fdc097b4583"
+      },
+      "t5": {
+        "sha256": "ad07e47cedf437a4156419ce5d3076e08a3e59bbfd6dac7cc53df1009cdcbe7f",
+        "document_id": "doc_5acc4ed0dab74aeb914ecc21af0ee4c4",
+        "version_label": "v4",
+        "parse_run_id": "parse_a9801ad4cc724b03ba27feccd6072c28"
+      }
+    },
+    "method": "sequential; no retries; no gold in requests; no product tuning between selected holdout queries; small Chinese factual draft set",
+    "quality_notice": "Paper-disjoint from earlier product tuning; authored by the same assistant. Public foundational papers may be in provider pretraining. Not a blind or independently adjudicated benchmark."
+  },
+  "overall": {
+    "case_count": 20,
+    "request_errors": 0,
+    "evidence_anchor_validity": 1.0,
+    "evidence_anchor_denominator": 120,
+    "gold_group_recall_at_6": 0.5217391304347826,
+    "gold_group_denominator": 23,
+    "claim_source_id_coverage": null,
+    "claim_denominator": 0,
+    "generated_case_count": 0,
+    "answered_case_count": 0,
+    "abstained_case_count": 0,
+    "model_fallback_count": 0,
+    "reviewed_cases": 0,
+    "review_coverage": 0.0,
+    "fully_correct_over_all_cases": null,
+    "fully_correct_over_answered_cases": null,
+    "citation_semantic_support": null,
+    "latency_seconds": {
+      "n": 20,
+      "p50": 0.073,
+      "p95": 2.429,
+      "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+    },
+    "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+  },
+  "by_split": {
+    "development": {
+      "case_count": 8,
+      "request_errors": 0,
+      "evidence_anchor_validity": 1.0,
+      "evidence_anchor_denominator": 48,
+      "gold_group_recall_at_6": 0.875,
+      "gold_group_denominator": 8,
+      "claim_source_id_coverage": null,
+      "claim_denominator": 0,
+      "generated_case_count": 0,
+      "answered_case_count": 0,
+      "abstained_case_count": 0,
+      "model_fallback_count": 0,
+      "reviewed_cases": 0,
+      "review_coverage": 0.0,
+      "fully_correct_over_all_cases": null,
+      "fully_correct_over_answered_cases": null,
+      "citation_semantic_support": null,
+      "latency_seconds": {
+        "n": 8,
+        "p50": 0.0719,
+        "p95": 2.429,
+        "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+      },
+      "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+    },
+    "holdout": {
+      "case_count": 12,
+      "request_errors": 0,
+      "evidence_anchor_validity": 1.0,
+      "evidence_anchor_denominator": 72,
+      "gold_group_recall_at_6": 0.3333333333333333,
+      "gold_group_denominator": 15,
+      "claim_source_id_coverage": null,
+      "claim_denominator": 0,
+      "generated_case_count": 0,
+      "answered_case_count": 0,
+      "abstained_case_count": 0,
+      "model_fallback_count": 0,
+      "reviewed_cases": 0,
+      "review_coverage": 0.0,
+      "fully_correct_over_all_cases": null,
+      "fully_correct_over_answered_cases": null,
+      "citation_semantic_support": null,
+      "latency_seconds": {
+        "n": 12,
+        "p50": 0.1093,
+        "p95": 6.7251,
+        "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+      },
+      "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+    }
+  },
+  "cases": [
+    {
+      "case_id": "D01",
+      "split": "development",
+      "case_sha256": "f3b1be62cde85c6fa1ba6ef4546451d1184deb217230707d824fa2fb1f98a388",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "2c3317676e91e58eef8e301aedd4ca43267ab90d28057af13b88b323b149a5f6",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 2.429
+    },
+    {
+      "case_id": "D02",
+      "split": "development",
+      "case_sha256": "f568456199e24a7965d799eaee283835257a1080ca860bb9168dc1c21640f21f",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "3d7c7acb7baba237000527452e9a48bb4e9ed2cf6df6a134bfad8de9c6ab2a94",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0611
+    },
+    {
+      "case_id": "D03",
+      "split": "development",
+      "case_sha256": "8fbbf3a554c66371ca0b60bc374ff9520897b1c07aed6fad0f734526a0217df4",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "674dc3ea3a7bb062de59e106a472a6ce5d0130e4658d71e87d5624bb36aa18af",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0591
+    },
+    {
+      "case_id": "D04",
+      "split": "development",
+      "case_sha256": "4e3a907276440bcd6fe51f5a2337de5162dc16dd985c5fdf0861f9f53fa8c6dc",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "b1a00167a1f54f4e5c8904f6742f142388951e8bbcea5c415f50a8474f804017",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 0,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0585
+    },
+    {
+      "case_id": "D05",
+      "split": "development",
+      "case_sha256": "f6166ff4c5db40e0f87d6d39e3a8c42ce483a45000411e0752df2996bc8ce06a",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "68d003a2ab796262466f6224aa76c3025154990ed253123f25c877ef8a10a4a2",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0761
+    },
+    {
+      "case_id": "D06",
+      "split": "development",
+      "case_sha256": "ce7c6afb3e14436919854864a7905bdc379c7487dd8878518f646785cee0fec9",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "14c7b57af0143b5b96cf710c26ab4cff16ac607707a05af2447220da87ee2333",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0719
+    },
+    {
+      "case_id": "D07",
+      "split": "development",
+      "case_sha256": "29ba844d06ec5ff4de977f8051ad20352502c70896002652aa180f33bf423a3a",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "193f1e5f740cda300fec475f32ffd68847afb817a15062fe83c68030501c8eae",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0729
+    },
+    {
+      "case_id": "D08",
+      "split": "development",
+      "case_sha256": "18c7e1a30d8ee7f860bacd5b150903783d55a9c0ae64cbb3f97ec5a9215c5978",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "d6493f970e16014e8d382af500a2e1de3ab08c86b28c9d8b94a883885f63eac5",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.073
+    },
+    {
+      "case_id": "H01",
+      "split": "holdout",
+      "case_sha256": "14a902299eaf869cde53a3a2fd2182a69c81a81af629396d9fcea2cf235eae21",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "d1f67f291bda0698a6a08be61182d6704cb5addb733a23e78a8eb8a81a608c83",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 0,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 6.7251
+    },
+    {
+      "case_id": "H02",
+      "split": "holdout",
+      "case_sha256": "3a969f5ba549d20bea387cf061a454beedfa8efea832ef5e664b19879e824b8f",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "85cae0b3e22a0a291c1e7ee44729d860b0d503b5b169d24d2f7bc75415e7064b",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0576
+    },
+    {
+      "case_id": "H03",
+      "split": "holdout",
+      "case_sha256": "8dc8d9e5722fb954db9daef94bb8f38b8e7fc1f86cf284e45234ea14a6e9f6f0",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "9d72f74d58ea1448ada911fd201b4ff16368c7d074634f785e63999a66c18734",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0626
+    },
+    {
+      "case_id": "H04",
+      "split": "holdout",
+      "case_sha256": "e59518710e8900857adea888eec7c6fdf7b9ad027c0be2a8706d45d05ab28040",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "a4f960bb68919553a2eff541572ba4c53f73131446667c3d9bb8ae2dc0e6c5b6",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0606
+    },
+    {
+      "case_id": "H05",
+      "split": "holdout",
+      "case_sha256": "db2457dc7cf595bf1012e2684c685aaf53372b28050e6d18bef5a7dde6fe718d",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "ac70aea4ffc45c760eff4053c2e5024590383a3fc09473cdb812d4c166e695a7",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0598
+    },
+    {
+      "case_id": "H06",
+      "split": "holdout",
+      "case_sha256": "cc873ba0975d561d02be345d77bb29010ad21047f69611cf09b2138c008bab8b",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "809d559722995c681d0eac0b1fff1f440de5a79061248991e01adc400f8ca30f",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 0,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1237
+    },
+    {
+      "case_id": "H07",
+      "split": "holdout",
+      "case_sha256": "1600f18fb2bab7138faa66a0aeedc5ed570f177d50b0fd0777dd2c113c3d8573",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "0b075f0b64e6f32fdea5422d5d29d4f286af3d8cca43f7c6e0170c237d41b0e0",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 0,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1094
+    },
+    {
+      "case_id": "H08",
+      "split": "holdout",
+      "case_sha256": "da3850fa246cb1ec37f2b2207cedd0bf12cc360cfa7a52d6a875c67339ca96fe",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "cf9cd1242a04622e82ab9122e9d432d7214cb64fe2194f5a40886345b38547c3",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 0,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1058
+    },
+    {
+      "case_id": "H09",
+      "split": "holdout",
+      "case_sha256": "a2c83647aaf1166bbc6bd8f0564ca04b11e8fa24af9a62004741c8474147642f",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "bd8206578322811903c708e330b0a3fcc9afd52345c1795b7cadeb44197af7da",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1099
+    },
+    {
+      "case_id": "H10",
+      "split": "holdout",
+      "case_sha256": "a9d85c1ee4d8c1ade9239e96804f74a1b4e1615250f347db8c2a0c0ab58cdca8",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "18b561552a65ea02d02188ad644ae7c7ff87ed4f3f92584a43d370c7c2bf4a6b",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 0,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1093
+    },
+    {
+      "case_id": "H11",
+      "split": "holdout",
+      "case_sha256": "1b946aee770a30919bacb92013e1612cf6e720092a16ab7ca46ed4451ab9a60e",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "7d598d9da811e945b5bcec433e1dae6aae7c6bf32b818deef44c8cde6f5c9f54",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 0,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1394
+    },
+    {
+      "case_id": "H12",
+      "split": "holdout",
+      "case_sha256": "02939e2eb7cc0670593940b7d98a728f3c1be5ba667035b9f03737fbed370318",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "ed5c640049720a51495cc5eaaf59f7959b0c8221492eada1b4a8aeb9ad19e941",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 0,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1884
+    }
+  ]
+}

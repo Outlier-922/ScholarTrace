@@ -1,0 +1,62 @@
+[
+  {
+    "case_id": "H01",
+    "case_sha256": "14a902299eaf869cde53a3a2fd2182a69c81a81af629396d9fcea2cf235eae21",
+    "response_sha256": "d7c6b7442b173ae1a8e7ef163515f05ab0028d21b09682d40e77387244733623",
+    "status": "pending",
+    "reviewer": "",
+    "judgment": null,
+    "supported_claims": null,
+    "notes": ""
+  },
+  {
+    "case_id": "H02",
+    "case_sha256": "3a969f5ba549d20bea387cf061a454beedfa8efea832ef5e664b19879e824b8f",
+    "response_sha256": "25ca82088d5f2fb1394d7e51d9e2c438c2aa49fd3c62f3a9d1dbf9cef8367186",
+    "status": "pending",
+    "reviewer": "",
+    "judgment": null,
+    "supported_claims": null,
+    "notes": ""
+  },
+  {
+    "case_id": "H06",
+    "case_sha256": "cc873ba0975d561d02be345d77bb29010ad21047f69611cf09b2138c008bab8b",
+    "response_sha256": "c02fde94528d8fdd8430ee2064b8f6d01516f72e34585207410d5d8aed586c74",
+    "status": "pending",
+    "reviewer": "",
+    "judgment": null,
+    "supported_claims": null,
+    "notes": ""
+  },
+  {
+    "case_id": "H07",
+    "case_sha256": "1600f18fb2bab7138faa66a0aeedc5ed570f177d50b0fd0777dd2c113c3d8573",
+    "response_sha256": "f919e9d4952d8a01ab24da36282f27109431d35027a4c696bb4e34f0e35df6c1",
+    "status": "pending",
+    "reviewer": "",
+    "judgment": null,
+    "supported_claims": null,
+    "notes": ""
+  },
+  {
+    "case_id": "H11",
+    "case_sha256": "1b946aee770a30919bacb92013e1612cf6e720092a16ab7ca46ed4451ab9a60e",
+    "response_sha256": "a877c1133cc0d88a017cacad524ecdb9d09c15203f2a9912de584ba10382ee1e",
+    "status": "pending",
+    "reviewer": "",
+    "judgment": null,
+    "supported_claims": null,
+    "notes": ""
+  },
+  {
+    "case_id": "H12",
+    "case_sha256": "02939e2eb7cc0670593940b7d98a728f3c1be5ba667035b9f03737fbed370318",
+    "response_sha256": "2af0bc9d0b15f73d6a31149226fb0132f80135b61f498fe13c01c9413b1ea258",
+    "status": "pending",
+    "reviewer": "",
+    "judgment": null,
+    "supported_claims": null,
+    "notes": ""
+  }
+]

@@ -1,0 +1,290 @@
+{
+  "manifest": {
+    "pack_sha256": "7af858122f9de44994de77a3afbe18ba36c0d5af86678667235b13b9487e5a03",
+    "files": {
+      "backend/app/qa.py": "f09fa129e308906c7fd6d216f106560b0b8fe8a68e3cc71254101e49f890d63e",
+      "backend/app/model_client.py": "2dfa4a113add718f4d0425e814afd8a6effcfc1b9c8fee9f7c23d28e2ac2a8b2",
+      "backend/app/semantic.py": "0211122e980791a821a5d3e0b63f90341ba292eeabee3132e95b0829a14ecbd2",
+      "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+      "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+      "scripts/evaluate_qa.py": "924d10783ba1a0931bfb74131c8c83bd39710d49544b40368ec11000d06f5629"
+    },
+    "run_id": "20261027T181303Z-16bae634",
+    "started_at": "2026-10-27T18:13:03.252877+00:00",
+    "api_health": {
+      "status": "ok",
+      "version": "0.7.0",
+      "edition": "local-development",
+      "stage": "intent-workflow-and-model-readiness",
+      "model_configured": true,
+      "capabilities": {
+        "pdf_upload": true,
+        "native_pdf_parsing": true,
+        "source_anchors": true,
+        "content_dedup_baseline": true,
+        "page_checkpoint": true,
+        "ocr": true,
+        "ocr_supported": true,
+        "ocr_enabled": true,
+        "ocr_ready": true,
+        "dense_supported": true,
+        "dense_enabled": true,
+        "dense_ready": true,
+        "structured_tables": true,
+        "formula_latex": false,
+        "semantic_tables": false,
+        "citation_graph": true,
+        "evidence_outline": true,
+        "full_translation": false,
+        "writing_plans": true,
+        "csv_plotting": true,
+        "architecture_diagrams": true,
+        "intent_workflow": true,
+        "model_diagnostics": true,
+        "multi_user_auth": false,
+        "comparison_matrix": true,
+        "citation_navigation": true,
+        "translation": true,
+        "literature_search": true,
+        "arxiv_import": true,
+        "topic_tracking": true
+      },
+      "ocr_status": {
+        "supported": true,
+        "enabled": true,
+        "ready": true,
+        "reason": "本地OCR模型已准备并完成CPU会话加载验证"
+      },
+      "embedding_status": {
+        "supported": true,
+        "enabled": true,
+        "ready": true,
+        "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "reason": "ready"
+      }
+    },
+    "git_commit": "3c9067d2c0bbcd51ee4b9108f111277b4fb92fec",
+    "git_dirty": true,
+    "live_model_requested": true,
+    "max_generation_requests": 6,
+    "max_reserved_output_tokens": 9600,
+    "model": {
+      "profile": "compatible",
+      "endpoint_host": "api.deepseek.com",
+      "model": "deepseek-flash"
+    },
+    "scope": "20 answerable factual questions; 8 development / 12 work-disjoint holdout. No unanswerable accuracy is claimed.",
+    "case_ids": [
+      "H01",
+      "H02",
+      "H06",
+      "H07",
+      "H11",
+      "H12"
+    ],
+    "sources": {
+      "transformer": {
+        "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+        "document_id": "doc_a1482495af8e4aae8fef36a33fe1919c",
+        "version_label": "v7",
+        "parse_run_id": "parse_4f92d2b9321c4404bbb861a2e642f62f"
+      },
+      "bert": {
+        "sha256": "987545ffb087f1ece898142c403a516baeabeb70ce19089397fac6f7db12c3d4",
+        "document_id": "doc_6de9669edfe045dbba32a97ced6222e1",
+        "version_label": null,
+        "parse_run_id": "parse_d2984c376fee467db05c3316a56a436b"
+      },
+      "roberta": {
+        "sha256": "76a3872d244793563a5b000b818cbaf0ca8972ab1145d32be474c05b2a8f3070",
+        "document_id": "doc_ef43e7d20403429483a2bf4ad7d0d991",
+        "version_label": "v1",
+        "parse_run_id": "parse_086e1c5f3f9b4568a8b25fdc097b4583"
+      },
+      "t5": {
+        "sha256": "ad07e47cedf437a4156419ce5d3076e08a3e59bbfd6dac7cc53df1009cdcbe7f",
+        "document_id": "doc_5acc4ed0dab74aeb914ecc21af0ee4c4",
+        "version_label": "v4",
+        "parse_run_id": "parse_a9801ad4cc724b03ba27feccd6072c28"
+      }
+    },
+    "method": "sequential; no retries; no gold in requests; no product tuning between selected holdout queries; small Chinese factual draft set",
+    "quality_notice": "Paper-disjoint from earlier product tuning; authored by the same assistant. Public foundational papers may be in provider pretraining. Not a blind or independently adjudicated benchmark."
+  },
+  "overall": {
+    "case_count": 6,
+    "request_errors": 0,
+    "evidence_anchor_validity": 1.0,
+    "evidence_anchor_denominator": 36,
+    "gold_group_recall_at_6": 0.125,
+    "gold_group_denominator": 8,
+    "claim_source_id_coverage": 1.0,
+    "claim_denominator": 7,
+    "generated_case_count": 6,
+    "answered_case_count": 4,
+    "abstained_case_count": 2,
+    "model_fallback_count": 0,
+    "reviewed_cases": 0,
+    "review_coverage": 0.0,
+    "fully_correct_over_all_cases": null,
+    "fully_correct_over_answered_cases": null,
+    "citation_semantic_support": null,
+    "latency_seconds": {
+      "n": 6,
+      "p50": 2.1589,
+      "p95": 2.787,
+      "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+    },
+    "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+  },
+  "by_split": {
+    "holdout": {
+      "case_count": 6,
+      "request_errors": 0,
+      "evidence_anchor_validity": 1.0,
+      "evidence_anchor_denominator": 36,
+      "gold_group_recall_at_6": 0.125,
+      "gold_group_denominator": 8,
+      "claim_source_id_coverage": 1.0,
+      "claim_denominator": 7,
+      "generated_case_count": 6,
+      "answered_case_count": 4,
+      "abstained_case_count": 2,
+      "model_fallback_count": 0,
+      "reviewed_cases": 0,
+      "review_coverage": 0.0,
+      "fully_correct_over_all_cases": null,
+      "fully_correct_over_answered_cases": null,
+      "citation_semantic_support": null,
+      "latency_seconds": {
+        "n": 6,
+        "p50": 2.1589,
+        "p95": 2.787,
+        "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+      },
+      "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+    }
+  },
+  "cases": [
+    {
+      "case_id": "H01",
+      "split": "holdout",
+      "case_sha256": "14a902299eaf869cde53a3a2fd2182a69c81a81af629396d9fcea2cf235eae21",
+      "gold_groups": 1,
+      "live_model_requested": true,
+      "response_sha256": "d7c6b7442b173ae1a8e7ef163515f05ab0028d21b09682d40e77387244733623",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 0,
+        "claim_count": 2,
+        "claims_with_valid_source_ids": 2,
+        "mode": "llm",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 2.3556
+    },
+    {
+      "case_id": "H02",
+      "split": "holdout",
+      "case_sha256": "3a969f5ba549d20bea387cf061a454beedfa8efea832ef5e664b19879e824b8f",
+      "gold_groups": 1,
+      "live_model_requested": true,
+      "response_sha256": "25ca82088d5f2fb1394d7e51d9e2c438c2aa49fd3c62f3a9d1dbf9cef8367186",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 2,
+        "claims_with_valid_source_ids": 2,
+        "mode": "llm",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 2.5525
+    },
+    {
+      "case_id": "H06",
+      "split": "holdout",
+      "case_sha256": "cc873ba0975d561d02be345d77bb29010ad21047f69611cf09b2138c008bab8b",
+      "gold_groups": 1,
+      "live_model_requested": true,
+      "response_sha256": "c02fde94528d8fdd8430ee2064b8f6d01516f72e34585207410d5d8aed586c74",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 0,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "llm",
+        "retrieval_mode": "bm25",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 1.7942
+    },
+    {
+      "case_id": "H07",
+      "split": "holdout",
+      "case_sha256": "1600f18fb2bab7138faa66a0aeedc5ed570f177d50b0fd0777dd2c113c3d8573",
+      "gold_groups": 1,
+      "live_model_requested": true,
+      "response_sha256": "f919e9d4952d8a01ab24da36282f27109431d35027a4c696bb4e34f0e35df6c1",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 0,
+        "claim_count": 2,
+        "claims_with_valid_source_ids": 2,
+        "mode": "llm",
+        "retrieval_mode": "bm25",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 2.787
+    },
+    {
+      "case_id": "H11",
+      "split": "holdout",
+      "case_sha256": "1b946aee770a30919bacb92013e1612cf6e720092a16ab7ca46ed4451ab9a60e",
+      "gold_groups": 2,
+      "live_model_requested": true,
+      "response_sha256": "a877c1133cc0d88a017cacad524ecdb9d09c15203f2a9912de584ba10382ee1e",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 0,
+        "claim_count": 1,
+        "claims_with_valid_source_ids": 1,
+        "mode": "llm",
+        "retrieval_mode": "bm25",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 2.0213
+    },
+    {
+      "case_id": "H12",
+      "split": "holdout",
+      "case_sha256": "02939e2eb7cc0670593940b7d98a728f3c1be5ba667035b9f03737fbed370318",
+      "gold_groups": 2,
+      "live_model_requested": true,
+      "response_sha256": "2af0bc9d0b15f73d6a31149226fb0132f80135b61f498fe13c01c9413b1ea258",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 0,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "llm",
+        "retrieval_mode": "bm25",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 2.1589
+    }
+  ]
+}

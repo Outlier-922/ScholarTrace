@@ -17,3 +17,4 @@ data/
 Thumbs.db
 playwright-report/
 test-results/
+tmp/
