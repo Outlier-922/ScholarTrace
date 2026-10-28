@@ -102,6 +102,8 @@ async def chat_json(system: str, payload: dict, *, max_tokens: int = 2000) -> di
     if parsed.hostname == "api.deepseek.com":
         body["thinking"] = {"type": "disabled"}
     if (budget:=_budget.get()) is not None:budget.reserve(max_tokens)
+    from .demo_access import reserve_model
+    reserve_model(max_tokens)
     async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10), follow_redirects=False) as client:
         response = await client.post(url, headers={"Authorization": "Bearer " + os.getenv("LLM_API_KEY", "").strip()}, json=body)
         response.raise_for_status()

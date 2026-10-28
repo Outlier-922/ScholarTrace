@@ -1,0 +1,78 @@
+{
+  "phase": "read-only-after-restart",
+  "unauthenticated_surfaces": {
+    "/": 401,
+    "/api/documents": 401,
+    "/docs": 401,
+    "/openapi.json": 401,
+    "/api/documents/unknown/pdf": 401
+  },
+  "authenticated_frontend": 200,
+  "authenticated_asset": 200,
+  "hidden_file": 404,
+  "cross_site_write": 403,
+  "oversized_body": 413,
+  "document_id": "doc_abd0d314031e43c99d03892867d303f3",
+  "document_status": "ready",
+  "document_sha256": "edc1983dee62cb137692d3d061d71a1f78b47ef4aec60cb6d581a607997becf1",
+  "parse_run_id": "parse_c8c702b52ba54092ad12a8caae0d4109",
+  "pdf_bytes_verified": true,
+  "health_version": "0.10.0",
+  "real_model_requests": 0,
+  "notice": "Isolated fictional PDF and synthetic credentials; no production data or independent answer quality verdict.",
+  "restart_document_and_parse_run_preserved": true,
+  "readonly_ask_status": 403,
+  "readonly_delete_status": 403,
+  "unauthenticated_asset_status": 401,
+  "provider_credentials_inherited": false,
+  "workspace_single_launcher_lock": "second launcher refused",
+  "cache_control": "no-store",
+  "frame_options": "DENY",
+  "authenticated_pdf_range_status": 206,
+  "completed_at": "2026-10-28T17:13:14.859844+00:00",
+  "tests": {
+    "passed": 260,
+    "warnings": 1,
+    "seconds": 25.93,
+    "added_cases": 27
+  },
+  "build": {
+    "typescript": "passed",
+    "vite_modules": 1600,
+    "vite_seconds": 2.24
+  },
+  "ui": {
+    "authenticated_clean_url": "passed",
+    "readonly_notice": true,
+    "pdf_canvas_count": 2,
+    "desktop_width": 1280,
+    "desktop_content": 1265,
+    "mobile_width": 390,
+    "mobile_content": 375,
+    "native_auth_dialog_automated": false,
+    "initial_test_url_fetch_failed": true
+  },
+  "public_deployed": false,
+  "multi_user_isolation": false,
+  "caddy_and_container_tested": false,
+  "product_fingerprint": {
+    "fingerprint_format": "utf8_lf_text_v1",
+    "pack_sha256": "1abbc183337cb8576d95d5f44c1d56488d8adf5f9b9a95a5520b7ddfce91183f",
+    "files": {
+      "backend/app/qa.py": "7e71fe26bed323e63d221957bc46a2a2f887fe6fd76bd6dc2941671fe353fee1",
+      "backend/app/model_client.py": "5dc193477ebbb9004c9ec430a22aab9afafe15e122073460121391ebcf4b5bdd",
+      "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+      "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+      "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+      "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+      "backend/app/comparison.py": "2b5e1565a0efdec1b41e8b0a8b924924eeb8bd15a758ca0590f7d1723cc68eee",
+      "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+      "backend/app/answer_fields.py": "0b9c45797acde532b4ba5e35c636256a3677662cf35864506ae25aa42302078a",
+      "backend/app/workflow.py": "f7e7cb1782807dd4f4d60b84f10e98602a7abd467bf98a5acedc7f60d3282cb7",
+      "backend/app/demo_access.py": "4943b392af56944f9c69efbe1e7e7a7232bef5b0ac013e2e520355840995a024",
+      "backend/app/main.py": "73337e9bb4311d964b1caa4dc9b9fe9f28aadded6493affd92fee733e39fef2b",
+      "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+      "scripts/evaluate_qa.py": "6fbd29459b122f014881cc95fe09de852d7edc9ae7707223a64acc5a8d983e4e"
+    }
+  }
+}

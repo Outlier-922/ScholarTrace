@@ -22,10 +22,11 @@ import pymupdf as fitz
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from . import __version__, ocr, semantic, store, semantic_jobs
+from . import __version__, ocr, semantic, store, semantic_jobs, demo_access
 from .parser import parse_document
 
 logger = logging.getLogger(__name__)
@@ -38,15 +39,17 @@ async def lifespan(app: FastAPI):
     store.init_db()
     semantic_jobs.init()
     research_store.init_db()
-    translation.resume_jobs()
-    literature.start()
+    literature.repo.init_db()
     graph.repo.init_db()
     studio.repo.init_db()
     workflow.repo.init_db()
     model_status.init_db()
-    workflow.start()
-    workflow.repo.recover()
-    store.cleanup_deleted_files()
+    if not demo_access.read_only():
+        translation.resume_jobs()
+        literature.start()
+        workflow.start()
+        workflow.repo.recover()
+        store.cleanup_deleted_files()
     workers = max(1, min(4, int(os.environ.get("SCHOLARTRACE_PARSE_WORKERS", "2"))))
     # PyMuPDF must not run concurrently in multiple threads. Each parse worker
     # has its own interpreter/native state; SQLite remains shared via WAL.
@@ -54,8 +57,9 @@ async def lifespan(app: FastAPI):
     app.state.parse_workers = workers
     app.state.pool_lock = threading.Lock()
     app.state.parse_executor = executor
-    for document_id in store.resumable_documents():
-        _submit_parse(app, document_id)
+    if not demo_access.read_only():
+        for document_id in store.resumable_documents():
+            _submit_parse(app, document_id)
     yield
     await semantic_jobs.shutdown()
     await workflow.shutdown()
@@ -111,17 +115,21 @@ app = FastAPI(title="ScholarTrace · 研迹", version=__version__, lifespan=life
               description="版本化文献与可定位原文证据。本地开发版：多文对比与联读。")
 app.include_router(semantic_jobs.router)
 origins = os.environ.get("SCHOLARTRACE_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173")
-app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in origins.split(",") if o.strip()],
+app.add_middleware(CORSMiddleware, allow_origins=[] if demo_access.enabled() else [o.strip() for o in origins.split(",") if o.strip()],
                    allow_credentials=False, allow_methods=["GET", "POST", "PATCH", "DELETE"],
                    allow_headers=["Content-Type", "Last-Event-ID"])
+if demo_access.enabled():
+    app.add_middleware(demo_access.DemoGuard)
 
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     ocr_status = ocr.runtime_status()
     embedding_status = semantic.runtime_status()
-    return {"status": "ok", "version": __version__, "edition": "local-development",
-            "stage": "multilingual-retrieval-and-layout",
+    return {"status": "ok", "version": __version__, "edition": "controlled-shared-demo" if demo_access.enabled() else "local-development",
+            "stage": "controlled-shared-demo",
+            "deployment": {"demo_enabled": demo_access.enabled(), "read_only": demo_access.read_only(),
+                           "workspace": "shared", "user_isolation": False},
             "model_configured": all(os.environ.get(key, "").strip()
                                     for key in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL")),
             "capabilities": {"pdf_upload": True, "native_pdf_parsing": True, "source_anchors": True,
@@ -400,3 +408,10 @@ app.include_router(graph.router)
 app.include_router(studio.router)
 app.include_router(workflow.router)
 app.include_router(model_status.router)
+
+# Serve only the explicit production build, never the repository or data root.
+if os.getenv('SCHOLARTRACE_SERVE_WEB', 'false').lower() == 'true':
+    web_dist = Path(__file__).resolve().parents[2] / 'apps' / 'web' / 'dist'
+    if not (web_dist / 'index.html').is_file():
+        raise RuntimeError('Frontend build missing; build apps/web before starting the demo.')
+    app.mount('/', StaticFiles(directory=web_dist, html=True), name='web')

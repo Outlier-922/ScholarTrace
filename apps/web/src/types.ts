@@ -100,6 +100,7 @@ export interface Health {
   version: string;
   capabilities: Record<string, boolean | string>;
   model_configured: boolean;
+  deployment?: { demo_enabled: boolean; read_only: boolean; workspace: string; user_isolation: boolean };
 }
 
 export interface Stats {
