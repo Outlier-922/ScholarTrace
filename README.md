@@ -4,6 +4,8 @@
 
 **第九阶段修复**：[索引与上标使用说明](docs/INDEX_AND_LAYOUT.md)、[实测报告](docs/STAGE9_TEST_REPORT.md)。新增中文字段/章节定位、逐文候选分配、显式本地索引进度，以及保留上标的模型输入。已观察回归集严格标注组命中22/23，197项自动测试通过；不代表新题事实准确率。第八阶段PDF仍是0.7.0历史草稿，正式提交前需按最终版本更新。
 
+**第十阶段新作品检查**：[报告](docs/STAGE10_TEST_REPORT.md)。产品固定在0.8.0（b7dc401），新增DistilBERT/CLIP的8题和2项缺失字段检查；新集标注组命中8/10，跨文仍有漏项及不完整公式表述，未宣称答案正确率。新增工具后全量200项通过；未按新结果修改产品代码。
+
 **第八阶段新增评测和参赛材料草稿**：[20题评测说明](evaluation/README.md)、[实测报告](docs/STAGE8_TEST_REPORT.md)、[技术说明源稿](docs/TECHNICAL_DESIGN_DRAFT.md)、[7分钟演示脚本](docs/DEMO_SCRIPT.md)、[提交清单](docs/SUBMISSION_CHECKLIST.md)。首轮严格标注块组召回12/23；6题真实模型样本存在缺项和拒答，独立人工质量复核尚未完成。技术PDF在output/pdf，封面按用户意见暂不写参赛身份。尚未录制MP4或部署公网。
 
 ## 当前功能与边界

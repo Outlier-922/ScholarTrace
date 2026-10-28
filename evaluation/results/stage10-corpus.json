@@ -1,0 +1,84 @@
+[
+  {
+    "identifier": "1910.01108v4",
+    "verified_title": "DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter",
+    "document": {
+      "sha256": "a70c78e2b4db85bfee7696e19829571a3b05f69c616db5c039f6f4eb33b1a0b6",
+      "page_count": 5,
+      "parse_run_id": "parse_828fd9e7162c4192a1c9ebe64b1ac885",
+      "status": "ready",
+      "warnings": [
+        "公式尚未做 LaTeX 恢复；表格和参考文献结构仍需核对原文。",
+        "PDF 元数据未提供作者；尚未自动核验作者与机构。"
+      ]
+    },
+    "provenance": {
+      "key": "arxiv:1910.01108v4",
+      "identifier": "1910.01108v4",
+      "metadata_title": "DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter",
+      "authors": [
+        "Victor Sanh",
+        "Lysandre Debut",
+        "Julien Chaumond",
+        "Thomas Wolf"
+      ],
+      "download_url": "https://arxiv.org/pdf/1910.01108v4",
+      "metadata_source": "https://export.arxiv.org/api/query?id_list=1910.01108v4",
+      "fetched_at": "2026-10-28T07:14:24.757935+00:00",
+      "sha256": "a70c78e2b4db85bfee7696e19829571a3b05f69c616db5c039f6f4eb33b1a0b6",
+      "document_id": "doc_d2f494b8a32f4b64999b6da6f74adad7"
+    },
+    "index": {
+      "id": "index_865a0dcb76c2498a84616587a610ec91",
+      "parse_run_id": "parse_828fd9e7162c4192a1c9ebe64b1ac885",
+      "status": "completed",
+      "done": 69,
+      "total": 69
+    }
+  },
+  {
+    "identifier": "2103.00020v1",
+    "verified_title": "Learning Transferable Visual Models From Natural Language Supervision",
+    "document": {
+      "sha256": "6478b6e571a7d6fcd846d8ef77bfd60c285f1986abb8f475eedc43de403074f5",
+      "page_count": 48,
+      "parse_run_id": "parse_d0e4dfdbf04c452581344e082be2f609",
+      "status": "partial",
+      "warnings": [
+        "公式尚未做 LaTeX 恢复；表格和参考文献结构仍需核对原文。",
+        "1 页表格提取失败，正文仍可使用。"
+      ]
+    },
+    "provenance": {
+      "key": "arxiv:2103.00020v1",
+      "identifier": "2103.00020v1",
+      "metadata_title": "Learning Transferable Visual Models From Natural Language Supervision",
+      "authors": [
+        "Alec Radford",
+        "Jong Wook Kim",
+        "Chris Hallacy",
+        "Aditya Ramesh",
+        "Gabriel Goh",
+        "Sandhini Agarwal",
+        "Girish Sastry",
+        "Amanda Askell",
+        "Pamela Mishkin",
+        "Jack Clark",
+        "Gretchen Krueger",
+        "Ilya Sutskever"
+      ],
+      "download_url": "https://arxiv.org/pdf/2103.00020v1",
+      "metadata_source": "https://export.arxiv.org/api/query?id_list=2103.00020v1",
+      "fetched_at": "2026-10-28T07:14:32.629758+00:00",
+      "sha256": "6478b6e571a7d6fcd846d8ef77bfd60c285f1986abb8f475eedc43de403074f5",
+      "document_id": "doc_e645387c78a74660b75a8c66e56df9bc"
+    },
+    "index": {
+      "id": "index_f25c322b975443f89b73175315829bc0",
+      "parse_run_id": "parse_d0e4dfdbf04c452581344e082be2f609",
+      "status": "completed",
+      "done": 762,
+      "total": 762
+    }
+  }
+]

@@ -1,0 +1,350 @@
+{
+  "schema_version": 1,
+  "name": "Fresh-work draft v3",
+  "sources": {
+    "distilbert": {
+      "sha256": "a70c78e2b4db85bfee7696e19829571a3b05f69c616db5c039f6f4eb33b1a0b6",
+      "version_label": "v4",
+      "page_count": 5,
+      "status": "ready",
+      "warnings": [
+        "公式尚未做 LaTeX 恢复；表格和参考文献结构仍需核对原文。",
+        "PDF 元数据未提供作者；尚未自动核验作者与机构。"
+      ],
+      "title": "DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter",
+      "work": "1910.01108",
+      "aliases": [
+        "arxiv:1910.01108"
+      ],
+      "split": "holdout",
+      "filename": "1910.01108v4.pdf",
+      "original_parse_run_id": "parse_828fd9e7162c4192a1c9ebe64b1ac885"
+    },
+    "clip": {
+      "sha256": "6478b6e571a7d6fcd846d8ef77bfd60c285f1986abb8f475eedc43de403074f5",
+      "version_label": "v1",
+      "page_count": 48,
+      "status": "partial",
+      "warnings": [
+        "公式尚未做 LaTeX 恢复；表格和参考文献结构仍需核对原文。",
+        "1 页表格提取失败，正文仍可使用。"
+      ],
+      "title": "Learning Transferable Visual Models From Natural Language Supervision",
+      "work": "2103.00020",
+      "aliases": [
+        "arxiv:2103.00020"
+      ],
+      "split": "holdout",
+      "filename": "2103.00020v1.pdf",
+      "original_parse_run_id": "parse_d0e4dfdbf04c452581344e082be2f609"
+    }
+  },
+  "cases": [
+    {
+      "id": "N01",
+      "split": "holdout",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "distilbert"
+      ],
+      "question": "DistilBERT 的学生架构相对 BERT 移除了哪些部件，层数如何变化？",
+      "expected_facts": "去掉token-type embeddings和pooler，层数减半。",
+      "gold_groups": [
+        [
+          {
+            "source": "distilbert",
+            "page": 2,
+            "bbox": [
+              0.176471,
+              0.692278,
+              0.826235,
+              0.787616
+            ],
+            "text_sha256": "3ef98cb29f2044ceab2b2f40c317fb79c386b9daa4ac7b6a17f41d937ceeea90",
+            "original_block_id": "blk_bdaaa4e683c644e8b409eef9f29df633"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N02",
+      "split": "holdout",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "distilbert"
+      ],
+      "question": "DistilBERT 的最终训练目标包含哪些损失，它们分别起什么作用？",
+      "expected_facts": "蒸馏损失、MLM监督损失、对齐学生与教师隐藏状态方向的余弦嵌入损失。",
+      "gold_groups": [
+        [
+          {
+            "source": "distilbert",
+            "page": 2,
+            "bbox": [
+              0.175966,
+              0.586043,
+              0.823534,
+              0.640236
+            ],
+            "text_sha256": "2cd3daaeb4fffc046972e0f28f134964a554bdf749f940643633e639b07db944",
+            "original_block_id": "blk_a039fb65581440cd8746d416f549761b"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N03",
+      "split": "holdout",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "distilbert"
+      ],
+      "question": "DistilBERT 使用什么预训练语料，训练硬件的数量、型号、单卡显存和训练耗时分别是多少？不要混入文中对照模型的设置。",
+      "expected_facts": "英语Wikipedia和Toronto Book Corpus；8张16GB V100；约90小时。",
+      "gold_groups": [
+        [
+          {
+            "source": "distilbert",
+            "page": 3,
+            "bbox": [
+              0.175884,
+              0.468059,
+              0.825789,
+              0.522075
+            ],
+            "text_sha256": "1fae79bcf98fabb236c62c8df989c983e2448cf318d061915f9b2e57914cdb01",
+            "original_block_id": "blk_2ffd7aa9c7c84ce0b58ca596cd773708"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N04",
+      "split": "holdout",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "clip"
+      ],
+      "question": "CLIP 第2.2节构建的数据集包含多少图文对，收集过程使用了多少条文本查询？",
+      "expected_facts": "4亿图文对；50万条查询。",
+      "gold_groups": [
+        [
+          {
+            "source": "clip",
+            "page": 3,
+            "bbox": [
+              0.501768,
+              0.70148,
+              0.887416,
+              0.865067
+            ],
+            "text_sha256": "69ae189572f651a1a504e49eab6f038856b5e086edbca95d9609a2f6a8db7b5c",
+            "original_block_id": "blk_e7ef20f27c3847dbbdd97bc46538f9db"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N05",
+      "split": "holdout",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "clip"
+      ],
+      "question": "CLIP 第2.5节报告的训练轮数、minibatch大小、优化器和学习率调度分别是什么？",
+      "expected_facts": "32轮；32,768；Adam并解耦权重衰减；余弦学习率调度。",
+      "gold_groups": [
+        [
+          {
+            "source": "clip",
+            "page": 5,
+            "bbox": [
+              0.501588,
+              0.263661,
+              0.887557,
+              0.834846
+            ],
+            "text_sha256": "a945f528af8824a7721a8ac478ca81e1972f0a40e4fd13bac1c27a9ccb9344ec",
+            "original_block_id": "blk_ec610674a2e84411912bcc6e3e458864"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N06",
+      "split": "holdout",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "clip"
+      ],
+      "question": "CLIP 中 RN50x64 与最大的 Vision Transformer 分别使用多少张什么GPU，训练了多少天？",
+      "expected_facts": "RN50x64：592张V100、18天；最大ViT：256张V100、12天。",
+      "gold_groups": [
+        [
+          {
+            "source": "clip",
+            "page": 5,
+            "bbox": [
+              0.501588,
+              0.263661,
+              0.887557,
+              0.834846
+            ],
+            "text_sha256": "a945f528af8824a7721a8ac478ca81e1972f0a40e4fd13bac1c27a9ccb9344ec",
+            "original_block_id": "blk_ec610674a2e84411912bcc6e3e458864"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N07",
+      "split": "holdout",
+      "kind": "cross_document",
+      "answerable": true,
+      "sources": [
+        "distilbert",
+        "clip"
+      ],
+      "question": "分别比较 DistilBERT 和 CLIP 的 RN50x64 训练GPU数量、型号与耗时，保留具体模型条件，不据此给效率排名。",
+      "expected_facts": "DistilBERT：8张16GB V100、约90小时；CLIP RN50x64：592张V100、18天。",
+      "gold_groups": [
+        [
+          {
+            "source": "distilbert",
+            "page": 3,
+            "bbox": [
+              0.175884,
+              0.468059,
+              0.825789,
+              0.522075
+            ],
+            "text_sha256": "1fae79bcf98fabb236c62c8df989c983e2448cf318d061915f9b2e57914cdb01",
+            "original_block_id": "blk_2ffd7aa9c7c84ce0b58ca596cd773708"
+          }
+        ],
+        [
+          {
+            "source": "clip",
+            "page": 5,
+            "bbox": [
+              0.501588,
+              0.263661,
+              0.887557,
+              0.834846
+            ],
+            "text_sha256": "a945f528af8824a7721a8ac478ca81e1972f0a40e4fd13bac1c27a9ccb9344ec",
+            "original_block_id": "blk_ec610674a2e84411912bcc6e3e458864"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N08",
+      "split": "holdout",
+      "kind": "cross_document",
+      "answerable": true,
+      "sources": [
+        "distilbert",
+        "clip"
+      ],
+      "question": "比较 DistilBERT 和 CLIP 各自训练目标的损失组成，不把两篇的目标混在一起。",
+      "expected_facts": "DistilBERT：蒸馏、MLM、余弦嵌入；CLIP：图文相似度上的对称交叉熵，拉近真配对、远离错误配对。",
+      "gold_groups": [
+        [
+          {
+            "source": "distilbert",
+            "page": 2,
+            "bbox": [
+              0.175966,
+              0.586043,
+              0.823534,
+              0.640236
+            ],
+            "text_sha256": "2cd3daaeb4fffc046972e0f28f134964a554bdf749f940643633e639b07db944",
+            "original_block_id": "blk_a039fb65581440cd8746d416f549761b"
+          }
+        ],
+        [
+          {
+            "source": "clip",
+            "page": 4,
+            "bbox": [
+              0.501817,
+              0.087707,
+              0.88755,
+              0.31162
+            ],
+            "text_sha256": "42fba2fd5d547533fa97d9b0c721f0ec4a578f63f5699208fc79a0cde55f2124",
+            "original_block_id": "blk_ab309ebc647e443fbd4d5451091e1112"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    }
+  ],
+  "negative_checks": [
+    {
+      "id": "G01",
+      "sources": [
+        "distilbert"
+      ],
+      "question": "DistilBERT 训练所用 V100 GPU 的核心时钟频率是多少 MHz？只回答论文明确报告的值，不从型号推断。",
+      "missing_field": "GPU核心时钟频率MHz",
+      "absence_patterns": [
+        "megahertz",
+        "\\bmhz\\b",
+        "core clock",
+        "clock frequency"
+      ],
+      "absence_text_sha256": "9d50d10d2a748110f4f81a9dfcad979a65c4342aae945cfc9dfdc9367ea7e9ea",
+      "absence_term_counts": {
+        "megahertz": 0,
+        "\\bmhz\\b": 0,
+        "core clock": 0,
+        "clock frequency": 0
+      },
+      "gold_review": "Assistant text search plus hardware-section inspection; not independent proof/adjudication"
+    },
+    {
+      "id": "G02",
+      "sources": [
+        "clip"
+      ],
+      "question": "CLIP 训练所用 V100 GPU 的运行电压是多少伏特？只回答论文明确报告的值，不从型号推断。",
+      "missing_field": "GPU运行电压V",
+      "absence_patterns": [
+        "voltage",
+        "\\bvolts?\\b"
+      ],
+      "absence_text_sha256": "fc3ce20f33dc15492f0fdb4e8a0f917cbffa5bd7d33d0b28c75aa31ef33272c9",
+      "absence_term_counts": {
+        "voltage": 0,
+        "\\bvolts?\\b": 0
+      },
+      "gold_review": "Assistant text search plus hardware-section inspection; not independent proof/adjudication"
+    }
+  ],
+  "model_sample": [
+    "N01",
+    "N03",
+    "N04",
+    "N06",
+    "N07",
+    "N08"
+  ],
+  "scope": "8 fresh-work answerable draft questions: 6 single-document, 2 cross-document; 2 separately reported missing-field probes",
+  "holdout_limit": "Product b7dc401 fixed before question authoring; no /ask calls on these papers before pack freeze. Same assistant authored gold after inspecting papers. Public foundational papers may occur in provider pretraining; no independent human quality score."
+}

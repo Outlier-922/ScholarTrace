@@ -1,0 +1,324 @@
+{
+  "manifest": {
+    "pack_sha256": "36b39242b9b90ad96e418e638c6c3554e53fb3750c52a8d90e2568e79aafb82c",
+    "files": {
+      "backend/app/qa.py": "7586dfa06214d624671bd7808153800d0b3f52713020e145ff827d5b9fc484c2",
+      "backend/app/model_client.py": "2dfa4a113add718f4d0425e814afd8a6effcfc1b9c8fee9f7c23d28e2ac2a8b2",
+      "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+      "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+      "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+      "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+      "backend/app/comparison.py": "2b5e1565a0efdec1b41e8b0a8b924924eeb8bd15a758ca0590f7d1723cc68eee",
+      "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+      "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+      "scripts/evaluate_qa.py": "92988d1d6b71ae520c9cb5cbc7e9191ae64fcbb24e9ae283b76eac81f0e5547e"
+    },
+    "run_id": "20261028T071821Z-59ee783b",
+    "started_at": "2026-10-28T07:18:21.684987+00:00",
+    "api_health": {
+      "status": "ok",
+      "version": "0.8.0",
+      "edition": "local-development",
+      "stage": "multilingual-retrieval-and-layout",
+      "model_configured": true,
+      "capabilities": {
+        "pdf_upload": true,
+        "native_pdf_parsing": true,
+        "source_anchors": true,
+        "content_dedup_baseline": true,
+        "page_checkpoint": true,
+        "ocr": true,
+        "ocr_supported": true,
+        "ocr_enabled": true,
+        "ocr_ready": true,
+        "dense_supported": true,
+        "dense_enabled": true,
+        "dense_ready": true,
+        "structured_tables": true,
+        "formula_latex": false,
+        "semantic_tables": false,
+        "citation_graph": true,
+        "evidence_outline": true,
+        "full_translation": false,
+        "writing_plans": true,
+        "csv_plotting": true,
+        "architecture_diagrams": true,
+        "intent_workflow": true,
+        "model_diagnostics": true,
+        "multi_user_auth": false,
+        "comparison_matrix": true,
+        "citation_navigation": true,
+        "translation": true,
+        "literature_search": true,
+        "arxiv_import": true,
+        "topic_tracking": true
+      },
+      "ocr_status": {
+        "supported": true,
+        "enabled": true,
+        "ready": true,
+        "reason": "本地OCR模型已准备并完成CPU会话加载验证"
+      },
+      "embedding_status": {
+        "supported": true,
+        "enabled": true,
+        "ready": true,
+        "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "reason": "ready"
+      }
+    },
+    "git_commit": "b7dc40195fd75444506aafa27e49e00b906324ff",
+    "git_dirty": true,
+    "live_model_requested": false,
+    "max_generation_requests": 0,
+    "max_reserved_output_tokens": 0,
+    "model": {
+      "profile": "compatible",
+      "endpoint_host": "api.deepseek.com",
+      "model": "deepseek-flash"
+    },
+    "scope": "8 fresh-work answerable draft questions: 6 single-document, 2 cross-document; 2 separately reported missing-field probes",
+    "case_ids": [
+      "N01",
+      "N02",
+      "N03",
+      "N04",
+      "N05",
+      "N06",
+      "N07",
+      "N08"
+    ],
+    "sources": {
+      "distilbert": {
+        "sha256": "a70c78e2b4db85bfee7696e19829571a3b05f69c616db5c039f6f4eb33b1a0b6",
+        "document_id": "doc_d2f494b8a32f4b64999b6da6f74adad7",
+        "version_label": "v4",
+        "parse_run_id": "parse_828fd9e7162c4192a1c9ebe64b1ac885"
+      },
+      "clip": {
+        "sha256": "6478b6e571a7d6fcd846d8ef77bfd60c285f1986abb8f475eedc43de403074f5",
+        "document_id": "doc_e645387c78a74660b75a8c66e56df9bc",
+        "version_label": "v1",
+        "parse_run_id": "parse_d0e4dfdbf04c452581344e082be2f609"
+      }
+    },
+    "method": "sequential; no retries; no gold in requests; no product tuning between selected holdout queries; small Chinese factual draft set",
+    "quality_notice": "Product b7dc401 fixed before question authoring; no /ask calls on these papers before pack freeze. Same assistant authored gold after inspecting papers. Public foundational papers may occur in provider pretraining; no independent human quality score."
+  },
+  "overall": {
+    "case_count": 8,
+    "request_errors": 0,
+    "evidence_anchor_validity": 1.0,
+    "evidence_anchor_denominator": 48,
+    "gold_group_recall_at_6": 0.8,
+    "gold_group_denominator": 10,
+    "claim_source_id_coverage": null,
+    "claim_denominator": 0,
+    "generated_case_count": 0,
+    "answered_case_count": 0,
+    "abstained_case_count": 0,
+    "model_fallback_count": 0,
+    "reviewed_cases": 0,
+    "review_coverage": 0.0,
+    "fully_correct_over_all_cases": null,
+    "fully_correct_over_answered_cases": null,
+    "citation_semantic_support": null,
+    "latency_seconds": {
+      "n": 8,
+      "p50": 0.165,
+      "p95": 0.3261,
+      "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+    },
+    "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+  },
+  "by_split": {
+    "holdout": {
+      "case_count": 8,
+      "request_errors": 0,
+      "evidence_anchor_validity": 1.0,
+      "evidence_anchor_denominator": 48,
+      "gold_group_recall_at_6": 0.8,
+      "gold_group_denominator": 10,
+      "claim_source_id_coverage": null,
+      "claim_denominator": 0,
+      "generated_case_count": 0,
+      "answered_case_count": 0,
+      "abstained_case_count": 0,
+      "model_fallback_count": 0,
+      "reviewed_cases": 0,
+      "review_coverage": 0.0,
+      "fully_correct_over_all_cases": null,
+      "fully_correct_over_answered_cases": null,
+      "citation_semantic_support": null,
+      "latency_seconds": {
+        "n": 8,
+        "p50": 0.165,
+        "p95": 0.3261,
+        "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+      },
+      "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+    }
+  },
+  "cases": [
+    {
+      "case_id": "N01",
+      "split": "holdout",
+      "case_sha256": "6cc02280375298296646a6b5fa8acf1afe8da0b375915c9e55bd6a1f9e9e1f19",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "b8c650c7c00171fb47bcb27384aa8693f064bb489b8b8f662b03a7aed3b4044b",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0863
+    },
+    {
+      "case_id": "N02",
+      "split": "holdout",
+      "case_sha256": "9524cfdf032cb7f7b42afac668069517520603251fcab13d0e80c2c4ead2dc65",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "1d5bc74573d42fc97ef763e6ccc1d50565e44575a4ffc1d60a64bf9b06d839b4",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0597
+    },
+    {
+      "case_id": "N03",
+      "split": "holdout",
+      "case_sha256": "b87ec6fa46332440270166a57e20658c41640d98a4afe172f5757a62d8a6c956",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "703cc7156878c95c41e2ea61f3d8eda3a28879d925e88c3319699154c96a2194",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.073
+    },
+    {
+      "case_id": "N04",
+      "split": "holdout",
+      "case_sha256": "de2221ef33bf6939d56b1ce9f0f8b81d6bac4bc04f637ea4ecb24938352a0395",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "e5751b155b58ff4942589bfc74a952f489146480612de6162d12d90d8080556c",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1924
+    },
+    {
+      "case_id": "N05",
+      "split": "holdout",
+      "case_sha256": "f78f6c19c36c339d14ce0786d00621c4ee10d7ef13f3bfa89a5776c05e1199f1",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "35e82b5d44a27fa416cd603d3d0c29a1658bb50de9a753327dec19d868d2ad9f",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.3261
+    },
+    {
+      "case_id": "N06",
+      "split": "holdout",
+      "case_sha256": "f9668e7b306940f662ff2452e7e9cc5678e83493a67a48a9bc10e1da062f9bf8",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "024f6bc675d53856478719c9eecac6c540178b578fc3dd45812356608682e3a4",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.165
+    },
+    {
+      "case_id": "N07",
+      "split": "holdout",
+      "case_sha256": "5d7a9434fdca9d36e769565e5ba084cfd4c94e487a934035cf4df42cc3c4daf9",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "d991ca8946756266fb2f5ac4ae8f973db14c6f78fa5865a6bd234cd360ff474c",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.2133
+    },
+    {
+      "case_id": "N08",
+      "split": "holdout",
+      "case_sha256": "036127aca9614f7604c003ed94b70ea9c8bd615478cec4c91465abc56e77e76f",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "9b448aeb798e6dadd5f1381c4c39d11d6a4066f2a5c54fd501e2bc97e541c98b",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1973
+    }
+  ]
+}

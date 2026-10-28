@@ -39,3 +39,7 @@
 见 `results/retrieval-v1.json`、`results/live-sample-v1.json` 和 `../docs/STAGE8_TEST_REPORT.md`。代码与题集在请求前按文件哈希冻结，运行时工作树未提交，manifest 如实记录 dirty 状态及当时 HEAD；不冒称已有独立发布提交。
 
 该留出集在观察结果后应退役为回归集。下一轮需要新作品/题目、独立复核和更完整的等价证据组，再比较检索与重排策略。原计划60题、无答案题、语义支持标注、消融和并发性能尚待完成。
+
+## 新作品v3首次记录
+
+第十阶段在冻结产品b7dc401后另建`qa_holdout_v3.json`与`freeze_holdout_v3.json`，覆盖DistilBERT/CLIP的8题及单独记录的2项缺失字段检查。采样ID在首次检索前固定；来源、partial警告和全部结果见`../docs/STAGE10_TEST_REPORT.md`。只在冻结的0.8.0上记录一次，不按新结果修复后继续冒称未见集。缺失检查用`evaluate_missing_fields.py --live-model`，空陈述不自动判正确，也不推断一定是模型主动拒答；来源过滤也可能导致最终为空。
