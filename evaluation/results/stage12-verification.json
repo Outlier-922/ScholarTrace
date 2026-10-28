@@ -1,0 +1,30 @@
+{
+  "completed_at": "2026-10-28T16:48:22.304369+00:00",
+  "product_version": "0.9.0",
+  "product_base_commit": "b65058f",
+  "frozen_files_unchanged": 12,
+  "new_generation_requests": 0,
+  "human_reviewed_research_cases": 0,
+  "automated_tests": {
+    "passed": 233,
+    "warnings": 1,
+    "targeted_after_css_fix": 7
+  },
+  "ui": {
+    "synthetic_export_import_and_offline_report": "passed",
+    "real_cases_initial_pending": 6,
+    "desktop_viewport": 1280,
+    "desktop_content_width": 1265,
+    "mobile_viewport": 390,
+    "mobile_content_width": 375,
+    "initial_mobile_content_width_before_fix": 618,
+    "console_warnings_and_errors": []
+  },
+  "pdf": {
+    "pages": 14,
+    "all_pages_rendered_and_visually_checked": true,
+    "sha256": "9232649d0f1371f632cb00d3e28b2bf858fa70f130099d3c840d53c4c91ad9c5",
+    "historical_pdf_unchanged": true
+  },
+  "quality_notice": "Software checks and synthetic judgments do not establish independent research answer quality."
+}

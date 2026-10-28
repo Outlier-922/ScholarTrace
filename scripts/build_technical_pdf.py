@@ -149,7 +149,13 @@ class Architecture(Flowable):
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--font',default='C:/Windows/Fonts/msyh.ttc')
     parser.add_argument('--bold-font',default='C:/Windows/Fonts/msyhbd.ttc')
+    parser.add_argument('--content',type=Path,help='Versioned JSON content; omit to rebuild the historical stage8 draft')
+    parser.add_argument('--output',type=Path)
+    parser.add_argument('--markdown',type=Path)
     args=parser.parse_args()
+    content=json.loads(args.content.read_text(encoding='utf-8')) if args.content else {}
+    pages=content.get('pages',PAGES)
+    version=content.get('version','0.7.0');stage=content.get('stage','8');date=content.get('date','2026-10-28')
     pdfmetrics.registerFont(TTFont('CJK',args.font,subfontIndex=0))
     pdfmetrics.registerFont(TTFont('CJK-Bold',args.bold_font,subfontIndex=0))
     pdfmetrics.registerFontFamily('CJK',normal='CJK',bold='CJK-Bold',italic='CJK',boldItalic='CJK-Bold')
@@ -160,18 +166,18 @@ def main():
     subtitle=ParagraphStyle('Subtitle',parent=body,fontSize=11.2,leading=18,textColor=muted,spaceAfter=18)
     caption=ParagraphStyle('Caption',parent=body,fontSize=8.5,leading=13,textColor=muted,spaceAfter=10)
     cell=ParagraphStyle('Cell',parent=body,fontSize=9,leading=14,spaceAfter=0)
-    output=ROOT/'output/pdf/ScholarTrace_技术说明_草稿.pdf';output.parent.mkdir(parents=True,exist_ok=True)
+    output=args.output or ROOT/'output/pdf/ScholarTrace_技术说明_草稿.pdf';output.parent.mkdir(parents=True,exist_ok=True)
     width=A4[0]-94
     def paragraph(value,style=body):return Paragraph(escape(value),style)
     def footer(canvas,doc):
         canvas.setStrokeColor(colors.HexColor('#d6e2e9'));canvas.line(47,45,A4[0]-47,45)
         canvas.setFont('CJK',8);canvas.setFillColor(muted)
-        canvas.drawString(47,29,'研迹 ScholarTrace | 技术说明草稿 | 应用 0.7.0 / 评测阶段 8')
-        canvas.drawRightString(A4[0]-47,29,f'{doc.page:02d} / {len(PAGES):02d}')
-        canvas.setFont('CJK',8);canvas.drawString(47,A4[1]-32,'SCHOLARTRACE / 2026.10.28')
+        canvas.drawString(47,29,f'研迹 ScholarTrace | 技术说明草稿 | 应用 {version} / 材料阶段 {stage}')
+        canvas.drawRightString(A4[0]-47,29,f'{doc.page:02d} / {len(pages):02d}')
+        canvas.setFont('CJK',8);canvas.drawString(47,A4[1]-32,'SCHOLARTRACE / '+date.replace('-','.'))
         canvas.setFillColor(teal);canvas.rect(A4[0]-85,A4[1]-33,38,3,fill=1,stroke=0)
-    story=[];markdown=['# 研迹 ScholarTrace 技术说明草稿','应用0.7.0；第八阶段；2026-10-28；参赛身份信息暂不写。','']
-    for index,page in enumerate(PAGES,1):
+    story=[];markdown=['# 研迹 ScholarTrace 技术说明草稿',f'应用{version}；材料阶段{stage}；{date}；参赛身份信息暂不写。','']
+    for index,page in enumerate(pages,1):
         if index==1:
             brand=ParagraphStyle('Brand',parent=title,fontSize=31,leading=41,textColor=navy,spaceAfter=4)
             story.extend([paragraph('研迹 ScholarTrace',brand),paragraph('技术说明草稿',subtitle),Spacer(1,15)])
@@ -202,11 +208,11 @@ def main():
             note=Table([[paragraph(page['callout'],body)]],colWidths=[width])
             note.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#e9f5f4')),('BOX',(0,0),(-1,-1),.5,teal),('LEFTPADDING',(0,0),(-1,-1),13),('RIGHTPADDING',(0,0),(-1,-1),13),('TOPPADDING',(0,0),(-1,-1),9)]))
             story.extend([Spacer(1,8),note]);markdown.extend(['> '+page['callout'],''])
-        if index<len(PAGES):story.append(PageBreak())
+        if index<len(pages):story.append(PageBreak())
     doc=SimpleDocTemplate(str(output),pagesize=A4,rightMargin=47,leftMargin=47,topMargin=63,bottomMargin=62,
                           title='研迹 ScholarTrace 技术说明草稿',author='ScholarTrace',pageCompression=1)
     doc.build(story,onFirstPage=footer,onLaterPages=footer)
-    (ROOT/'docs/TECHNICAL_DESIGN_DRAFT.md').write_text('\n'.join(markdown).rstrip()+'\n',encoding='utf-8')
+    (args.markdown or ROOT/'docs/TECHNICAL_DESIGN_DRAFT.md').write_text('\n'.join(markdown).rstrip()+'\n',encoding='utf-8')
     print(output)
 
 
