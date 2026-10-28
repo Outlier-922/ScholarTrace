@@ -1,0 +1,70 @@
+{
+  "created_at": "2026-10-28T23:22:04.272527+00:00",
+  "application_version": "0.15.0",
+  "git_head": "778d35c12b3894693c2bb3cbed8a23f961248648",
+  "scope": "Two preselected native-PDF formula candidates from one official paper. Known paper; not independent mathematical accuracy assessment. First responses/failures retained; no repeated paid sampling.",
+  "max_generation_requests": 2,
+  "max_reserved_output_tokens": 3200,
+  "fingerprint_format": "utf8_lf_text_v1",
+  "files": {
+    "backend/app/qa.py": "7e71fe26bed323e63d221957bc46a2a2f887fe6fd76bd6dc2941671fe353fee1",
+    "backend/app/model_client.py": "5dc193477ebbb9004c9ec430a22aab9afafe15e122073460121391ebcf4b5bdd",
+    "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+    "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+    "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+    "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+    "backend/app/comparison.py": "2b5e1565a0efdec1b41e8b0a8b924924eeb8bd15a758ca0590f7d1723cc68eee",
+    "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+    "backend/app/answer_fields.py": "0b9c45797acde532b4ba5e35c636256a3677662cf35864506ae25aa42302078a",
+    "backend/app/workflow.py": "b75272efdfbe3e2a279a6baab8ff03007079af891315a05992fcf22cc9994b28",
+    "backend/app/demo_access.py": "4943b392af56944f9c69efbe1e7e7a7232bef5b0ac013e2e520355840995a024",
+    "backend/app/main.py": "0a0e7e677ea89ca78730698032f54467d28b05881f151dea48691237cb049e5d",
+    "backend/app/selection_translation.py": "f7cefe5a0efabfe972e1a3dd318f684269592e1bef44f33144687f40effe07e2",
+    "backend/app/formulas.py": "99da952f880b6235de1a049ea35924e32af2f832075939bc9383404d315934aa",
+    "backend/app/formula_native.py": "6d6387a0ef610990ecd3a97d002c0bcc849a1815a865c8f088af94d2cf675c2d",
+    "backend/app/formula_store.py": "80d04a97a6ac44f4b0c6987009bc7b01a89fc1f3591c4b1e3feb7455f32871c6",
+    "backend/app/evidence_repairs.py": "1647918d7ce84ce7c09342ec298539de7a1f645cc8745483d95578b2f8de62eb",
+    "backend/app/claim_checks.py": "fd26531637ad81ab23d7893299bf6c21fa6fb4b648c0671e18c12b4e778ecf10",
+    "backend/app/insights.py": "2888d73ab304bcd54f457d3d66c90b869e223a8740e8214c6da39eb60c880c75",
+    "backend/app/insight_store.py": "181897369226a29bb5a51ec7838984024c12dec4e304c5b5e85d019eb1485721",
+    "backend/app/graph.py": "62327d844fd86f3365091f2aefebe0fd93d8b17bd9e78cc10f442b930651fc9b",
+    "backend/app/graph_store.py": "eda8d9682f316f71e53241e8f29b4aa2d798284c4752c99f69ac6f75970a45ad",
+    "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+    "scripts/evaluate_qa.py": "b3bbfc79e847358c41a09501106648f53192cf4f633447316cc71c791329b2d2",
+    "apps/web/src/FormulaPanel.tsx": "0224386cfd19def94350ca84ee933516f26731042be1b4e03150996808792bd3",
+    "apps/web/src/PdfReader.tsx": "dfbae59dd8708ab259a076bb82769daa8a452a7e22e69cfdc3006c7cb7e5cf07",
+    "apps/web/src/formulas.css": "566f57af48d95e81c1813c566cbb75cc8cc3eb8199f25f0a862dd99aa485c163",
+    "apps/web/package.json": "7742bae347bce2074e7d901caf6df9a29c8a9f4095b7414c0443f1699e425e78",
+    "apps/web/pnpm-lock.yaml": "266621f18518b8ba0e59eaf8f01fe43ad010db0210b03002e108b8e35de2d367"
+  },
+  "sources": [
+    {
+      "id": "f437ee20-3dc8-41d2-bd25-733ec80c930c",
+      "document_id": "doc_17a4fd61b95d4836ae00c7fbc700dd1d",
+      "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+      "parse_run_id": "parse_1f1f32cd012a4dff9e6827de32ff2c6a",
+      "page": 4,
+      "source_key": "7ec5be920cf718fd2370bc94e2a52f04de9f178bea48c60e300047cb8acb023a",
+      "image_sha256": "058277f9c967660905f2945f1117e528d400fe342a691d3770fa8817d9885520",
+      "block_ids": [
+        "blk_1941e8e8d50748dba87ba391f03d636c",
+        "blk_06d7c69a9eaf42eabbe854cd43b22a25",
+        "blk_5e22918aabdc4ae2b38810b958a4a890"
+      ],
+      "glyphs_sha256": "09d0de9af6a2a6c21122abea519ccd1e8819b170e8caaf54a7e2e1c7e5989896"
+    },
+    {
+      "id": "8fecc8b2-fbb6-4b86-80b3-9a703bffb244",
+      "document_id": "doc_17a4fd61b95d4836ae00c7fbc700dd1d",
+      "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+      "parse_run_id": "parse_1f1f32cd012a4dff9e6827de32ff2c6a",
+      "page": 5,
+      "source_key": "443ff138b0c2d8f3d6c6f8a8d8375ece65eca0a5316a3236168ee6d1529260ed",
+      "image_sha256": "8a031b149664a7c074c7eccfd674e4b58d32864a0c36f045934aa686fb7aca58",
+      "block_ids": [
+        "blk_054ba8c668244a50b81dfdee39e07702"
+      ],
+      "glyphs_sha256": "6dd3ffa78c097427a9ae3bcd4cb09cf6fa5daedd2c6db8bdad4f6f1b2dd8e004"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-10-28T23:37:21.464100+00:00",
+  "application_version": "0.15.0",
+  "scope": "After first model responses. UI scope change now clears previous block/source lists before fetching, preventing stale history after a fetch error. Backend and prompts unchanged; no further model calls.",
+  "previous_freeze": "evaluation/freeze_stage18_formulas_v1.json",
+  "changed_files": [
+    "apps/web/src/FormulaPanel.tsx"
+  ],
+  "max_generation_requests": 0,
+  "fingerprint_format": "utf8_lf_text_v1",
+  "files": {
+    "backend/app/qa.py": "7e71fe26bed323e63d221957bc46a2a2f887fe6fd76bd6dc2941671fe353fee1",
+    "backend/app/model_client.py": "5dc193477ebbb9004c9ec430a22aab9afafe15e122073460121391ebcf4b5bdd",
+    "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+    "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+    "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+    "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+    "backend/app/comparison.py": "2b5e1565a0efdec1b41e8b0a8b924924eeb8bd15a758ca0590f7d1723cc68eee",
+    "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+    "backend/app/answer_fields.py": "0b9c45797acde532b4ba5e35c636256a3677662cf35864506ae25aa42302078a",
+    "backend/app/workflow.py": "b75272efdfbe3e2a279a6baab8ff03007079af891315a05992fcf22cc9994b28",
+    "backend/app/demo_access.py": "4943b392af56944f9c69efbe1e7e7a7232bef5b0ac013e2e520355840995a024",
+    "backend/app/main.py": "0a0e7e677ea89ca78730698032f54467d28b05881f151dea48691237cb049e5d",
+    "backend/app/selection_translation.py": "f7cefe5a0efabfe972e1a3dd318f684269592e1bef44f33144687f40effe07e2",
+    "backend/app/formulas.py": "99da952f880b6235de1a049ea35924e32af2f832075939bc9383404d315934aa",
+    "backend/app/formula_native.py": "6d6387a0ef610990ecd3a97d002c0bcc849a1815a865c8f088af94d2cf675c2d",
+    "backend/app/formula_store.py": "80d04a97a6ac44f4b0c6987009bc7b01a89fc1f3591c4b1e3feb7455f32871c6",
+    "backend/app/evidence_repairs.py": "1647918d7ce84ce7c09342ec298539de7a1f645cc8745483d95578b2f8de62eb",
+    "backend/app/claim_checks.py": "fd26531637ad81ab23d7893299bf6c21fa6fb4b648c0671e18c12b4e778ecf10",
+    "backend/app/insights.py": "2888d73ab304bcd54f457d3d66c90b869e223a8740e8214c6da39eb60c880c75",
+    "backend/app/insight_store.py": "181897369226a29bb5a51ec7838984024c12dec4e304c5b5e85d019eb1485721",
+    "backend/app/graph.py": "62327d844fd86f3365091f2aefebe0fd93d8b17bd9e78cc10f442b930651fc9b",
+    "backend/app/graph_store.py": "eda8d9682f316f71e53241e8f29b4aa2d798284c4752c99f69ac6f75970a45ad",
+    "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+    "scripts/evaluate_qa.py": "b3bbfc79e847358c41a09501106648f53192cf4f633447316cc71c791329b2d2",
+    "apps/web/src/FormulaPanel.tsx": "ccc3c7e6bf9ce6bc7fc08f2bcc616bd6489aef5ca0a11bc9d7f56989441387a6",
+    "apps/web/src/PdfReader.tsx": "dfbae59dd8708ab259a076bb82769daa8a452a7e22e69cfdc3006c7cb7e5cf07",
+    "apps/web/src/formulas.css": "566f57af48d95e81c1813c566cbb75cc8cc3eb8199f25f0a862dd99aa485c163",
+    "apps/web/package.json": "7742bae347bce2074e7d901caf6df9a29c8a9f4095b7414c0443f1699e425e78",
+    "apps/web/pnpm-lock.yaml": "266621f18518b8ba0e59eaf8f01fe43ad010db0210b03002e108b8e35de2d367"
+  }
+}

@@ -1,7 +1,7 @@
 {
   "name": "scholartrace-web",
   "private": true,
-  "version": "0.14.0",
+  "version": "0.15.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -9,6 +9,7 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
+    "katex": "0.19.1",
     "lucide-react": "^0.468.0",
     "pdfjs-dist": "^5.3.31",
     "react": "^19.1.0",

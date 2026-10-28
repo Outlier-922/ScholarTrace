@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, FileText, Layers, Link2, LoaderCircle, Minus, Plus, ScanLine, Search, Target, TextSelect } from 'lucide-react';
 import { getDocument, GlobalWorkerOptions, TextLayer } from 'pdfjs-dist';
@@ -9,6 +9,7 @@ import type { DocumentBlock, DocumentStructure, ResearchDocument } from './types
 import BlockContent, { isOcrBlock } from './BlockContent';
 import TranslationPane from './TranslationPane';
 import SelectionTranslation from './SelectionTranslation';
+const FormulaPanel = lazy(() => import('./FormulaPanel'));
 import type { TranslationHandle } from './TranslationPane';
 import { request } from './api';
 
@@ -41,7 +42,7 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
   const [pageRotation, setPageRotation] = useState(0);
   const [showBlocks, setShowBlocks] = useState(false);
-  const [view, setView] = useState<'pdf' | 'text' | 'references' | 'parallel'>('pdf');
+  const [view, setView] = useState<'pdf' | 'text' | 'references' | 'parallel' | 'formulas'>('pdf');
   const [citations, setCitations] = useState<CitationMap | null>(null);
   const [citationError, setCitationError] = useState('');
   const [activeCitation, setActiveCitation] = useState<CitationLink | null>(null);
@@ -239,6 +240,7 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
           <button className={view === 'text' ? 'active' : ''} onClick={() => setView('text')}>结构文本</button>
           <button className={view === 'references' ? 'active' : ''} onClick={() => setView('references')}>引用</button>
           <button className={view === 'parallel' ? 'active' : ''} onClick={() => setView('parallel')}>中英对照</button>
+          <button className={view === 'formulas' ? 'active' : ''} onClick={() => setView('formulas')}>公式</button>
         </div>
         <div className="page-controls">
           <button className="icon-button" disabled={page <= 1} onClick={() => onPage(page - 1)} title="上一页" aria-label="上一页"><ChevronLeft size={16} /></button>
@@ -258,7 +260,7 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
       {view === 'parallel' && <div className="parallel-options"><label><input type="checkbox" checked={linked} onChange={event => setLinked(event.target.checked)} />按段落联动滚动</label><span>公式和代码保留原文；自动翻译请核验。</span></div>}
       {ocrBlocks.length > 0 && <div className="ocr-reader-bar"><span><ScanLine size={13} />本页含 OCR 文字 · {ocrBlocks.length} 个区域</span><button className={ocrSelection ? 'active' : ''} onClick={() => setOcrSelection(!ocrSelection)} aria-pressed={ocrSelection}><TextSelect size={13} />{ocrSelection ? '文字选择已开启' : '开启文字选择'}</button></div>}
       <div className={`reader-split ${view === 'parallel' ? 'is-parallel' : ''}`}><div className="pdf-scroll" ref={scrollRef} onScroll={syncFromPdf} onWheel={() => { suppressUntil.current = 0; }} onPointerDown={() => { suppressUntil.current = 0; }}>
-        {view === 'references' ? <div className="reference-list"><h3>References 原文条目</h3><p>数字引用可双向跳转；作者年份格式暂保留列表。</p>{citationError && <p role="alert">{citationError}</p>}{citations?.references.map(reference => <article key={reference.id}><strong>{reference.marker ? `[${reference.marker}]` : '未编号条目'}</strong><p>{reference.text}</p>{onFindReference && <button onClick={() => onFindReference(reference.text)}><Search size={12} />查找书目</button>}<button onClick={() => { onSelectBlock(sourceBlock(reference)); setView('pdf'); }}><Target size={12} />原文条目 · 第{reference.page}页</button><div>{reference.backlinks.map(link => <button key={link.id} title={link.context} onClick={() => { onSelectBlock(sourceBlock(link)); setView('pdf'); }}>正文引用 · 第{link.page}页</button>)}</div></article>)}{citations && !citations.references.length && <p>当前解析未识别出参考文献条目。</p>}</div> : error ? <div className="reader-error"><FileText size={28} /><h3>原文暂时无法显示</h3><p>{error}</p><a href={`/api/documents/${document.id}/pdf`} target="_blank" rel="noreferrer">直接打开 PDF</a></div> : (view === 'pdf' || view === 'parallel') ? (
+        {view === 'formulas' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载公式工具…</p>}><FormulaPanel documentId={document.id} runId={structure.parse_run_id} page={page} modelConfigured={modelConfigured} readOnly={readOnly} onSource={block => { onPage(block.page); onSelectBlock(block); setView('pdf'); }} /></Suspense> : view === 'references' ? <div className="reference-list"><h3>References 原文条目</h3><p>数字引用可双向跳转；作者年份格式暂保留列表。</p>{citationError && <p role="alert">{citationError}</p>}{citations?.references.map(reference => <article key={reference.id}><strong>{reference.marker ? `[${reference.marker}]` : '未编号条目'}</strong><p>{reference.text}</p>{onFindReference && <button onClick={() => onFindReference(reference.text)}><Search size={12} />查找书目</button>}<button onClick={() => { onSelectBlock(sourceBlock(reference)); setView('pdf'); }}><Target size={12} />原文条目 · 第{reference.page}页</button><div>{reference.backlinks.map(link => <button key={link.id} title={link.context} onClick={() => { onSelectBlock(sourceBlock(link)); setView('pdf'); }}>正文引用 · 第{link.page}页</button>)}</div></article>)}{citations && !citations.references.length && <p>当前解析未识别出参考文献条目。</p>}</div> : error ? <div className="reader-error"><FileText size={28} /><h3>原文暂时无法显示</h3><p>{error}</p><a href={`/api/documents/${document.id}/pdf`} target="_blank" rel="noreferrer">直接打开 PDF</a></div> : (view === 'pdf' || view === 'parallel') ? (
           <>
             {loading && <div className="pdf-loading"><LoaderCircle className="spin" size={23} /><span>正在渲染原文</span></div>}
             <div className="pdf-paper" style={pageSize.width ? { width: pageSize.width, height: pageSize.height } : undefined}>

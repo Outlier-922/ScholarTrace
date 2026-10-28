@@ -1,5 +1,5 @@
 {
-  "application_version": "0.14.0",
+  "application_version": "0.15.0",
   "as_of": "2026-10-29",
   "scope": "按用户提供赛题逐项整理的工程交付判断；不是主办方认证、评分百分比或豁免清单。",
   "items": [
@@ -8,7 +8,7 @@
     {"id":"M1-OCR","required":true,"state":"verified","requirement":"官方扫描件可解析和定位","current":"15页真实OCR及原图回跳已验证；质量分数不当准确率","proof_paths":["docs/STAGE2_TEST_REPORT.md"]},
     {"id":"M1-LONG","required":true,"state":"partial","requirement":"541页长书分块、索引及资源鲁棒性","current":"原生解析已跑通；完整索引、资源与并发验收不足","proof_paths":["docs/STAGE1_TEST_REPORT.md"]},
     {"id":"M1-STRUCTURE","required":true,"state":"partial","requirement":"作者机构、层级树、图表与参考文献结构化","current":"目录与块可用，机构/复杂图表结构仍不完整","proof_paths":["docs/STAGE2_TEST_REPORT.md"]},
-    {"id":"M1-FORMULA","required":true,"state":"missing","requirement":"公式LaTeX细粒度抽取","current":"仅原页、公式候选和部分上标表示；完整LaTeX恢复未实现","proof_paths":[]},
+    {"id":"M1-FORMULA","required":true,"state":"partial","requirement":"公式LaTeX细粒度抽取","current":"原生字形/坐标转写候选、原图与手工历史可用；扫描公式只支持原图手工路径，复杂公式及识别质量未全面验收","proof_paths":["docs/STAGE18_TEST_REPORT.md"]},
     {"id":"M2-TRACE","required":true,"state":"verified","requirement":"回答引用回到确切版本和原文位置","current":"文件/ParseRun/块/页码/坐标绑定与删除失效检查","proof_paths":["docs/STAGE11_TEST_REPORT.md"]},
     {"id":"M2-QUALITY","required":true,"state":"partial","requirement":"细粒度单文与跨文问题可核验且完整","current":"字段补检索已实现；存在漏召回和未完成字段，没有正式事实质量通过结论","proof_paths":["docs/STAGE10_TEST_REPORT.md","docs/STAGE11_TEST_REPORT.md"]},
     {"id":"M3-CITATION","required":true,"state":"verified","requirement":"正文数字引用与References双向跳转","current":"数字及组合引用已有原文位置往返；作者年份扩展仍待做","proof_paths":["docs/STAGE3_TEST_REPORT.md"]},
