@@ -173,6 +173,8 @@ async def execute_review(identity: str, body: ReviewRequest, artifact_id=None):
         for value in section['claims'][:4]:
             if retained >= 8:
                 rejected += 1; continue
+            if section['section'] == 'comparison' and (not isinstance(value, dict) or value.get('kind') != 'synthesis'):
+                rejected += 1; continue
             claim = checked_claim(value, evidence)
             if claim: claims.append(claim); retained += 1
             else: rejected += 1
@@ -263,6 +265,9 @@ def detail(identity: str): return require(identity)
 @router.get('/research-insights/{identity}/export')
 def export(identity: str):
     value = require(identity)
+    if value['kind'] == 'check':
+        from . import claim_checks
+        return claim_checks.export(identity)
     lines = ['# ' + ('自动综述草稿' if value['kind'] == 'review' else '未来工作全文核对'), '', value['topic'], '', '自动生成，语义仍需人工核对。', '']
     if value['kind'] == 'review':
         for section in value['sections']:

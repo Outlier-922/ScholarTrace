@@ -3,6 +3,7 @@ import { Download, LoaderCircle, Target } from 'lucide-react';
 import { postJSON, request } from './api';
 import type { Evidence, ResearchDocument } from './types';
 import './insights.css';
+import ClaimCheckPanel from './ClaimCheckPanel';
 
 interface Claim { text: string; kind: string; evidence_ids: string[]; quotes: { evidence_id: string; quote: string }[]; }
 interface Assessment { document_id: string; title: string; relation: string; claim: Claim | null; bucket: string; temporal_status: string; source_date: { date: string | null }; candidate_date: { date: string | null }; notice: string; }
@@ -22,6 +23,7 @@ export default function InsightPanel({ graphId, sources, documents, onSource, mo
   const [history, setHistory] = useState<History[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [screened, setScreened] = useState(false);
   const operation = useRef<AbortController | null>(null);
   useEffect(() => {
     const abort = new AbortController();
@@ -31,6 +33,16 @@ export default function InsightPanel({ graphId, sources, documents, onSource, mo
     return () => { abort.abort(); operation.current?.abort(); };
   }, [graphId]);
   const direction = directions.find(item => item.block_id === directionId);
+  async function load(identity: string) {
+    operation.current?.abort();
+    const abort = new AbortController(); operation.current = abort;
+    setBusy(true); setError('');
+    try {
+      const result = await request<Insight>(`/research-insights/${identity}`, { signal: abort.signal });
+      if (!abort.signal.aborted) setValue(result);
+    } catch (cause) { if (!abort.signal.aborted) setError(String(cause)); }
+    finally { if (!abort.signal.aborted) setBusy(false); }
+  }
   async function create(kind: 'review' | 'future') {
     if (busy) return;
     setBusy(true); setError(''); const abort = new AbortController(); operation.current = abort;
@@ -49,10 +61,12 @@ export default function InsightPanel({ graphId, sources, documents, onSource, mo
     <section><h3>未来工作全文核对</h3><p>先选确切方向，再勾选已入库候选全文。元数据候选需先核对并导入，不能只凭标题判定已解决。</p><select aria-label="待核对未来工作" value={directionId} onChange={event => { const next = directions.find(item => item.block_id === event.target.value); setDirectionId(event.target.value); setFocus(next?.text.slice(0, 1400) || ''); setCandidates([]); }}><option value="">选择未来工作原文</option>{directions.map(item => <option key={item.block_id} value={item.block_id}>{item.title} · PDF第{item.page}页 · {item.text.slice(0, 65)}</option>)}</select>
       {direction && <><textarea aria-label="确切未来工作片段" maxLength={1400} value={focus} onChange={event => setFocus(event.target.value)} /><small>保留原文的连续子串，最多1400字符；缩小到一个具体方向。</small><button onClick={() => onSource(direction)}><Target size={12} />核对方向原文</button><div className="insight-papers">{documents.filter(doc => ['ready', 'partial'].includes(doc.status) && doc.id !== direction.document_id).map(doc => <label key={doc.id}><input type="checkbox" checked={candidates.includes(doc.id)} disabled={busy || !candidates.includes(doc.id) && candidates.length >= 3} onChange={() => setCandidates(current => current.includes(doc.id) ? current.filter(id => id !== doc.id) : [...current, doc.id])} />候选全文：{doc.title}</label>)}</div><button disabled={busy || readOnly || !modelConfigured || !candidates.length || focus.trim().length < 4} onClick={() => void create('future')}>核对所选候选全文（最多3篇）</button></>}
     </section>
-    {history.length > 0 && <label>已保存的生成记录<select aria-label="综述与方向核对历史" value={value?.id || ''} disabled={busy} onChange={event => { if (event.target.value) void request<Insight>(`/research-insights/${event.target.value}`).then(setValue).catch(cause => setError(String(cause))); }}><option value="">选择历史记录</option>{history.map(item => <option key={item.id} value={item.id}>{item.kind === 'review' ? '综述' : '方向核对'} · {new Date(item.created_at).toLocaleString('zh-CN')} · {item.topic.slice(0, 35)}</option>)}</select></label>}
+    {history.length > 0 && <label>已保存的生成记录<select aria-label="综述与方向核对历史" value={value?.id || ''} disabled={busy} onChange={event => { if (event.target.value) void load(event.target.value); }}><option value="">选择历史记录</option>{history.map(item => <option key={item.id} value={item.id}>{item.kind === 'review' ? '综述' : '方向核对'} · {new Date(item.created_at).toLocaleString('zh-CN')} · {item.topic.slice(0, 35)}</option>)}</select></label>}
     {error && <p className="research-error" role="alert">{error}</p>}{value && <section className="insight-result" aria-label="生成与核对结果"><header><h3>{value.kind === 'review' ? '自动综述草稿 · 待核验' : '未来方向核对 · 模型建议'}</h3><a href={`/api/research-insights/${value.id}/export`}><Download size={13} />导出证据Markdown</a></header>
+      <ClaimCheckPanel insightId={value.id} readOnly={readOnly || busy} modelConfigured={modelConfigured} onSource={onSource} onScreened={setScreened} />
+      <details open={!screened}><summary>原始草稿与原模型建议（保留生成记录）</summary>
       {value.kind === 'review' ? <>{value.sections?.length ? value.sections.map(section => <section key={section.title}><h4>{section.title}</h4>{section.claims.map((claim, index) => renderClaim(claim, `${section.title}-${index}`))}</section>) : <p>没有生成可保留的综述陈述，请查看证据提纲或缩小主题。</p>}<h4>论文覆盖</h4>{value.coverage?.map(source => <p key={source.document_id}>{source.title}：{source.status === 'has_candidate_claim' ? '有候选陈述，仍需核对' : '未覆盖，保留缺口'}</p>)}</> : <>{['retain_for_review', 'provisionally_addressed'].map(bucket => <details key={bucket} open={bucket === 'retain_for_review'}><summary>{bucket === 'retain_for_review' ? '保留核对的候选' : '模型建议已有处理的候选 · 可展开复核'}（{value.assessments?.filter(row => row.bucket === bucket).length || 0}）</summary>{value.assessments?.filter(row => row.bucket === bucket).map(row => <section key={row.document_id}><h4>{row.title}</h4><p>{relations[row.relation]} · {times[row.temporal_status]}</p><small>原版本日期：{row.source_date.date || '未知'}；候选版本日期：{row.candidate_date.date || '未知'}</small>{row.claim ? renderClaim(row.claim, row.document_id) : <p>没有通过来源/引文检查的核对理由。</p>}<small>{row.notice}</small></section>)}</details>)}</>}
       {value.kind === 'review' && <p className="graph-scope-note">未保留的输出条目：{value.rejected_rows || 0}。已显示陈述仍需核对语义支持。</p>}
-      {value.warnings.map(warning => <p className="graph-scope-note" key={warning}>{warning}</p>)}</section>}
+      {value.warnings.map(warning => <p className="graph-scope-note" key={warning}>{warning}</p>)}</details></section>}
   </div>;
 }

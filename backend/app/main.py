@@ -415,6 +415,8 @@ from . import selection_translation
 app.include_router(selection_translation.router)
 from . import insights, insight_store
 app.include_router(insights.router)
+from . import claim_checks
+app.include_router(claim_checks.router)
 
 # Serve only the explicit production build, never the repository or data root.
 if os.getenv('SCHOLARTRACE_SERVE_WEB', 'false').lower() == 'true':

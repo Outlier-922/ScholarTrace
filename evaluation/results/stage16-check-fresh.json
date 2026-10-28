@@ -1,0 +1,330 @@
+{
+  "id": "1bbc2fe8-67b2-481f-ade6-b7916d7479ef",
+  "graph_id": "93284bd3-daa8-4e15-b7eb-81f4057c312c",
+  "kind": "check",
+  "created_at": "2026-10-28T19:00:10.931077+00:00",
+  "topic": "Transformer训练与适配开销：归一化位置和低秩更新机制、适用条件及局限",
+  "parent_insight_id": "8cf4e8ff-1d6b-4e40-a838-ed217a5be9d0",
+  "parent_digest": "a9090aaf51414dfd8f38d43e192180818575fe21414fdcce315f9763098ceb7a",
+  "prompt_version": "attached-quotes-v1",
+  "model_identity": "662343a299fde05d6e5ad412",
+  "sources": [
+    {
+      "document_id": "doc_b00c08841f0449679bda40426cb99ae2",
+      "parse_run_id": "parse_3b8d5f3e4f084ceab342f8f309054849",
+      "title": "On Layer Normalization in the Transformer Architecture",
+      "sha256": "e1fa0519ed8e09a676d56c983e99ead5effd7ef840ae86a186729287469bf883"
+    },
+    {
+      "document_id": "doc_7d5b0867a72d41b095e6019d66a89583",
+      "parse_run_id": "parse_f8888aafa973476f9d3ba17787774036",
+      "title": "LORA: LOW-RANK ADAPTATION OF LARGE LAN- GUAGE MODELS",
+      "sha256": "e9a0d3128767db616085dc0f4e6e455e672e89af823e8ed1282793682787395a"
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "s0c0",
+      "section": "研究背景",
+      "text": "大规模预训练后，全量微调因需重训所有参数而变得不太可行，例如部署多个GPT-3 175B微调实例成本过高。",
+      "evidence_ids": [
+        "ev_4453cede80f66bed4105"
+      ],
+      "status": "source_checked",
+      "kind": "paper_fact",
+      "quotes": [
+        {
+          "evidence_id": "ev_4453cede80f66bed4105",
+          "quote": "As\nwe pre-train larger models, full ﬁne-tuning, which retrains all model parameters,\nbecomes less feasible. Using GPT-3 175B as an example – deploying indepen-\ndent instances of ﬁne-tuned models, each with 175B parameters, is prohibitively\nexpensive.",
+          "model_quote": "As we pre-train larger models, full fine-tuning, which retrains all model parameters, becomes less feasible. Using GPT-3 175B as an example – deploying independent instances of fine-tuned models, each with 175B parameters, is prohibitively expensive.",
+          "match": "normalized_pdf_text",
+          "start": 161,
+          "end": 411
+        }
+      ],
+      "semantic_verified": false
+    },
+    {
+      "claim_id": "s1c0",
+      "section": "方法与路线",
+      "text": "Pre-LN Transformer将层归一化置于残差块内部，理论表明其初始化时梯度行为良好，因此可移除预热阶段。",
+      "evidence_ids": [
+        "ev_6d1d6b38673ef4cbc0ba"
+      ],
+      "status": "source_checked",
+      "kind": "paper_fact",
+      "quotes": [
+        {
+          "evidence_id": "ev_6d1d6b38673ef4cbc0ba",
+          "quote": "if the layer\nnormalization is put inside the residual blocks\n(recently proposed as Pre-LN Transformer), the\ngradients are well-behaved at initialization. This\nmotivates us to remove the warm-up stage for the\ntraining of Pre-LN Transformers.",
+          "model_quote": "if the layer normalization is put inside the residual blocks (recently proposed as Pre-LN Transformer), the gradients are well-behaved at initialization. This motivates us to remove the warm-up stage for the training of Pre-LN Transformers.",
+          "match": "normalized_pdf_text",
+          "start": 918,
+          "end": 1158
+        }
+      ],
+      "semantic_verified": false
+    },
+    {
+      "claim_id": "s2c0",
+      "section": "跨文综合",
+      "text": "与GPT-3 175B用Adam全量微调相比，LoRA可将可训练参数减少10,000倍，GPU内存需求减少3倍。",
+      "evidence_ids": [
+        "ev_4453cede80f66bed4105"
+      ],
+      "status": "source_checked",
+      "kind": "paper_fact",
+      "quotes": [
+        {
+          "evidence_id": "ev_4453cede80f66bed4105",
+          "quote": "Compared to GPT-3 175B ﬁne-tuned with Adam,\nLoRA can reduce the number of trainable parameters by 10,000 times and the\nGPU memory requirement by 3 times.",
+          "model_quote": "Compared to GPT-3 175B fine-tuned with Adam, LoRA can reduce the number of trainable parameters by 10,000 times and the GPU memory requirement by 3 times.",
+          "match": "normalized_pdf_text",
+          "start": 673,
+          "end": 826
+        }
+      ],
+      "semantic_verified": false
+    },
+    {
+      "claim_id": "s3c0",
+      "section": "局限与边界",
+      "text": "Post-LN Transformer在初始化时输出层附近参数的期望梯度较大，使用大学习率会导致训练不稳定，预热阶段有助于避免此问题。",
+      "evidence_ids": [
+        "ev_6d1d6b38673ef4cbc0ba"
+      ],
+      "status": "source_checked",
+      "kind": "paper_fact",
+      "quotes": [
+        {
+          "evidence_id": "ev_6d1d6b38673ef4cbc0ba",
+          "quote": "for the\noriginal-designed Post-LN Transformer, which\nplaces the layer normalization between the resid-\nual blocks, the expected gradients of the parame-\nters near the output layer are large. Therefore, us-\ning a large learning rate on those gradients makes\nthe training unstable.",
+          "model_quote": "for the original-designed Post-LN Transformer, which places the layer normalization between the residual blocks, the expected gradients of the parameters near the output layer are large. Therefore, using a large learning rate on those gradients makes the training unstable.",
+          "match": "normalized_pdf_text",
+          "start": 522,
+          "end": 801
+        }
+      ],
+      "semantic_verified": false
+    },
+    {
+      "claim_id": "s3c1",
+      "section": "局限与边界",
+      "text": "LoRA的有效性通过语言模型适配中秩亏缺的实证研究得到阐释，但该研究未声称适用于所有模型或任务。",
+      "evidence_ids": [
+        "ev_4453cede80f66bed4105"
+      ],
+      "status": "source_checked",
+      "kind": "paper_fact",
+      "quotes": [
+        {
+          "evidence_id": "ev_4453cede80f66bed4105",
+          "quote": "We also provide an empirical investigation into\nrank-deﬁciency in language model adaptation, which sheds light on the efﬁcacy of\nLoRA.",
+          "model_quote": "We also provide an empirical investigation into rank-deficiency in language model adaptation, which sheds light on the efficacy of LoRA.",
+          "match": "normalized_pdf_text",
+          "start": 1061,
+          "end": 1195
+        }
+      ],
+      "semantic_verified": false
+    }
+  ],
+  "checks": [
+    {
+      "claim_id": "s0c0",
+      "status": "supported",
+      "reason": "引文明确说明预训练更大模型后全量微调（重训所有参数）变得不太可行，并以GPT-3 175B部署独立微调实例成本过高为例，覆盖陈述各分句。",
+      "unsupported_parts": [],
+      "quote_support": [
+        {
+          "evidence_id": "ev_4453cede80f66bed4105",
+          "quote": "As\nwe pre-train larger models, full ﬁne-tuning, which retrains all model parameters,\nbecomes less feasible. Using GPT-3 175B as an example – deploying indepen-\ndent instances of ﬁne-tuned models, each with 175B parameters, is prohibitively\nexpensive."
+        }
+      ],
+      "output_valid": true
+    },
+    {
+      "claim_id": "s1c0",
+      "status": "partial",
+      "reason": "引文支持层归一化置于残差块内（Pre-LN）时初始化梯度行为良好，并据此移除预热；但“理论表明”中的理论依据未被引文明确表述，引文只说motivates。",
+      "unsupported_parts": [
+        "理论表明"
+      ],
+      "quote_support": [
+        {
+          "evidence_id": "ev_6d1d6b38673ef4cbc0ba",
+          "quote": "if the layer\nnormalization is put inside the residual blocks\n(recently proposed as Pre-LN Transformer), the\ngradients are well-behaved at initialization. This\nmotivates us to remove the warm-up stage for the\ntraining of Pre-LN Transformers."
+        }
+      ],
+      "output_valid": true
+    },
+    {
+      "claim_id": "s2c0",
+      "status": "supported",
+      "reason": "引文直接给出与GPT-3 175B用Adam全量微调相比，LoRA减少可训练参数10,000倍、GPU内存需求3倍，数值与比较对象一致。",
+      "unsupported_parts": [],
+      "quote_support": [
+        {
+          "evidence_id": "ev_4453cede80f66bed4105",
+          "quote": "Compared to GPT-3 175B ﬁne-tuned with Adam,\nLoRA can reduce the number of trainable parameters by 10,000 times and the\nGPU memory requirement by 3 times."
+        }
+      ],
+      "output_valid": true
+    },
+    {
+      "claim_id": "s3c0",
+      "status": "partial",
+      "reason": "引文支持Post-LN初始化时输出层附近参数期望梯度大、大学习率导致训练不稳定；但“预热阶段有助于避免此问题”未在引文中出现。",
+      "unsupported_parts": [
+        "预热阶段有助于避免此问题"
+      ],
+      "quote_support": [
+        {
+          "evidence_id": "ev_6d1d6b38673ef4cbc0ba",
+          "quote": "for the\noriginal-designed Post-LN Transformer, which\nplaces the layer normalization between the resid-\nual blocks, the expected gradients of the parame-\nters near the output layer are large. Therefore, us-\ning a large learning rate on those gradients makes\nthe training unstable."
+        }
+      ],
+      "output_valid": true
+    },
+    {
+      "claim_id": "s3c1",
+      "status": "partial",
+      "reason": "引文支持对语言模型适配中秩亏缺的实证研究阐释LoRA有效性；但“未声称适用于所有模型或任务”是引文未讨论的否定性范围主张，无法由局部引文证明。",
+      "unsupported_parts": [
+        "但该研究未声称适用于所有模型或任务"
+      ],
+      "quote_support": [
+        {
+          "evidence_id": "ev_4453cede80f66bed4105",
+          "quote": "We also provide an empirical investigation into\nrank-deﬁciency in language model adaptation, which sheds light on the efﬁcacy of\nLoRA."
+        }
+      ],
+      "output_valid": true
+    }
+  ],
+  "semantic_verified": false,
+  "counts": {
+    "contradicted": 0,
+    "insufficient": 0,
+    "partial": 3,
+    "supported": 2
+  },
+  "warnings": [
+    "这是模型对所附短引文的二次判断，不是独立事实认证；同一模型可能重复原错误。",
+    "未建议完整支持的原陈述保留在待修订区；筛选不补证据、不自动改写、不确认创新或问题已解决。"
+  ],
+  "evidence_refs": [
+    {
+      "id": "ev_6d1d6b38673ef4cbc0ba",
+      "document_id": "doc_b00c08841f0449679bda40426cb99ae2",
+      "parse_run_id": "parse_3b8d5f3e4f084ceab342f8f309054849",
+      "block_id": "blk_2e9b8940288049d49b5ccacda91379e0",
+      "page": 1,
+      "bbox": [
+        0.12256,
+        0.268417,
+        0.44309,
+        0.703749
+      ],
+      "text_sha256": "94c14978686d4f716327fc721bbfaf5940aa409a5d2a4b918cf910bc48bd78ce"
+    },
+    {
+      "id": "ev_1261be886c5612170cbf",
+      "document_id": "doc_b00c08841f0449679bda40426cb99ae2",
+      "parse_run_id": "parse_3b8d5f3e4f084ceab342f8f309054849",
+      "block_id": "blk_ec0114b9b7824fe3ae02066f54654aef",
+      "page": 8,
+      "bbox": [
+        0.090003,
+        0.77244,
+        0.475793,
+        0.907811
+      ],
+      "text_sha256": "b41437937026c1afe22f7c1c262abc6f1242c87912eda060ccad60ce5d636e84"
+    },
+    {
+      "id": "ev_df4e310f1de48a13f8e5",
+      "document_id": "doc_b00c08841f0449679bda40426cb99ae2",
+      "parse_run_id": "parse_3b8d5f3e4f084ceab342f8f309054849",
+      "block_id": "blk_ec42d273da114bb9b66a2d25ef22ccde",
+      "page": 5,
+      "bbox": [
+        0.090003,
+        0.83282,
+        0.475638,
+        0.905906
+      ],
+      "text_sha256": "723887a124115facf260de82068480c18aaf0ad15e5102f6ee24ced53274683a"
+    },
+    {
+      "id": "ev_8043db28c1719b9ab7ef",
+      "document_id": "doc_b00c08841f0449679bda40426cb99ae2",
+      "parse_run_id": "parse_3b8d5f3e4f084ceab342f8f309054849",
+      "block_id": "blk_2178c95a3015433f8c58eb47bc0baef8",
+      "page": 8,
+      "bbox": [
+        0.214162,
+        0.381838,
+        0.364159,
+        0.399255
+      ],
+      "text_sha256": "94281b02bbb29fcd566c695fd5d0fc86933e740e1a74d17f9815a8a9a921ff74"
+    },
+    {
+      "id": "ev_4453cede80f66bed4105",
+      "document_id": "doc_7d5b0867a72d41b095e6019d66a89583",
+      "parse_run_id": "parse_f8888aafa973476f9d3ba17787774036",
+      "block_id": "blk_d40e0116cffd40f0b3b08f06426a3a4f",
+      "page": 1,
+      "bbox": [
+        0.235075,
+        0.337514,
+        0.764932,
+        0.585323
+      ],
+      "text_sha256": "e9db05739b17c0fdca8d8d12f997d07275a0fda96463f59833939aea500299ef"
+    },
+    {
+      "id": "ev_744b4072f7c9076f90a4",
+      "document_id": "doc_7d5b0867a72d41b095e6019d66a89583",
+      "parse_run_id": "parse_f8888aafa973476f9d3ba17787774036",
+      "block_id": "blk_3d821488c3a842a3a7a269e845d1a45b",
+      "page": 2,
+      "bbox": [
+        0.176471,
+        0.814689,
+        0.823535,
+        0.926468
+      ],
+      "text_sha256": "456b2d917bab2bb8623fb8e72f742a3b71aa88b35a9ceb467ee53c5883685f1c"
+    },
+    {
+      "id": "ev_3a8e9520dcd1d3de75ac",
+      "document_id": "doc_7d5b0867a72d41b095e6019d66a89583",
+      "parse_run_id": "parse_f8888aafa973476f9d3ba17787774036",
+      "block_id": "blk_4a9173d213b94e8ca159bf1a688eee19",
+      "page": 3,
+      "bbox": [
+        0.176471,
+        0.106108,
+        0.823518,
+        0.132816
+      ],
+      "text_sha256": "7dcf320b75f06083e7085fc161727bd79b24e970be69333eff63c1b33eae76da"
+    },
+    {
+      "id": "ev_ea9636a1ecbd72808241",
+      "document_id": "doc_7d5b0867a72d41b095e6019d66a89583",
+      "parse_run_id": "parse_f8888aafa973476f9d3ba17787774036",
+      "block_id": "blk_faaf1b0fd7d7433289516c1a63c2a224",
+      "page": 9,
+      "bbox": [
+        0.176471,
+        0.898165,
+        0.823537,
+        0.924581
+      ],
+      "text_sha256": "8991f543510032accb8f4544e58ab3178ffeaa2b69afbc87619433056c6bbf67"
+    }
+  ]
+}
