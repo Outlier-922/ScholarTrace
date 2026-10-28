@@ -1,0 +1,76 @@
+{
+  "pack_sha256": "1abbc183337cb8576d95d5f44c1d56488d8adf5f9b9a95a5520b7ddfce91183f",
+  "product_files": {
+    "backend/app/qa.py": "eebea42cc7e33720b17f41ba77507e4484d2c8833648137fb4d5fec241cd582d",
+    "backend/app/model_client.py": "2dfa4a113add718f4d0425e814afd8a6effcfc1b9c8fee9f7c23d28e2ac2a8b2",
+    "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+    "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+    "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+    "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+    "backend/app/comparison.py": "2b5e1565a0efdec1b41e8b0a8b924924eeb8bd15a758ca0590f7d1723cc68eee",
+    "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+    "backend/app/answer_fields.py": "68b99b6ab4bbb299d6cb1ff46f317afd533ef2d8a1065df5a5e69ceae06e0da9",
+    "backend/app/workflow.py": "f7e7cb1782807dd4f4d60b84f10e98602a7abd467bf98a5acedc7f60d3282cb7",
+    "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+    "scripts/evaluate_qa.py": "bb9490e507b72e6341466dab64a913a711f19fce24d93b04556133fbc1a5184b"
+  },
+  "max_generation_requests": 2,
+  "max_reserved_output_tokens": 3200,
+  "quality_notice": "Assistant-authored absence probes; text search plus hardware-section review is not independent adjudication. No correctness or abstention accuracy is computed.",
+  "cases": [
+    {
+      "case_id": "G01",
+      "case_sha256": "cf653a995c48a5fd797a55ea6d788239d0e1180907842dbdc97b067f4c2d8652",
+      "question": "DistilBERT 训练所用 V100 GPU 的核心时钟频率是多少 MHz？只回答论文明确报告的值，不从型号推断。",
+      "source_runs": {
+        "distilbert": "parse_828fd9e7162c4192a1c9ebe64b1ac885"
+      },
+      "response_sha256": "bf3f4126ebfd1a6406142397b46b720de74820d736bd0807cb3b7e0690555122",
+      "generated": true,
+      "retained_claims": 1,
+      "no_retained_factual_claims": false,
+      "empty_result_origin": null,
+      "semantic_correctness": null,
+      "review_status": "pending_independent_review",
+      "anchor_check": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 0,
+        "gold_groups_retrieved": 0,
+        "claim_count": 1,
+        "claims_with_valid_source_ids": 1,
+        "mode": "llm",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 2.5289
+    },
+    {
+      "case_id": "G02",
+      "case_sha256": "183861892326e75941e1403a7d04fc226ffcc7e553292eec06b241181ce4c773",
+      "question": "CLIP 训练所用 V100 GPU 的运行电压是多少伏特？只回答论文明确报告的值，不从型号推断。",
+      "source_runs": {
+        "clip": "parse_d0e4dfdbf04c452581344e082be2f609"
+      },
+      "response_sha256": "dc1cfe49d1e76d66dfbb9c0f3959d07d680d63b184633ff0fb0bc0e73ae85cf1",
+      "generated": true,
+      "retained_claims": 1,
+      "no_retained_factual_claims": false,
+      "empty_result_origin": null,
+      "semantic_correctness": null,
+      "review_status": "pending_independent_review",
+      "anchor_check": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 0,
+        "gold_groups_retrieved": 0,
+        "claim_count": 1,
+        "claims_with_valid_source_ids": 1,
+        "mode": "llm",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 3.5758
+    }
+  ]
+}

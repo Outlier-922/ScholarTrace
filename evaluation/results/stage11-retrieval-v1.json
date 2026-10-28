@@ -1,0 +1,770 @@
+{
+  "manifest": {
+    "pack_sha256": "1abbc183337cb8576d95d5f44c1d56488d8adf5f9b9a95a5520b7ddfce91183f",
+    "files": {
+      "backend/app/qa.py": "eebea42cc7e33720b17f41ba77507e4484d2c8833648137fb4d5fec241cd582d",
+      "backend/app/model_client.py": "2dfa4a113add718f4d0425e814afd8a6effcfc1b9c8fee9f7c23d28e2ac2a8b2",
+      "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+      "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+      "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+      "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+      "backend/app/comparison.py": "2b5e1565a0efdec1b41e8b0a8b924924eeb8bd15a758ca0590f7d1723cc68eee",
+      "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+      "backend/app/answer_fields.py": "68b99b6ab4bbb299d6cb1ff46f317afd533ef2d8a1065df5a5e69ceae06e0da9",
+      "backend/app/workflow.py": "f7e7cb1782807dd4f4d60b84f10e98602a7abd467bf98a5acedc7f60d3282cb7",
+      "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+      "scripts/evaluate_qa.py": "bb9490e507b72e6341466dab64a913a711f19fce24d93b04556133fbc1a5184b"
+    },
+    "run_id": "20261028T105055Z-f983f365",
+    "started_at": "2026-10-28T10:50:55.398495+00:00",
+    "api_health": {
+      "status": "ok",
+      "version": "0.9.0",
+      "edition": "local-development",
+      "stage": "multilingual-retrieval-and-layout",
+      "model_configured": true,
+      "capabilities": {
+        "pdf_upload": true,
+        "native_pdf_parsing": true,
+        "source_anchors": true,
+        "content_dedup_baseline": true,
+        "page_checkpoint": true,
+        "ocr": true,
+        "ocr_supported": true,
+        "ocr_enabled": true,
+        "ocr_ready": true,
+        "dense_supported": true,
+        "dense_enabled": true,
+        "dense_ready": true,
+        "structured_tables": true,
+        "formula_latex": false,
+        "semantic_tables": false,
+        "citation_graph": true,
+        "evidence_outline": true,
+        "full_translation": false,
+        "writing_plans": true,
+        "csv_plotting": true,
+        "architecture_diagrams": true,
+        "intent_workflow": true,
+        "model_diagnostics": true,
+        "multi_user_auth": false,
+        "comparison_matrix": true,
+        "citation_navigation": true,
+        "translation": true,
+        "literature_search": true,
+        "arxiv_import": true,
+        "topic_tracking": true
+      },
+      "ocr_status": {
+        "supported": true,
+        "enabled": true,
+        "ready": true,
+        "reason": "本地OCR模型已准备并完成CPU会话加载验证"
+      },
+      "embedding_status": {
+        "supported": true,
+        "enabled": true,
+        "ready": true,
+        "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "reason": "ready"
+      }
+    },
+    "git_commit": "2d0d6741522fc4baa5a93cb4729793f3ec9b2309",
+    "git_dirty": true,
+    "live_model_requested": false,
+    "max_generation_requests": 0,
+    "max_reserved_output_tokens": 0,
+    "model": {
+      "profile": "compatible",
+      "endpoint_host": "api.deepseek.com",
+      "model": "deepseek-flash"
+    },
+    "scope": "28 previously observed factual cases and 2 separately recorded missing-field probes; development regression only",
+    "case_ids": [
+      "D01",
+      "D02",
+      "D03",
+      "D04",
+      "D05",
+      "D06",
+      "D07",
+      "D08",
+      "H01",
+      "H02",
+      "H03",
+      "H04",
+      "H05",
+      "H06",
+      "H07",
+      "H08",
+      "H09",
+      "H10",
+      "H11",
+      "H12",
+      "N01",
+      "N02",
+      "N03",
+      "N04",
+      "N05",
+      "N06",
+      "N07",
+      "N08"
+    ],
+    "sources": {
+      "transformer": {
+        "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+        "document_id": "doc_a1482495af8e4aae8fef36a33fe1919c",
+        "version_label": "v7",
+        "parse_run_id": "parse_4f92d2b9321c4404bbb861a2e642f62f"
+      },
+      "bert": {
+        "sha256": "987545ffb087f1ece898142c403a516baeabeb70ce19089397fac6f7db12c3d4",
+        "document_id": "doc_6de9669edfe045dbba32a97ced6222e1",
+        "version_label": null,
+        "parse_run_id": "parse_d2984c376fee467db05c3316a56a436b"
+      },
+      "roberta": {
+        "sha256": "76a3872d244793563a5b000b818cbaf0ca8972ab1145d32be474c05b2a8f3070",
+        "document_id": "doc_ef43e7d20403429483a2bf4ad7d0d991",
+        "version_label": "v1",
+        "parse_run_id": "parse_086e1c5f3f9b4568a8b25fdc097b4583"
+      },
+      "t5": {
+        "sha256": "ad07e47cedf437a4156419ce5d3076e08a3e59bbfd6dac7cc53df1009cdcbe7f",
+        "document_id": "doc_5acc4ed0dab74aeb914ecc21af0ee4c4",
+        "version_label": "v4",
+        "parse_run_id": "parse_a07717a1ac9e4930908e46ff6a985983"
+      },
+      "distilbert": {
+        "sha256": "a70c78e2b4db85bfee7696e19829571a3b05f69c616db5c039f6f4eb33b1a0b6",
+        "document_id": "doc_d2f494b8a32f4b64999b6da6f74adad7",
+        "version_label": "v4",
+        "parse_run_id": "parse_828fd9e7162c4192a1c9ebe64b1ac885"
+      },
+      "clip": {
+        "sha256": "6478b6e571a7d6fcd846d8ef77bfd60c285f1986abb8f475eedc43de403074f5",
+        "document_id": "doc_e645387c78a74660b75a8c66e56df9bc",
+        "version_label": "v1",
+        "parse_run_id": "parse_d0e4dfdbf04c452581344e082be2f609"
+      }
+    },
+    "method": "sequential; no retries; no gold in requests; no product tuning between selected holdout queries; small Chinese factual draft set",
+    "quality_notice": "All cases were observed before this revision. Gold facts/anchors are unchanged assistant drafts pending independent human review. No fresh-work quality claim."
+  },
+  "overall": {
+    "case_count": 28,
+    "request_errors": 0,
+    "evidence_anchor_validity": 1.0,
+    "evidence_anchor_denominator": 168,
+    "gold_group_recall_at_6": 0.9696969696969697,
+    "gold_group_denominator": 33,
+    "claim_source_id_coverage": null,
+    "claim_denominator": 0,
+    "generated_case_count": 0,
+    "answered_case_count": 0,
+    "abstained_case_count": 0,
+    "model_fallback_count": 0,
+    "reviewed_cases": 0,
+    "review_coverage": 0.0,
+    "fully_correct_over_all_cases": null,
+    "fully_correct_over_answered_cases": null,
+    "citation_semantic_support": null,
+    "latency_seconds": {
+      "n": 28,
+      "p50": 0.1786,
+      "p95": 0.8884,
+      "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+    },
+    "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+  },
+  "by_split": {
+    "development": {
+      "case_count": 28,
+      "request_errors": 0,
+      "evidence_anchor_validity": 1.0,
+      "evidence_anchor_denominator": 168,
+      "gold_group_recall_at_6": 0.9696969696969697,
+      "gold_group_denominator": 33,
+      "claim_source_id_coverage": null,
+      "claim_denominator": 0,
+      "generated_case_count": 0,
+      "answered_case_count": 0,
+      "abstained_case_count": 0,
+      "model_fallback_count": 0,
+      "reviewed_cases": 0,
+      "review_coverage": 0.0,
+      "fully_correct_over_all_cases": null,
+      "fully_correct_over_answered_cases": null,
+      "citation_semantic_support": null,
+      "latency_seconds": {
+        "n": 28,
+        "p50": 0.1786,
+        "p95": 0.8884,
+        "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+      },
+      "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+    }
+  },
+  "cases": [
+    {
+      "case_id": "D01",
+      "split": "development",
+      "case_sha256": "f3b1be62cde85c6fa1ba6ef4546451d1184deb217230707d824fa2fb1f98a388",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "e1ade9d89047113cb1d678624cc61ad57b57ac35b4050660213a85ea611d20ce",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 2.2337
+    },
+    {
+      "case_id": "D02",
+      "split": "development",
+      "case_sha256": "f568456199e24a7965d799eaee283835257a1080ca860bb9168dc1c21640f21f",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "2d0c6f30c3039b5d98f2cc470a3d1a34c70fb55e953a0681cfb24c0ede4e9438",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.2702
+    },
+    {
+      "case_id": "D03",
+      "split": "development",
+      "case_sha256": "8fbbf3a554c66371ca0b60bc374ff9520897b1c07aed6fad0f734526a0217df4",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "64cd9caa5ad76a45fb991fd6a51b5a4c44307b90ef6ee7ec8a2b45404034b287",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1595
+    },
+    {
+      "case_id": "D04",
+      "split": "development",
+      "case_sha256": "4e3a907276440bcd6fe51f5a2337de5162dc16dd985c5fdf0861f9f53fa8c6dc",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "f9595085ecb5618e8b9d2158eca8d83838a74ec9e72ce42bb9adc48c2423c62a",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1436
+    },
+    {
+      "case_id": "D05",
+      "split": "development",
+      "case_sha256": "f6166ff4c5db40e0f87d6d39e3a8c42ce483a45000411e0752df2996bc8ce06a",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "2a0b346b83ae70b20c220cd4fcf3704aca36a1a1c65efec9af248e1fdcd958c4",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1176
+    },
+    {
+      "case_id": "D06",
+      "split": "development",
+      "case_sha256": "ce7c6afb3e14436919854864a7905bdc379c7487dd8878518f646785cee0fec9",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "41b9bb11b4074b96c835842277c5a9bc49728fb7a119071b582907dc0154c4d9",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.2721
+    },
+    {
+      "case_id": "D07",
+      "split": "development",
+      "case_sha256": "29ba844d06ec5ff4de977f8051ad20352502c70896002652aa180f33bf423a3a",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "664d1ab89b9cf6c9aa7939a15b16b2e7f95499b81dc65f96ec5a9b0dcfbb146d",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1481
+    },
+    {
+      "case_id": "D08",
+      "split": "development",
+      "case_sha256": "18c7e1a30d8ee7f860bacd5b150903783d55a9c0ae64cbb3f97ec5a9215c5978",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "a590b70920d93943fcfd74995385811c7bb47b9132d93299956a5cf2f0448250",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1516
+    },
+    {
+      "case_id": "H01",
+      "split": "development",
+      "case_sha256": "fb7a1257d73c9bbecc2b916f29fcac828e7d57eaf58d133c0735afbfe2184677",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "baf32fcccbea37c6d9e3e2d4f71efbd7fee4d0301d0039e2e3365e9043453952",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 0,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1388
+    },
+    {
+      "case_id": "H02",
+      "split": "development",
+      "case_sha256": "134278e873c0c9014f24c3fcc9bbab8972c0e751804d20b20be29e03a91b4e15",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "187e0a11a0a397df97f4f0f9c7fc5f025c7cd5ec09f101b2119eae64d3ef3ed7",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1786
+    },
+    {
+      "case_id": "H03",
+      "split": "development",
+      "case_sha256": "dd1dbc0dae81d1af43740d4d53720c361000e2a90e5445aa423bbccfce183e3b",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "ae5872d4a39ff53f6a632e65106ab11ecd5219220fe7a7a9953ed1c13d944143",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0668
+    },
+    {
+      "case_id": "H04",
+      "split": "development",
+      "case_sha256": "a7a3015422d89ec36ee3a966df404b8d26a72821c4e96045dbc91ea952df4808",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "b437a596f6f83d638f06d4bd33b594b5fa07816d1c2f2ebda04e9e310529841b",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1507
+    },
+    {
+      "case_id": "H05",
+      "split": "development",
+      "case_sha256": "829cadb97f0402753105450e1a0d959eb316157371a429d2728d6ac9a63c5e71",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "c5f3998cf7b423338aa95661e635cbf70375ea50588d5122c952cce0aed8a32d",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1198
+    },
+    {
+      "case_id": "H06",
+      "split": "development",
+      "case_sha256": "e6cddaecfa15a1216940b708719ca643d64ef9a9acf42b3a8fc8dd6fd82aac32",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "bd606310ca1a8fe171a6983af28de75dc9cd22f887e5e5c3fd028d1831c5dac4",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1678
+    },
+    {
+      "case_id": "H07",
+      "split": "development",
+      "case_sha256": "4d58b1edf18b8fbf3ced8414075af7563c18500bd6b1348d4e3f3266ade238f4",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "04ab7f43c225f85bb912df31fd08afafa129b99453d7306ece2a69f8c8573df5",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.546
+    },
+    {
+      "case_id": "H08",
+      "split": "development",
+      "case_sha256": "012a425dd6ecaa84c144a2cce2878f3c68819430c5939ffeef9c069d613b7469",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "08cfdfa1719c337b9b2e7f5e27c999d2bb4689b8f58ee51b5b972a3e48db805c",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 2,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.573
+    },
+    {
+      "case_id": "H09",
+      "split": "development",
+      "case_sha256": "2390a255c74c087d91258664f8eb6c045d68130e16ec5cf8d28ad017c0bd561a",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "369a13b6ccc35d1ca9c4e93005345887544b37fef36ffce8d777d7e8b9439d81",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.3927
+    },
+    {
+      "case_id": "H10",
+      "split": "development",
+      "case_sha256": "a5f2617c351592811c74c0b6032369f686e222e4b85f18e7ed0d269449b6aaf8",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "73033bf6c848e7d76ba1272661a91652de5788ffbc41fb93185b2213d4a79030",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1469
+    },
+    {
+      "case_id": "H11",
+      "split": "development",
+      "case_sha256": "4b8dd1b6e12c3209f4050dc9d32e240057058ee771c06a6e053de12964c813ed",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "c0c0e93b6b5fc3bb3b7c04e6c0a7720250faad0e314b4d9c3c6840f2214fb260",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 2,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.5922
+    },
+    {
+      "case_id": "H12",
+      "split": "development",
+      "case_sha256": "e8ce32d66e2e99027ff4a2604ea498af21ab7278bbb2b049d2638ac99f01b0c2",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "fae3d37521ab77ab36f26cc177d10a8e114b81703a736e1d9ec9adce39c918f5",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 2,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.2163
+    },
+    {
+      "case_id": "N01",
+      "split": "development",
+      "case_sha256": "5dba74adae045448b19329d7084d360d2ecaaaab8f8bee34bf0353359bba9d21",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "8c88b438a60df6990e3bf1cb8c6f1e706f5b12a74010b749e32b0078d110028a",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1364
+    },
+    {
+      "case_id": "N02",
+      "split": "development",
+      "case_sha256": "cbadd542a6ee4894e7fd9d9ae53b96b0f7d29c712a54a16e86821da9430923ff",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "5bb72e430eed0a7344735d8e86b4e52a19ed29c28a782f3bb16c7a7b7567e248",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0983
+    },
+    {
+      "case_id": "N03",
+      "split": "development",
+      "case_sha256": "06cf72d703ae5f05c6657cb006d698f368d7c2d908c896ec884c36fbd7de2e54",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "17a05221262e272a9aa57fbd919c774783a3cff8713bca08a1f302bef4e76471",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.2639
+    },
+    {
+      "case_id": "N04",
+      "split": "development",
+      "case_sha256": "5644ed8766497686dfeca46b973cd8593eb5f99db3f6511fb73b88f5521e2518",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "570bd93204bba7cb847d0c031d88476cba72d03e9ac2a5aa249f53b670d4251b",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.4621
+    },
+    {
+      "case_id": "N05",
+      "split": "development",
+      "case_sha256": "c91255fe763d5e037fd264af8cab7ecb7ac88c73cc0fd1e5b1cd50091d68ee32",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "a67e2e503cb95e63f546f05c0dd0295c9b6a2b576b821b3cf5a5d2628ec5eb84",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.5999
+    },
+    {
+      "case_id": "N06",
+      "split": "development",
+      "case_sha256": "006a5d5f260f9bb7e112edee32e9a96524796e2ee604921c2b1968d125b1ba3f",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "7db61249e4728a7afa3ce33f1be5e4ccd806f9c0017a70efe697b089073b263b",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.4425
+    },
+    {
+      "case_id": "N07",
+      "split": "development",
+      "case_sha256": "213a4997ca314e0eeeaf835f40ec86a28663f5d3c51c7e631d275f04c79fa6f4",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "61a20c05bdd9ec1995c5b5eeeb51d6b8568270d8e5161405eee6be669941cac1",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 2,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.8884
+    },
+    {
+      "case_id": "N08",
+      "split": "development",
+      "case_sha256": "900b7b73e1d0b2a82f2ab8a8c34d2e7dbabde705f3f6e1cc013737f85aadc3da",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "b12fa94d78644fd5f2a0f01e0a1fe6542732dedad04739287d61d683ed2d654c",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 2,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.4711
+    }
+  ]
+}

@@ -18,11 +18,12 @@ from scripts.eval_core import bind_sources, digest, request_body, score_response
 
 PRODUCT_FILES = ['backend/app/qa.py', 'backend/app/model_client.py', 'backend/app/semantic.py',
                  'backend/app/source_scope.py','backend/app/parser.py','backend/app/store.py',
-                 'backend/app/comparison.py','backend/app/semantic_jobs.py', 'scripts/eval_core.py', 'scripts/evaluate_qa.py']
+                 'backend/app/comparison.py','backend/app/semantic_jobs.py','backend/app/answer_fields.py',
+                 'backend/app/workflow.py', 'scripts/eval_core.py', 'scripts/evaluate_qa.py']
 
 
 def fingerprint(pack):
-    return {'pack_sha256':digest(pack), 'files':{name:__import__('hashlib').sha256((ROOT/name).read_bytes()).hexdigest()
+    return {'fingerprint_format':'utf8_lf_text_v1','pack_sha256':digest(pack), 'files':{name:__import__('hashlib').sha256((ROOT/name).read_text(encoding='utf-8').encode('utf-8')).hexdigest()
                                              for name in PRODUCT_FILES}}
 
 

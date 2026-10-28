@@ -1,0 +1,81 @@
+{
+  "run_id": "c9287f78-28bd-4783-9388-64ba96986db3",
+  "created_at": "2026-10-28T10:57:55.371033+00:00",
+  "question": "分别比较 DistilBERT 和 CLIP 的 RN50x64 训练GPU数量、型号与耗时，保留具体模型条件，不据此给效率排名。",
+  "response_sha256": "40dd046b7008d5e87f6faa6e8bccb11672daefb47882ca06dc0c4510674ad0cb",
+  "score": {
+    "evidence_count": 6,
+    "valid_anchor_count": 6,
+    "gold_groups": 2,
+    "gold_groups_retrieved": 2,
+    "claim_count": 6,
+    "claims_with_valid_source_ids": 6,
+    "mode": "llm",
+    "retrieval_mode": "bm25_dense_rrf",
+    "semantic_correctness": null
+  },
+  "answer_coverage": [
+    {
+      "document_id": "doc_e645387c78a74660b75a8c66e56df9bc",
+      "title": "Learning Transferable Visual Models From Natural Language Supervision · v1",
+      "field": "gpu_count",
+      "label": "GPU/加速器数量",
+      "status": "has_candidate_answer",
+      "evidence_ids": [
+        "ev_565bd275db8f07c1a14c"
+      ]
+    },
+    {
+      "document_id": "doc_e645387c78a74660b75a8c66e56df9bc",
+      "title": "Learning Transferable Visual Models From Natural Language Supervision · v1",
+      "field": "gpu_model",
+      "label": "GPU/加速器型号",
+      "status": "has_candidate_answer",
+      "evidence_ids": [
+        "ev_565bd275db8f07c1a14c"
+      ]
+    },
+    {
+      "document_id": "doc_e645387c78a74660b75a8c66e56df9bc",
+      "title": "Learning Transferable Visual Models From Natural Language Supervision · v1",
+      "field": "duration",
+      "label": "训练耗时",
+      "status": "has_candidate_answer",
+      "evidence_ids": [
+        "ev_565bd275db8f07c1a14c"
+      ]
+    },
+    {
+      "document_id": "doc_d2f494b8a32f4b64999b6da6f74adad7",
+      "title": "DistilBERT, a distilled version of BERT: smaller, · v4",
+      "field": "gpu_count",
+      "label": "GPU/加速器数量",
+      "status": "has_candidate_answer",
+      "evidence_ids": [
+        "ev_de761d2ffb1275f07520"
+      ]
+    },
+    {
+      "document_id": "doc_d2f494b8a32f4b64999b6da6f74adad7",
+      "title": "DistilBERT, a distilled version of BERT: smaller, · v4",
+      "field": "gpu_model",
+      "label": "GPU/加速器型号",
+      "status": "has_candidate_answer",
+      "evidence_ids": [
+        "ev_de761d2ffb1275f07520"
+      ]
+    },
+    {
+      "document_id": "doc_d2f494b8a32f4b64999b6da6f74adad7",
+      "title": "DistilBERT, a distilled version of BERT: smaller, · v4",
+      "field": "duration",
+      "label": "训练耗时",
+      "status": "has_candidate_answer",
+      "evidence_ids": [
+        "ev_de761d2ffb1275f07520"
+      ]
+    }
+  ],
+  "missing_information": [],
+  "notice": "Browser-originated run selected by question, model mode and actual selected document order; candidate coverage is not semantic correctness."
+}

@@ -83,6 +83,7 @@ export interface AnswerResult {
   missing_information: string[];
   steps: { label: string; status: string; detail: string }[];
   warnings: string[];
+  answer_coverage?: { document_id: string; title: string; field: string; label: string; status: string; evidence_ids: string[] }[];
   retrieval?: {
     mode: 'bm25_dense_rrf' | 'bm25' | 'mixed';
     index_required?: { document_id: string; parse_run_id: string; missing_chunks: number }[];

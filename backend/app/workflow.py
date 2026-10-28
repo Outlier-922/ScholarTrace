@@ -202,12 +202,10 @@ async def retrieve(payload,supplement=False):
         documents=[document for document in documents if document['id'] in first.get('uncovered_documents',[])]
     use_dimension_queries=supplement or any(step['tool']=='comparison' for step in payload['steps'])
     question=payload['goal']+(' '+ ' '.join(comparison.DIMENSIONS[key]['query'] for key in payload['dimensions']) if use_dimension_queries else '')
-    evidence=[]
-    for document in documents:
-        hits=await run_in_threadpool(qa._retrieve,question,[document],3)
-        evidence+=hits
+    retrieval={}
+    evidence=await run_in_threadpool(qa._retrieve_question,question,documents,min(12,max(3,len(documents)*3)),retrieval)
     result={'mode':'evidence_only','evidence':evidence,'claims':[],'question':question,'uncovered_documents':[document['id'] for document in documents if not any(item['document_id']==document['id'] for item in evidence)],
-            'answer':'原文候选证据，尚未形成语义核验后的回答。'}
+            'retrieval':retrieval,'answer':'原文候选证据，尚未形成语义核验后的回答。'}
     if payload['use_model'] and evidence:
         try:proposed=await qa._generate(payload['goal'],evidence)
         except ValueError as error:
@@ -215,7 +213,9 @@ async def retrieve(payload,supplement=False):
             result['model_error']='budget_exhausted'
             return result
         result['claims']=qa._validate_claims(proposed,evidence);result['mode']='llm'
-        result['answer']='\n'.join(claim['text'] for claim in result['claims']) or '没有陈述通过来源与数字检查，保留空缺。'
+        result['answer_coverage']=proposed.get('answer_coverage',[])
+        result['missing_information']=proposed.get('missing_information',[])
+        result['answer']=qa.format_answer(result['claims'],evidence) or '没有陈述通过来源与数字检查，保留空缺。'
     return result
 
 

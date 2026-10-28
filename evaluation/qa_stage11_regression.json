@@ -1,0 +1,1056 @@
+{
+  "schema_version": 1,
+  "name": "Stage11 field-answer development regression",
+  "sources": {
+    "transformer": {
+      "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+      "version_label": "v7",
+      "title": "Attention Is All You Need",
+      "page_count": 15,
+      "arxiv_id": "1706.03762",
+      "work": "1706.03762",
+      "aliases": [
+        "arxiv:1706.03762v7"
+      ],
+      "split": "development",
+      "filename": "1706.03762v7.pdf",
+      "original_parse_run_id": "parse_4f92d2b9321c4404bbb861a2e642f62f",
+      "parser": {
+        "id": "parse_4f92d2b9321c4404bbb861a2e642f62f",
+        "document_id": "doc_a1482495af8e4aae8fef36a33fe1919c",
+        "parser_name": "PyMuPDF + optional RapidOCR",
+        "parser_version": "2",
+        "status": "ready",
+        "created_at": "2026-10-27T00:54:24.794864+00:00",
+        "finished_at": "2026-10-27T00:54:25.896317+00:00",
+        "config": {
+          "ocr": false,
+          "tables": true
+        }
+      }
+    },
+    "bert": {
+      "sha256": "987545ffb087f1ece898142c403a516baeabeb70ce19089397fac6f7db12c3d4",
+      "version_label": null,
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      "page_count": 16,
+      "arxiv_id": null,
+      "work": "1810.04805",
+      "aliases": [
+        "arxiv:1810.04805",
+        "acl:N19-1423"
+      ],
+      "split": "development",
+      "filename": "N19-1423.pdf",
+      "original_parse_run_id": "parse_d2984c376fee467db05c3316a56a436b",
+      "parser": {
+        "id": "parse_d2984c376fee467db05c3316a56a436b",
+        "document_id": "doc_6de9669edfe045dbba32a97ced6222e1",
+        "parser_name": "PyMuPDF native baseline",
+        "parser_version": "1",
+        "status": "ready",
+        "created_at": "2026-10-24T06:34:01.849656+00:00",
+        "finished_at": "2026-10-24T06:34:02.752207+00:00",
+        "config": {}
+      }
+    },
+    "roberta": {
+      "sha256": "76a3872d244793563a5b000b818cbaf0ca8972ab1145d32be474c05b2a8f3070",
+      "version_label": "v1",
+      "title": "RoBERTa: A Robustly Optimized BERT Pretraining Approach",
+      "page_count": 13,
+      "arxiv_id": "1907.11692",
+      "work": "1907.11692",
+      "aliases": [
+        "arxiv:1907.11692v1"
+      ],
+      "split": "development",
+      "filename": "1907.11692v1.pdf",
+      "original_parse_run_id": "parse_086e1c5f3f9b4568a8b25fdc097b4583",
+      "parser": {
+        "id": "parse_086e1c5f3f9b4568a8b25fdc097b4583",
+        "document_id": "doc_ef43e7d20403429483a2bf4ad7d0d991",
+        "parser_name": "PyMuPDF + optional RapidOCR",
+        "parser_version": "2",
+        "status": "ready",
+        "created_at": "2026-10-27T18:05:37.071295+00:00",
+        "finished_at": "2026-10-27T18:05:37.610843+00:00",
+        "config": {
+          "ocr": true,
+          "tables": true
+        }
+      }
+    },
+    "t5": {
+      "sha256": "ad07e47cedf437a4156419ce5d3076e08a3e59bbfd6dac7cc53df1009cdcbe7f",
+      "version_label": "v4",
+      "title": "Exploring the Limits of Transfer Learning with a Unified",
+      "page_count": 67,
+      "arxiv_id": "1910.10683",
+      "work": "1910.10683",
+      "aliases": [
+        "arxiv:1910.10683v4"
+      ],
+      "split": "development",
+      "filename": "1910.10683v4.pdf",
+      "original_parse_run_id": "parse_a9801ad4cc724b03ba27feccd6072c28",
+      "parser": {
+        "id": "parse_a9801ad4cc724b03ba27feccd6072c28",
+        "document_id": "doc_5acc4ed0dab74aeb914ecc21af0ee4c4",
+        "parser_name": "PyMuPDF + optional RapidOCR",
+        "parser_version": "2",
+        "status": "ready",
+        "created_at": "2026-10-27T18:05:42.722001+00:00",
+        "finished_at": "2026-10-27T18:05:45.888136+00:00",
+        "config": {
+          "ocr": true,
+          "tables": true
+        }
+      }
+    },
+    "distilbert": {
+      "sha256": "a70c78e2b4db85bfee7696e19829571a3b05f69c616db5c039f6f4eb33b1a0b6",
+      "version_label": "v4",
+      "page_count": 5,
+      "status": "ready",
+      "warnings": [
+        "公式尚未做 LaTeX 恢复；表格和参考文献结构仍需核对原文。",
+        "PDF 元数据未提供作者；尚未自动核验作者与机构。"
+      ],
+      "title": "DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter",
+      "work": "1910.01108",
+      "aliases": [
+        "arxiv:1910.01108"
+      ],
+      "split": "development",
+      "filename": "1910.01108v4.pdf",
+      "original_parse_run_id": "parse_828fd9e7162c4192a1c9ebe64b1ac885"
+    },
+    "clip": {
+      "sha256": "6478b6e571a7d6fcd846d8ef77bfd60c285f1986abb8f475eedc43de403074f5",
+      "version_label": "v1",
+      "page_count": 48,
+      "status": "partial",
+      "warnings": [
+        "公式尚未做 LaTeX 恢复；表格和参考文献结构仍需核对原文。",
+        "1 页表格提取失败，正文仍可使用。"
+      ],
+      "title": "Learning Transferable Visual Models From Natural Language Supervision",
+      "work": "2103.00020",
+      "aliases": [
+        "arxiv:2103.00020"
+      ],
+      "split": "development",
+      "filename": "2103.00020v1.pdf",
+      "original_parse_run_id": "parse_d0e4dfdbf04c452581344e082be2f609"
+    }
+  },
+  "cases": [
+    {
+      "id": "D01",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "transformer"
+      ],
+      "question": "Transformer 训练使用了多少张、什么型号的 GPU？",
+      "expected_facts": "8 张 NVIDIA P100。",
+      "gold_groups": [
+        [
+          {
+            "source": "transformer",
+            "page": 7,
+            "bbox": [
+              0.175706,
+              0.614625,
+              0.823532,
+              0.682395
+            ],
+            "text_sha256": "e390452e0b2527157f89bea9bc8176321d1217525634e185e5aaaa705560d13c",
+            "original_block_id": "blk_f65dea2c2d984ee5936cb2a4fc234b60"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "D02",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "transformer"
+      ],
+      "question": "Transformer 的 base 与 big 模型分别训练多少步、耗时多久？",
+      "expected_facts": "base：100,000 步、12 小时；big：300,000 步、3.5 天。",
+      "gold_groups": [
+        [
+          {
+            "source": "transformer",
+            "page": 7,
+            "bbox": [
+              0.175706,
+              0.614625,
+              0.823532,
+              0.682395
+            ],
+            "text_sha256": "e390452e0b2527157f89bea9bc8176321d1217525634e185e5aaaa705560d13c",
+            "original_block_id": "blk_f65dea2c2d984ee5936cb2a4fc234b60"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "D03",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "transformer"
+      ],
+      "question": "Transformer 报告的 Adam beta1 和 beta2 分别是多少？",
+      "expected_facts": "beta1=0.9，beta2=0.98。",
+      "gold_groups": [
+        [
+          {
+            "source": "transformer",
+            "page": 7,
+            "bbox": [
+              0.175706,
+              0.728,
+              0.823534,
+              0.756374
+            ],
+            "text_sha256": "b8120d1177c4cde70d03c141d10c67faffa009b9cbcf7003943a23a66a5df2cd",
+            "original_block_id": "blk_ebaf2a0688bd4306a8213a4e91685eea"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "D04",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "transformer"
+      ],
+      "question": "Transformer 编码器包含多少层？各子层输出维度 d_model 是多少？",
+      "expected_facts": "6 个相同层；d_model=512。",
+      "gold_groups": [
+        [
+          {
+            "source": "transformer",
+            "page": 3,
+            "bbox": [
+              0.175884,
+              0.634886,
+              0.826237,
+              0.731997
+            ],
+            "text_sha256": "ce3a6e49de35974ac5093b8aac5a1c595a611cdf6de62b4916eaf0150f7749e3",
+            "original_block_id": "blk_92f24f2fb7e14004a35e91653a73be73"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "D05",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "bert"
+      ],
+      "question": "BERTBASE 与 BERTLARGE 的参数量分别是多少？",
+      "expected_facts": "BERTBASE 110M；BERTLARGE 340M。",
+      "gold_groups": [
+        [
+          {
+            "source": "bert",
+            "page": 3,
+            "bbox": [
+              0.516191,
+              0.674305,
+              0.882865,
+              0.735545
+            ],
+            "text_sha256": "ff6e951e0177302275cc131ba1b7f48efa7be3bf45209561ac630a8c0a3726f2",
+            "original_block_id": "blk_f5b0068e60ab48968d5b3de51db1e447"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "D06",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "bert"
+      ],
+      "question": "BERT 预训练的批量大小、每序列最大 token 长度和训练步数是多少？",
+      "expected_facts": "256 序列，512 token，1,000,000 步；不代表全程都用512长度。",
+      "gold_groups": [
+        [
+          {
+            "source": "bert",
+            "page": 13,
+            "bbox": [
+              0.120952,
+              0.864238,
+              0.487621,
+              0.909385
+            ],
+            "text_sha256": "2793b22296e50f666d59f122a129a41c0ded5b11b311f42ea4e150120c3fef3c",
+            "original_block_id": "blk_873442ffd74c4fc2bb84af6f409337e9"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "D07",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "bert"
+      ],
+      "question": "BERT 预训练 Adam 的学习率、beta1、beta2 与 L2 权重衰减是多少？",
+      "expected_facts": "1e-4、0.9、0.999、0.01。",
+      "gold_groups": [
+        [
+          {
+            "source": "bert",
+            "page": 13,
+            "bbox": [
+              0.516191,
+              0.314814,
+              0.882862,
+              0.48871
+            ],
+            "text_sha256": "f1d0bef875af9df45f6a8f77975186a23fe667febc141f62bda89ec6a7264cd8",
+            "original_block_id": "blk_a69f82bb04c140d0b16a07f776165da6"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "D08",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "bert"
+      ],
+      "question": "BERTBASE 与 BERTLARGE 各用多少 Cloud TPU、多少芯片，预训练多久？",
+      "expected_facts": "BASE：4 TPU/16芯片；LARGE：16 TPU/64芯片；各4天。",
+      "gold_groups": [
+        [
+          {
+            "source": "bert",
+            "page": 13,
+            "bbox": [
+              0.516191,
+              0.492486,
+              0.88286,
+              0.569818
+            ],
+            "text_sha256": "8d24696e3cb922893ba77308947ce5d699672ed12afdb82bb85152d1b2cf3fbf",
+            "original_block_id": "blk_c92146c6fb834b4cafe0f955b297a51d"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "H01",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "roberta"
+      ],
+      "question": "RoBERTa 最终配置采用什么 masking 策略，是否使用 NSP loss？",
+      "expected_facts": "dynamic masking；FULL-SENTENCES，去掉 NSP loss。",
+      "gold_groups": [
+        [
+          {
+            "source": "roberta",
+            "page": 6,
+            "bbox": [
+              0.516504,
+              0.459877,
+              0.883473,
+              0.617631
+            ],
+            "text_sha256": "6c5d2531cdea0ecfccf4ac00f21e7f69a9e4481e40b41f90e35c1b4c20df3b62",
+            "original_block_id": "blk_8720154031034a7b9873d1d9e2514e24"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "H02",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "roberta"
+      ],
+      "question": "RoBERTa 使用什么粒度的 BPE，词表包含多少个 subword units？",
+      "expected_facts": "byte-level BPE，50K subword units。",
+      "gold_groups": [
+        [
+          {
+            "source": "roberta",
+            "page": 6,
+            "bbox": [
+              0.516504,
+              0.077928,
+              0.883306,
+              0.253782
+            ],
+            "text_sha256": "91b99c51a72e6e54716328db7ffba480e6170ef863217b12ca3ebf9db86af551",
+            "original_block_id": "blk_202c450f07194636a18afb06afab2131"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "H03",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "roberta"
+      ],
+      "question": "RoBERTa 第5节加入所有额外数据后，总预训练文本规模是多少？",
+      "expected_facts": "160GB。",
+      "gold_groups": [
+        [
+          {
+            "source": "roberta",
+            "page": 7,
+            "bbox": [
+              0.121008,
+              0.542821,
+              0.487939,
+              0.668367
+            ],
+            "text_sha256": "9ce1047eb273d4ce2415c33350aabc58e7704dbefe54b224024f8d94d6464548",
+            "original_block_id": "blk_d1e52fd96fba4cd886398dec25aea1db"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "H04",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "roberta"
+      ],
+      "question": "RoBERTa 第5节依次把预训练步数从多少增加到多少，最长训练多少步？",
+      "expected_facts": "100K 到 300K，再到 500K；最长500K。",
+      "gold_groups": [
+        [
+          {
+            "source": "roberta",
+            "page": 7,
+            "bbox": [
+              0.121008,
+              0.6718,
+              0.48794,
+              0.813449
+            ],
+            "text_sha256": "c3e452e92557161d35e61a071327172e7b823428ac544da4087cc57f692141c9",
+            "original_block_id": "blk_5f9938f1ad3a46818b90e2695371af03"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "H05",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "roberta"
+      ],
+      "question": "RoBERTa 第4.3节之后的实验采用多少条序列的 batch？",
+      "expected_facts": "8K sequences；区别于文中复述的BERT 256。",
+      "gold_groups": [
+        [
+          {
+            "source": "roberta",
+            "page": 6,
+            "bbox": [
+              0.121008,
+              0.397453,
+              0.487756,
+              0.491075
+            ],
+            "text_sha256": "d67b7e4c5d1e8f525f9a8bb6757b795f8ebf2327e6836b491b949df06bc5aa24",
+            "original_block_id": "blk_57e075ddeeef4b6fbbd98cebfced4834"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "H06",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "t5"
+      ],
+      "question": "T5 的 C4 基础数据集来自哪一月份的网页抽取文本，清洗后约多大？",
+      "expected_facts": "2019年4月；约750GB。",
+      "gold_groups": [
+        [
+          {
+            "source": "t5",
+            "page": 7,
+            "bbox": [
+              0.147059,
+              0.238265,
+              0.853987,
+              0.320722
+            ],
+            "text_sha256": "50623758dc3980bff24a82110d6a5d985a2ba4539fbe6707daa0ade7fbcc2cff",
+            "original_block_id": "blk_a73851cb065c42cea8f4cc0293c2e336"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "H07",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "t5"
+      ],
+      "question": "T5 第3.1节基线预训练多少步，最大序列长度和 batch 序列数分别是多少？",
+      "expected_facts": "524,288步；512；128序列。限基线设置。",
+      "gold_groups": [
+        [
+          {
+            "source": "t5",
+            "page": 11,
+            "bbox": [
+              0.147059,
+              0.854327,
+              0.85562,
+              0.890207
+            ],
+            "text_sha256": "9f85b0ccb82de8a4290ce1d01f39e0a2f7574ff00dadea92710de47b9e28cba0",
+            "original_block_id": "blk_0b0e9169887b4f00adfdb15db57c3a15"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "H08",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "t5"
+      ],
+      "question": "T5 的词表用什么工具编码，词表大小是多少，输入输出是否共享？",
+      "expected_facts": "SentencePiece；32,000 wordpieces；输入输出共享。",
+      "gold_groups": [
+        [
+          {
+            "source": "t5",
+            "page": 12,
+            "bbox": [
+              0.144974,
+              0.605034,
+              0.853387,
+              0.63617
+            ],
+            "text_sha256": "6e2b77026683db82576feb94babd579d6bcff8e96bad7db13adf974cd7ee52b1",
+            "original_block_id": "blk_a8a26a5435a44f8f8757808c37234798"
+          }
+        ],
+        [
+          {
+            "source": "t5",
+            "page": 12,
+            "bbox": [
+              0.146417,
+              0.639248,
+              0.856764,
+              0.772776
+            ],
+            "text_sha256": "f16093e7669bd31ad3335d43722bfd6be8533f13d620beb753b431f2d3c0c297",
+            "original_block_id": "blk_dc2ac8b251a747a7a3ec33f4953ca715"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "H09",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "t5"
+      ],
+      "question": "T5 第3.1节基线微调步数与恒定学习率是多少？",
+      "expected_facts": "262,144步；0.001；限基线微调。",
+      "gold_groups": [
+        [
+          {
+            "source": "t5",
+            "page": 12,
+            "bbox": [
+              0.146613,
+              0.387241,
+              0.856493,
+              0.559981
+            ],
+            "text_sha256": "3efc95dab202eb6d1e7bada1fc72da00e7748d45cf6b35996950a74077e6edf5",
+            "original_block_id": "blk_c1389f309d4647b69c410687c40b828b"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "H10",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "t5"
+      ],
+      "question": "T5 第3.1.4节基线目标丢弃输入 token 的比例是多少，连续缺失片段用什么替代？",
+      "expected_facts": "15%；每个连续片段由一个独特 sentinel token 替代。",
+      "gold_groups": [
+        [
+          {
+            "source": "t5",
+            "page": 13,
+            "bbox": [
+              0.146417,
+              0.592583,
+              0.853877,
+              0.777433
+            ],
+            "text_sha256": "22bdbf0c9ea3aab9b351100b6035632a8024b67db38f5313770e64b5f3fe02a6",
+            "original_block_id": "blk_2699432496f54d06ac91b9a280df1a93"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "H11",
+      "split": "development",
+      "kind": "cross_document",
+      "answerable": true,
+      "sources": [
+        "roberta",
+        "t5"
+      ],
+      "question": "分别比较 RoBERTa 与 T5 使用的词表大小及分词工具或粒度，不混淆原始BERT的词表。",
+      "expected_facts": "RoBERTa：byte-level BPE 50K；T5：SentencePiece 32,000 wordpieces。",
+      "gold_groups": [
+        [
+          {
+            "source": "roberta",
+            "page": 6,
+            "bbox": [
+              0.516504,
+              0.077928,
+              0.883306,
+              0.253782
+            ],
+            "text_sha256": "91b99c51a72e6e54716328db7ffba480e6170ef863217b12ca3ebf9db86af551",
+            "original_block_id": "blk_202c450f07194636a18afb06afab2131"
+          }
+        ],
+        [
+          {
+            "source": "t5",
+            "page": 12,
+            "bbox": [
+              0.144974,
+              0.605034,
+              0.853387,
+              0.63617
+            ],
+            "text_sha256": "6e2b77026683db82576feb94babd579d6bcff8e96bad7db13adf974cd7ee52b1",
+            "original_block_id": "blk_a8a26a5435a44f8f8757808c37234798"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "H12",
+      "split": "development",
+      "kind": "cross_document",
+      "answerable": true,
+      "sources": [
+        "roberta",
+        "t5"
+      ],
+      "question": "分别给出 RoBERTa 第5节合并数据与 T5 的 C4 清洗数据的文本体积，不把大小当成质量比较。",
+      "expected_facts": "RoBERTa 合并160GB；T5 C4约750GB；语料与清洗条件不同。",
+      "gold_groups": [
+        [
+          {
+            "source": "roberta",
+            "page": 7,
+            "bbox": [
+              0.121008,
+              0.542821,
+              0.487939,
+              0.668367
+            ],
+            "text_sha256": "9ce1047eb273d4ce2415c33350aabc58e7704dbefe54b224024f8d94d6464548",
+            "original_block_id": "blk_d1e52fd96fba4cd886398dec25aea1db"
+          }
+        ],
+        [
+          {
+            "source": "t5",
+            "page": 7,
+            "bbox": [
+              0.147059,
+              0.238265,
+              0.853987,
+              0.320722
+            ],
+            "text_sha256": "50623758dc3980bff24a82110d6a5d985a2ba4539fbe6707daa0ade7fbcc2cff",
+            "original_block_id": "blk_a73851cb065c42cea8f4cc0293c2e336"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_draft_pending_independent_human_review"
+    },
+    {
+      "id": "N01",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "distilbert"
+      ],
+      "question": "DistilBERT 的学生架构相对 BERT 移除了哪些部件，层数如何变化？",
+      "expected_facts": "去掉token-type embeddings和pooler，层数减半。",
+      "gold_groups": [
+        [
+          {
+            "source": "distilbert",
+            "page": 2,
+            "bbox": [
+              0.176471,
+              0.692278,
+              0.826235,
+              0.787616
+            ],
+            "text_sha256": "3ef98cb29f2044ceab2b2f40c317fb79c386b9daa4ac7b6a17f41d937ceeea90",
+            "original_block_id": "blk_bdaaa4e683c644e8b409eef9f29df633"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N02",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "distilbert"
+      ],
+      "question": "DistilBERT 的最终训练目标包含哪些损失，它们分别起什么作用？",
+      "expected_facts": "蒸馏损失、MLM监督损失、对齐学生与教师隐藏状态方向的余弦嵌入损失。",
+      "gold_groups": [
+        [
+          {
+            "source": "distilbert",
+            "page": 2,
+            "bbox": [
+              0.175966,
+              0.586043,
+              0.823534,
+              0.640236
+            ],
+            "text_sha256": "2cd3daaeb4fffc046972e0f28f134964a554bdf749f940643633e639b07db944",
+            "original_block_id": "blk_a039fb65581440cd8746d416f549761b"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N03",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "distilbert"
+      ],
+      "question": "DistilBERT 使用什么预训练语料，训练硬件的数量、型号、单卡显存和训练耗时分别是多少？不要混入文中对照模型的设置。",
+      "expected_facts": "英语Wikipedia和Toronto Book Corpus；8张16GB V100；约90小时。",
+      "gold_groups": [
+        [
+          {
+            "source": "distilbert",
+            "page": 3,
+            "bbox": [
+              0.175884,
+              0.468059,
+              0.825789,
+              0.522075
+            ],
+            "text_sha256": "1fae79bcf98fabb236c62c8df989c983e2448cf318d061915f9b2e57914cdb01",
+            "original_block_id": "blk_2ffd7aa9c7c84ce0b58ca596cd773708"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N04",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "clip"
+      ],
+      "question": "CLIP 第2.2节构建的数据集包含多少图文对，收集过程使用了多少条文本查询？",
+      "expected_facts": "4亿图文对；50万条查询。",
+      "gold_groups": [
+        [
+          {
+            "source": "clip",
+            "page": 3,
+            "bbox": [
+              0.501768,
+              0.70148,
+              0.887416,
+              0.865067
+            ],
+            "text_sha256": "69ae189572f651a1a504e49eab6f038856b5e086edbca95d9609a2f6a8db7b5c",
+            "original_block_id": "blk_e7ef20f27c3847dbbdd97bc46538f9db"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N05",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "clip"
+      ],
+      "question": "CLIP 第2.5节报告的训练轮数、minibatch大小、优化器和学习率调度分别是什么？",
+      "expected_facts": "32轮；32,768；Adam并解耦权重衰减；余弦学习率调度。",
+      "gold_groups": [
+        [
+          {
+            "source": "clip",
+            "page": 5,
+            "bbox": [
+              0.501588,
+              0.263661,
+              0.887557,
+              0.834846
+            ],
+            "text_sha256": "a945f528af8824a7721a8ac478ca81e1972f0a40e4fd13bac1c27a9ccb9344ec",
+            "original_block_id": "blk_ec610674a2e84411912bcc6e3e458864"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N06",
+      "split": "development",
+      "kind": "single_document",
+      "answerable": true,
+      "sources": [
+        "clip"
+      ],
+      "question": "CLIP 中 RN50x64 与最大的 Vision Transformer 分别使用多少张什么GPU，训练了多少天？",
+      "expected_facts": "RN50x64：592张V100、18天；最大ViT：256张V100、12天。",
+      "gold_groups": [
+        [
+          {
+            "source": "clip",
+            "page": 5,
+            "bbox": [
+              0.501588,
+              0.263661,
+              0.887557,
+              0.834846
+            ],
+            "text_sha256": "a945f528af8824a7721a8ac478ca81e1972f0a40e4fd13bac1c27a9ccb9344ec",
+            "original_block_id": "blk_ec610674a2e84411912bcc6e3e458864"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N07",
+      "split": "development",
+      "kind": "cross_document",
+      "answerable": true,
+      "sources": [
+        "distilbert",
+        "clip"
+      ],
+      "question": "分别比较 DistilBERT 和 CLIP 的 RN50x64 训练GPU数量、型号与耗时，保留具体模型条件，不据此给效率排名。",
+      "expected_facts": "DistilBERT：8张16GB V100、约90小时；CLIP RN50x64：592张V100、18天。",
+      "gold_groups": [
+        [
+          {
+            "source": "distilbert",
+            "page": 3,
+            "bbox": [
+              0.175884,
+              0.468059,
+              0.825789,
+              0.522075
+            ],
+            "text_sha256": "1fae79bcf98fabb236c62c8df989c983e2448cf318d061915f9b2e57914cdb01",
+            "original_block_id": "blk_2ffd7aa9c7c84ce0b58ca596cd773708"
+          }
+        ],
+        [
+          {
+            "source": "clip",
+            "page": 5,
+            "bbox": [
+              0.501588,
+              0.263661,
+              0.887557,
+              0.834846
+            ],
+            "text_sha256": "a945f528af8824a7721a8ac478ca81e1972f0a40e4fd13bac1c27a9ccb9344ec",
+            "original_block_id": "blk_ec610674a2e84411912bcc6e3e458864"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    },
+    {
+      "id": "N08",
+      "split": "development",
+      "kind": "cross_document",
+      "answerable": true,
+      "sources": [
+        "distilbert",
+        "clip"
+      ],
+      "question": "比较 DistilBERT 和 CLIP 各自训练目标的损失组成，不把两篇的目标混在一起。",
+      "expected_facts": "DistilBERT：蒸馏、MLM、余弦嵌入；CLIP：图文相似度上的对称交叉熵，拉近真配对、远离错误配对。",
+      "gold_groups": [
+        [
+          {
+            "source": "distilbert",
+            "page": 2,
+            "bbox": [
+              0.175966,
+              0.586043,
+              0.823534,
+              0.640236
+            ],
+            "text_sha256": "2cd3daaeb4fffc046972e0f28f134964a554bdf749f940643633e639b07db944",
+            "original_block_id": "blk_a039fb65581440cd8746d416f549761b"
+          }
+        ],
+        [
+          {
+            "source": "clip",
+            "page": 4,
+            "bbox": [
+              0.501817,
+              0.087707,
+              0.88755,
+              0.31162
+            ],
+            "text_sha256": "42fba2fd5d547533fa97d9b0c721f0ec4a578f63f5699208fc79a0cde55f2124",
+            "original_block_id": "blk_ab309ebc647e443fbd4d5451091e1112"
+          }
+        ]
+      ],
+      "gold_review": "assistant_authored_pending_independent_human_review"
+    }
+  ],
+  "negative_checks": [
+    {
+      "id": "G01",
+      "sources": [
+        "distilbert"
+      ],
+      "question": "DistilBERT 训练所用 V100 GPU 的核心时钟频率是多少 MHz？只回答论文明确报告的值，不从型号推断。",
+      "missing_field": "GPU核心时钟频率MHz",
+      "absence_patterns": [
+        "megahertz",
+        "\\bmhz\\b",
+        "core clock",
+        "clock frequency"
+      ],
+      "absence_text_sha256": "9d50d10d2a748110f4f81a9dfcad979a65c4342aae945cfc9dfdc9367ea7e9ea",
+      "absence_term_counts": {
+        "megahertz": 0,
+        "\\bmhz\\b": 0,
+        "core clock": 0,
+        "clock frequency": 0
+      },
+      "gold_review": "Assistant text search plus hardware-section inspection; not independent proof/adjudication"
+    },
+    {
+      "id": "G02",
+      "sources": [
+        "clip"
+      ],
+      "question": "CLIP 训练所用 V100 GPU 的运行电压是多少伏特？只回答论文明确报告的值，不从型号推断。",
+      "missing_field": "GPU运行电压V",
+      "absence_patterns": [
+        "voltage",
+        "\\bvolts?\\b"
+      ],
+      "absence_text_sha256": "fc3ce20f33dc15492f0fdb4e8a0f917cbffa5bd7d33d0b28c75aa31ef33272c9",
+      "absence_term_counts": {
+        "voltage": 0,
+        "\\bvolts?\\b": 0
+      },
+      "gold_review": "Assistant text search plus hardware-section inspection; not independent proof/adjudication"
+    }
+  ],
+  "prior_pack_sha256": [
+    "4ede3e7df2d898717ccd67abd29ee611f51167b4236b4ddb5225d8b07042900c",
+    "36b39242b9b90ad96e418e638c6c3554e53fb3750c52a8d90e2568e79aafb82c"
+  ],
+  "scope": "28 previously observed factual cases and 2 separately recorded missing-field probes; development regression only",
+  "holdout_limit": "All cases were observed before this revision. Gold facts/anchors are unchanged assistant drafts pending independent human review. No fresh-work quality claim."
+}

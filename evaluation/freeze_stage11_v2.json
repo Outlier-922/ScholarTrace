@@ -1,0 +1,20 @@
+{
+  "pack_sha256": "1abbc183337cb8576d95d5f44c1d56488d8adf5f9b9a95a5520b7ddfce91183f",
+  "files": {
+    "backend/app/qa.py": "eebea42cc7e33720b17f41ba77507e4484d2c8833648137fb4d5fec241cd582d",
+    "backend/app/model_client.py": "2dfa4a113add718f4d0425e814afd8a6effcfc1b9c8fee9f7c23d28e2ac2a8b2",
+    "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+    "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+    "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+    "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+    "backend/app/comparison.py": "2b5e1565a0efdec1b41e8b0a8b924924eeb8bd15a758ca0590f7d1723cc68eee",
+    "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+    "backend/app/answer_fields.py": "0b9c45797acde532b4ba5e35c636256a3677662cf35864506ae25aa42302078a",
+    "backend/app/workflow.py": "f7e7cb1782807dd4f4d60b84f10e98602a7abd467bf98a5acedc7f60d3282cb7",
+    "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+    "scripts/evaluate_qa.py": "bb9490e507b72e6341466dab64a913a711f19fce24d93b04556133fbc1a5184b"
+  },
+  "created_at": "2026-10-28T10:57:09.040134+00:00",
+  "git_commit": "2d0d6741522fc4baa5a93cb4729793f3ec9b2309",
+  "notice": "File hashes fix this local evaluator/product snapshot; not an external attestation."
+}

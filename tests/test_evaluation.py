@@ -138,3 +138,22 @@ def test_offline_review_detects_raw_change(evaluation,tmp_path):
     (tmp_path/'raw.json').write_text(json.dumps([row]),encoding='utf-8')
     with pytest.raises(ValueError,match='response_changed'):
         review_run(tmp_path,[])
+
+
+def test_product_fingerprint_survives_git_line_ending_conversion(tmp_path,monkeypatch):
+    from scripts import evaluate_qa
+    monkeypatch.setattr(evaluate_qa,'ROOT',tmp_path);monkeypatch.setattr(evaluate_qa,'PRODUCT_FILES',['fixture.py'])
+    path=tmp_path/'fixture.py';path.write_bytes("value = '科研'\nassert value\n".encode())
+    first=evaluate_qa.fingerprint({'cases':[]})
+    path.write_bytes("value = '科研'\r\nassert value\r\n".encode())
+    assert evaluate_qa.fingerprint({'cases':[]})==first
+    assert first['fingerprint_format']=='utf8_lf_text_v1'
+
+
+def test_product_fingerprint_still_detects_source_change(tmp_path,monkeypatch):
+    from scripts import evaluate_qa
+    monkeypatch.setattr(evaluate_qa,'ROOT',tmp_path);monkeypatch.setattr(evaluate_qa,'PRODUCT_FILES',['fixture.py'])
+    path=tmp_path/'fixture.py';path.write_text('value = 7\n',encoding='utf-8')
+    before=evaluate_qa.fingerprint({})
+    path.write_text('value = 8\n',encoding='utf-8')
+    assert evaluate_qa.fingerprint({})!=before

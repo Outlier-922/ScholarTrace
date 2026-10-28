@@ -21,7 +21,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import semantic, store, source_scope
+from . import semantic, store, source_scope, answer_fields
 from starlette.concurrency import run_in_threadpool
 
 router = APIRouter(prefix="/api", tags=["evidence"])
@@ -286,6 +286,64 @@ def _retrieve(question: str, documents: list[dict[str, Any]], limit: int,
     return _continuation_context(ranked,sources,limit,question)
 
 
+def _retrieve_question(question,documents,limit,diagnostics=None):
+    """Bounded field probes supplement broad retrieval; no provider requests."""
+    keys=answer_fields.requested(question);details={}
+    depth=min(12,max(limit,limit*2)) if len(documents)>1 or len(keys)>1 else limit
+    base=_retrieve(question,documents,depth,details)
+    if not keys:
+        if diagnostics is not None:diagnostics.update(details)
+        return base[:limit]
+    pool={item['id']:dict(item,retrieval_fields=[]) for item in base}
+    probes=[];per_doc={item['document_id']:item for item in details.get('documents',[])}
+    if len(documents)==1:per_doc[documents[0]['id']]={'document_id':documents[0]['id'],**details}
+    # Round-robin field probes keep a many-field first paper from consuming the
+    # entire supplementary search budget. There is still only one generation.
+    for field in keys:
+        for document in documents:
+            if len(probes)>=12:break
+            query=answer_fields.probe_query(question,field);extra={}
+            hits=_retrieve(query,[document],3,extra)
+            per_doc[document['id']]={'document_id':document['id'],**extra}
+            probes.append({'document_id':document['id'],'field':field,'query':query,'used_dense':bool(extra.get('used'))})
+            for hit in hits:
+                if hit['id'] not in pool:pool[hit['id']]={**hit,'retrieval_fields':[]}
+                pool[hit['id']]['retrieval_fields'].append(field)
+        if len(probes)>=12:break
+    selected=[];chosen=set();covered=set()
+    def hits(item):
+        return {(item['document_id'],field) for field in keys if answer_fields.cue_score(field,item['text'])>0}
+    def quality(item):
+        cues=sum(answer_fields.cue_score(field,item['text']) for field in keys)
+        return len(hits(item)-covered),cues,len(set(item['retrieval_fields'])),item.get('bm25_score',0)
+    def add(item):
+        if item['id'] not in chosen and len(selected)<limit:
+            selected.append(item);chosen.add(item['id']);covered.update(hits(item))
+    for document in documents:
+        candidates=[item for item in pool.values() if item['document_id']==document['id']]
+        if candidates:add(max(candidates,key=quality))
+    while len(selected)<limit:
+        candidates=[item for item in pool.values() if item['id'] not in chosen]
+        if not candidates:break
+        best=max(candidates,key=quality)
+        if quality(best)[0]==0:break
+        add(best)
+    for item in [*base,*pool.values()]:add(pool[item['id']])
+    used=[item.get('used',False) for item in per_doc.values()]
+    if diagnostics is not None:
+        diagnostics.update(details)
+        diagnostics.update(used=any(used),mode='bm25_dense_rrf' if used and all(used) else 'mixed' if any(used) else 'bm25',
+            documents=list(per_doc.values()),index_required=[need for item in per_doc.values() for need in item.get('index_required',[])],
+            requested_fields=[{'key':key,'label':answer_fields.FIELDS[key][0]} for key in keys],
+            field_queries=probes,extra_query_limit=12,extra_queries_used=len(probes),
+            field_queries_truncated=len(probes)<len(documents)*len(keys),
+            candidate_coverage=[{'document_id':document['id'],'field':key,'candidate_evidence_ids':[
+                item['id'] for item in selected if item['document_id']==document['id'] and answer_fields.cue_score(key,item['text'])>0]}
+                for document in documents for key in keys],
+            coverage={document['id']:sum(item['document_id']==document['id'] for item in selected) for document in documents})
+    return selected
+
+
 def _validate_claims(payload: dict[str, Any], evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
     sources = {item["id"]: item for item in evidence}
     verified: list[dict[str, Any]] = []
@@ -299,6 +357,7 @@ def _validate_claims(payload: dict[str, Any], evidence: list[dict[str, Any]]) ->
         ids = claim.get("evidence_ids")
         if not isinstance(text, str) or not text.strip() or len(text) > 2000:
             continue
+        if answer_fields.formula_fragment(text):continue
         if not isinstance(ids, list) or not ids or any(not isinstance(i, str) or i not in sources for i in ids):
             continue
         supporting_text = " ".join(model_source_text(sources[i]) for i in ids)
@@ -308,8 +367,20 @@ def _validate_claims(payload: dict[str, Any], evidence: list[dict[str, Any]]) ->
         original_numbers = set(re.findall(r"(?<![\w])\d+(?:\.\d+)?(?:e[-+]?\d+)?", supporting_text, re.I))
         if any(number not in original_numbers for number in numbers):
             continue
-        verified.append({"text": text.strip(), "evidence_ids": list(dict.fromkeys(ids)), "status": "source_checked"})
+        value={"text": text.strip(), "evidence_ids": list(dict.fromkeys(ids)), "status": "source_checked"}
+        if isinstance(claim.get('field'),str) and claim['field'] in answer_fields.FIELDS and claim.get('document_id') and all(sources[identity].get('document_id')==claim['document_id'] for identity in ids):
+            value.update(field=claim['field'],document_id=claim['document_id'])
+        verified.append(value)
     return verified
+
+
+def format_answer(claims,evidence):
+    titles={item['document_id']:item['title']+(' · '+item['version_label'] if item.get('version_label') else '') for item in evidence}
+    scoped=[claim for claim in claims if claim.get('field') in answer_fields.FIELDS and claim.get('document_id') in titles]
+    if len(scoped)!=len(claims):return '\n\n'.join(claim['text'] for claim in claims)
+    groups={}
+    for claim in scoped:groups.setdefault(claim['document_id'],[]).append(answer_fields.FIELDS[claim['field']][0]+'：'+claim['text'])
+    return '\n\n'.join((titles[identity]+'\n' if len(groups)>1 else '')+'\n'.join(lines) for identity,lines in groups.items())
 
 
 async def _generate(question: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:
@@ -324,10 +395,20 @@ async def _generate(question: str, evidence: list[dict[str, Any]]) -> dict[str, 
         "严格输出JSON对象：{\"claims\":[{\"text\":\"事实\",\"evidence_ids\":[\"ev_x\"]}],"
         "\"missing_information\":[\"缺失项\"]}。无依据时claims为空。"
     )
-    system += '文本中的^{...}保留PDF上标位置，可能是幂、单位或脚注；按上下文解释，不把2^{35}读成235。章节路径用于定位条件。'
-    source_payload = [{"id": item["id"], "title": item["title"], "page": item["page"],
+    system += '文本中的^{...}保留PDF上标位置，可能是幂、单位或脚注；不要把上标拼成普通整数。章节路径用于定位条件。除非问题要求公式，不输出公式；不完整公式不能当作已恢复的公式。'
+    source_payload = [{"id": item["id"], "document_id":item.get('document_id','unknown'),"title": item["title"], "page": item["page"],
                        "section_path":item.get('section_path',[]),"text": model_source_text(item)[:3500]} for item in evidence]
-    return await model_client.chat_json(system, {"question": question, "evidence": source_payload}, max_tokens=1600)
+    keys=answer_fields.requested(question)
+    payload={"question":question,"evidence":source_payload}
+    if keys:
+        system += ('本次使用逐文逐字段格式，覆盖所问字段，不能把别篇证据填入该篇。只输出field_answers，不输出无关背景或额外缺失要求。'
+            '同一字段在保留条件和约数后已有答案时不要又报缺失；不要要求未被问到的精度或更细型号。'
+            'JSON格式：{"field_answers":[{"document_id":"给定文献ID","field":"给定字段key","status":"answered或missing","text":"只回答此字段的事实，保留模型/阶段条件","evidence_ids":["ev_x"]}]}。'
+            'missing表示给定证据不足，text留空，不能断言整篇没有报告。每个文献/字段仅一项，最多20项。')
+        payload['requested_fields']=[{'key':key,'label':answer_fields.FIELDS[key][0]} for key in keys]
+    result=await model_client.chat_json(system,payload,max_tokens=1600)
+    interpreted=answer_fields.interpret(result,question,evidence,_validate_claims)
+    return interpreted if interpreted is not None else {key:result[key] for key in ('claims','missing_information') if key in result}
 
 
 def _save_run(result: dict[str, Any], question: str, document_ids: list[str]) -> None:
@@ -348,8 +429,11 @@ def _filter_deleted_sources(result: dict[str, Any], document_ids: list[str]) -> 
     result["evidence"] = [item for item in result.get("evidence", []) if item["document_id"] not in deleted]
     valid_ids = {item["id"] for item in result["evidence"]}
     result["claims"] = [claim for claim in result.get("claims", []) if all(identity in valid_ids for identity in claim["evidence_ids"])]
+    for cell in result.get('answer_coverage',[]):
+        if cell['document_id'] in deleted:
+            cell.update(status='source_unavailable',evidence_ids=[])
     if result["claims"]:
-        result["answer"] = "\n\n".join(claim["text"] for claim in result["claims"])
+        result["answer"] = format_answer(result['claims'],result['evidence'])
     else:
         result["answer"] = "本任务的部分来源已删除，请重新检索。"
         result["mode"] = "evidence_only"
@@ -377,12 +461,14 @@ async def ask(request: AskRequest) -> dict[str, Any]:
     documents = [item for item in documents if item.get("status") in ("ready", "partial")]
     documents = source_scope.pin(documents,request.parse_runs)
     retrieval_details: dict[str, Any] = {}
-    evidence = await run_in_threadpool(_retrieve, question, documents, request.limit, retrieval_details)
+    evidence = await run_in_threadpool(_retrieve_question, question, documents, request.limit, retrieval_details)
     retrieval_mode = retrieval_details.get('mode') or ("bm25_dense_rrf" if retrieval_details.get("used") else "bm25")
     warnings = ["已使用 BM25 + 多语言语义向量 + RRF 融合；重排与完整语义支持核验尚待完善。" if retrieval_details.get("used") else "当前使用 BM25 检索；语义模型未启用、未准备或该文献尚需预索引。"]
     if retrieval_details.get("reason") and not retrieval_details.get("used"):
         warnings.append(retrieval_details["reason"])
     if retrieval_mode=='mixed':warnings.append('所选论文使用了不同检索路径：部分语义融合，部分BM25；可为待索引论文显式准备语义索引。')
+    if retrieval_details.get('field_queries_truncated'):warnings.append('已达到12次本地字段补检索上限，部分字段未单独补检索；请缩小范围后核对。')
+    if len(answer_fields.requested(question,limit=None))>8:warnings.append('本次仅识别前8类字段，请拆分较长问题逐项核对。')
     if any(model_source_text(item)!=item['text'] for item in evidence):
         warnings.append('部分来源含PDF上标；模型输入保留^{...}版式表示，摘录与坐标仍使用原始内容块，请核对原页。')
     if any(item.get("extraction") == "rapidocr" for item in evidence):
@@ -402,6 +488,7 @@ async def ask(request: AskRequest) -> dict[str, Any]:
         "steps": steps,
         "warnings": warnings,
         "retrieval": {"mode": retrieval_mode, **retrieval_details},
+        "answer_coverage": [],
     }
     if not evidence:
         result["answer"] = "未检索到足以回答这个问题的原文证据。请检查文献范围、解析状态，或换用论文中的关键词。"
@@ -416,11 +503,23 @@ async def ask(request: AskRequest) -> dict[str, Any]:
                 claims = _validate_claims(payload, evidence)
                 missing = payload.get("missing_information", [])
                 result["claims"] = claims
+                result['answer_coverage']=payload.get('answer_coverage',[])
+                result['field_validation']=payload.get('field_validation',{'mode':'legacy_claims','semantic_verified':False})
                 result["missing_information"] = [str(item)[:500] for item in missing[:10]] if isinstance(missing, list) else []
                 result["mode"] = "llm"
+                if answer_fields.requested(question) and not result['answer_coverage']:
+                    warnings.append('模型未返回逐字段格式；以下陈述仍需逐项核对，不据此判定回答完整。')
+                covered_docs={cell['document_id'] for cell in result['answer_coverage']}
+                for document in documents:
+                    if document['id'] not in covered_docs and payload.get('field_validation',{}).get('mode')=='scoped_fields':
+                        for key in answer_fields.requested(question):
+                            result['answer_coverage'].append({'document_id':document['id'],'title':document['title'],'field':key,
+                                'label':answer_fields.FIELDS[key][0],'status':'not_assessed','evidence_ids':[]})
                 if claims:
-                    result["answer"] = "\n\n".join(claim["text"] for claim in claims)
+                    result["answer"] = format_answer(claims,evidence)
                     steps.append({"label": "生成与来源检查", "status": "completed", "detail": f"保留 {len(claims)} 条具有有效证据ID且通过数字检查的陈述；语义支持仍需核对原文"})
+                    if result['answer_coverage']:
+                        steps.append({'label':'逐文逐字段输出检查','status':'completed','detail':'仅保留所问字段，区分候选回答、缺失、未完成与冲突；这不是语义支持判定。'})
                 else:
                     result["answer"] = "模型没有给出通过来源与数字检查的事实。以下仅展示原文候选证据。"
                     steps.append({"label": "生成与来源检查", "status": "completed", "detail": "没有可保留的事实，选择拒答"})

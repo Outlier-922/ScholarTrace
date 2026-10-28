@@ -53,7 +53,8 @@ def main():
             except (httpx.HTTPError,ValueError,KeyError,TypeError) as error:row['error_type']=type(error).__name__
             row['elapsed_seconds']=round(time.perf_counter()-started,4);rows.append(row)
             print(case['id']+': '+json.dumps({key:value for key,value in row.items() if key not in {'response','question','anchor_check'}},ensure_ascii=False),flush=True)
-    report={'pack_sha256':digest(pack),'product_files':frozen['files'],'max_generation_requests':2,
+    report={'pack_sha256':digest(pack),'product_files':frozen['files'],
+            'fingerprint_format':frozen.get('fingerprint_format','raw_bytes_legacy'),'max_generation_requests':2,
             'max_reserved_output_tokens':3200,'quality_notice':'Assistant-authored absence probes; text search plus hardware-section review is not independent adjudication. No correctness or abstention accuracy is computed.',
             'cases':[{key:value for key,value in row.items() if key!='response'} for row in rows]}
     (root/'raw.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding='utf-8')
