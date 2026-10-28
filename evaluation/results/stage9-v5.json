@@ -1,0 +1,588 @@
+{
+  "manifest": {
+    "pack_sha256": "4ede3e7df2d898717ccd67abd29ee611f51167b4236b4ddb5225d8b07042900c",
+    "files": {
+      "backend/app/qa.py": "7586dfa06214d624671bd7808153800d0b3f52713020e145ff827d5b9fc484c2",
+      "backend/app/model_client.py": "2dfa4a113add718f4d0425e814afd8a6effcfc1b9c8fee9f7c23d28e2ac2a8b2",
+      "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+      "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+      "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+      "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+      "backend/app/comparison.py": "2b5e1565a0efdec1b41e8b0a8b924924eeb8bd15a758ca0590f7d1723cc68eee",
+      "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+      "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+      "scripts/evaluate_qa.py": "92988d1d6b71ae520c9cb5cbc7e9191ae64fcbb24e9ae283b76eac81f0e5547e"
+    },
+    "run_id": "20261027T184337Z-cb60b782",
+    "started_at": "2026-10-27T18:43:37.842314+00:00",
+    "api_health": {
+      "status": "ok",
+      "version": "0.8.0",
+      "edition": "local-development",
+      "stage": "multilingual-retrieval-and-layout",
+      "model_configured": true,
+      "capabilities": {
+        "pdf_upload": true,
+        "native_pdf_parsing": true,
+        "source_anchors": true,
+        "content_dedup_baseline": true,
+        "page_checkpoint": true,
+        "ocr": true,
+        "ocr_supported": true,
+        "ocr_enabled": true,
+        "ocr_ready": true,
+        "dense_supported": true,
+        "dense_enabled": true,
+        "dense_ready": true,
+        "structured_tables": true,
+        "formula_latex": false,
+        "semantic_tables": false,
+        "citation_graph": true,
+        "evidence_outline": true,
+        "full_translation": false,
+        "writing_plans": true,
+        "csv_plotting": true,
+        "architecture_diagrams": true,
+        "intent_workflow": true,
+        "model_diagnostics": true,
+        "multi_user_auth": false,
+        "comparison_matrix": true,
+        "citation_navigation": true,
+        "translation": true,
+        "literature_search": true,
+        "arxiv_import": true,
+        "topic_tracking": true
+      },
+      "ocr_status": {
+        "supported": true,
+        "enabled": true,
+        "ready": true,
+        "reason": "本地OCR模型已准备并完成CPU会话加载验证"
+      },
+      "embedding_status": {
+        "supported": true,
+        "enabled": true,
+        "ready": true,
+        "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "reason": "ready"
+      }
+    },
+    "git_commit": "eb2659f3369be7429bf5ff7a68f09b044498f010",
+    "git_dirty": true,
+    "live_model_requested": false,
+    "max_generation_requests": 0,
+    "max_reserved_output_tokens": 0,
+    "model": {
+      "profile": "compatible",
+      "endpoint_host": "api.deepseek.com",
+      "model": "deepseek-flash"
+    },
+    "scope": "20 previously observed development regression questions; no fresh held-out generalization claim",
+    "case_ids": [
+      "D01",
+      "D02",
+      "D03",
+      "D04",
+      "D05",
+      "D06",
+      "D07",
+      "D08",
+      "H01",
+      "H02",
+      "H03",
+      "H04",
+      "H05",
+      "H06",
+      "H07",
+      "H08",
+      "H09",
+      "H10",
+      "H11",
+      "H12"
+    ],
+    "sources": {
+      "transformer": {
+        "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+        "document_id": "doc_a1482495af8e4aae8fef36a33fe1919c",
+        "version_label": "v7",
+        "parse_run_id": "parse_4f92d2b9321c4404bbb861a2e642f62f"
+      },
+      "bert": {
+        "sha256": "987545ffb087f1ece898142c403a516baeabeb70ce19089397fac6f7db12c3d4",
+        "document_id": "doc_6de9669edfe045dbba32a97ced6222e1",
+        "version_label": null,
+        "parse_run_id": "parse_d2984c376fee467db05c3316a56a436b"
+      },
+      "roberta": {
+        "sha256": "76a3872d244793563a5b000b818cbaf0ca8972ab1145d32be474c05b2a8f3070",
+        "document_id": "doc_ef43e7d20403429483a2bf4ad7d0d991",
+        "version_label": "v1",
+        "parse_run_id": "parse_086e1c5f3f9b4568a8b25fdc097b4583"
+      },
+      "t5": {
+        "sha256": "ad07e47cedf437a4156419ce5d3076e08a3e59bbfd6dac7cc53df1009cdcbe7f",
+        "document_id": "doc_5acc4ed0dab74aeb914ecc21af0ee4c4",
+        "version_label": "v4",
+        "parse_run_id": "parse_a07717a1ac9e4930908e46ff6a985983"
+      }
+    },
+    "method": "sequential; no retries; no gold in requests; no product tuning between selected holdout queries; small Chinese factual draft set",
+    "quality_notice": "All cases observed before this product revision. Improvements measure regression behavior only. Independent human quality review remains pending."
+  },
+  "overall": {
+    "case_count": 20,
+    "request_errors": 0,
+    "evidence_anchor_validity": 1.0,
+    "evidence_anchor_denominator": 120,
+    "gold_group_recall_at_6": 0.9565217391304348,
+    "gold_group_denominator": 23,
+    "claim_source_id_coverage": null,
+    "claim_denominator": 0,
+    "generated_case_count": 0,
+    "answered_case_count": 0,
+    "abstained_case_count": 0,
+    "model_fallback_count": 0,
+    "reviewed_cases": 0,
+    "review_coverage": 0.0,
+    "fully_correct_over_all_cases": null,
+    "fully_correct_over_answered_cases": null,
+    "citation_semantic_support": null,
+    "latency_seconds": {
+      "n": 20,
+      "p50": 0.0715,
+      "p95": 0.2008,
+      "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+    },
+    "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+  },
+  "by_split": {
+    "development": {
+      "case_count": 20,
+      "request_errors": 0,
+      "evidence_anchor_validity": 1.0,
+      "evidence_anchor_denominator": 120,
+      "gold_group_recall_at_6": 0.9565217391304348,
+      "gold_group_denominator": 23,
+      "claim_source_id_coverage": null,
+      "claim_denominator": 0,
+      "generated_case_count": 0,
+      "answered_case_count": 0,
+      "abstained_case_count": 0,
+      "model_fallback_count": 0,
+      "reviewed_cases": 0,
+      "review_coverage": 0.0,
+      "fully_correct_over_all_cases": null,
+      "fully_correct_over_answered_cases": null,
+      "citation_semantic_support": null,
+      "latency_seconds": {
+        "n": 20,
+        "p50": 0.0715,
+        "p95": 0.2008,
+        "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+      },
+      "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+    }
+  },
+  "cases": [
+    {
+      "case_id": "D01",
+      "split": "development",
+      "case_sha256": "f3b1be62cde85c6fa1ba6ef4546451d1184deb217230707d824fa2fb1f98a388",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "6ce9fee2a837aef99ce756e884e6d8fc3f135b3d90bbfb6160561a2b5feddb0d",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 1.6931
+    },
+    {
+      "case_id": "D02",
+      "split": "development",
+      "case_sha256": "f568456199e24a7965d799eaee283835257a1080ca860bb9168dc1c21640f21f",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "92ca2cb4e71944077c5081fc8a2b03ad44d3083037a68765bb309dbaf8a6baeb",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0617
+    },
+    {
+      "case_id": "D03",
+      "split": "development",
+      "case_sha256": "8fbbf3a554c66371ca0b60bc374ff9520897b1c07aed6fad0f734526a0217df4",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "42250077d7de9993e00831fa726c2cdfd9496dbda7c9365b0c032989a03fa1bb",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0585
+    },
+    {
+      "case_id": "D04",
+      "split": "development",
+      "case_sha256": "4e3a907276440bcd6fe51f5a2337de5162dc16dd985c5fdf0861f9f53fa8c6dc",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "b160daa6020dc7a99c8c65e2e47f2ba4bb2ae123621b5ffbbd642ee11ecc96ab",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0607
+    },
+    {
+      "case_id": "D05",
+      "split": "development",
+      "case_sha256": "f6166ff4c5db40e0f87d6d39e3a8c42ce483a45000411e0752df2996bc8ce06a",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "8ba79b1fb3dae223f2c04ccad5ef4dbe32282d7afe27a9f3d84b633b4e4d1add",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0797
+    },
+    {
+      "case_id": "D06",
+      "split": "development",
+      "case_sha256": "ce7c6afb3e14436919854864a7905bdc379c7487dd8878518f646785cee0fec9",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "51a919afde7d34e7eb9f3f994b6bfb055e7cd4cbd35ac59d9f32a59d37b565d2",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0723
+    },
+    {
+      "case_id": "D07",
+      "split": "development",
+      "case_sha256": "29ba844d06ec5ff4de977f8051ad20352502c70896002652aa180f33bf423a3a",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "6a95ba62893ab3862c6da18de4b98fde439ea040addedeb01038be5942d7bf97",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0715
+    },
+    {
+      "case_id": "D08",
+      "split": "development",
+      "case_sha256": "18c7e1a30d8ee7f860bacd5b150903783d55a9c0ae64cbb3f97ec5a9215c5978",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "3759401eb7e7bacb78acdacba9f54df30bf47593a3ea38f28fe9767b7cf5a620",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0688
+    },
+    {
+      "case_id": "H01",
+      "split": "development",
+      "case_sha256": "fb7a1257d73c9bbecc2b916f29fcac828e7d57eaf58d133c0735afbfe2184677",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "f4236486f80c54d64f7eae7d6f42ed7d6399581c419ff7639c4b1ccd07ff9c7d",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 0,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0658
+    },
+    {
+      "case_id": "H02",
+      "split": "development",
+      "case_sha256": "134278e873c0c9014f24c3fcc9bbab8972c0e751804d20b20be29e03a91b4e15",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "6a209b86064df83dce4b8b1a5970218da544d3cb0e43b0344402acbbf68b74eb",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0628
+    },
+    {
+      "case_id": "H03",
+      "split": "development",
+      "case_sha256": "dd1dbc0dae81d1af43740d4d53720c361000e2a90e5445aa423bbccfce183e3b",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "0d56d6803e25bd8f36d6bac864ed8d2444b7db21b2eeca7ad08f196cc1f2645c",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0627
+    },
+    {
+      "case_id": "H04",
+      "split": "development",
+      "case_sha256": "a7a3015422d89ec36ee3a966df404b8d26a72821c4e96045dbc91ea952df4808",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "8bcdbeb5d5437ad1b7c58b81cb1b7b229f540489424a87e3c50520759cacd803",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0614
+    },
+    {
+      "case_id": "H05",
+      "split": "development",
+      "case_sha256": "829cadb97f0402753105450e1a0d959eb316157371a429d2728d6ac9a63c5e71",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "63ebeb8cf1b5e948a84fdc949ff8d77d61f3073a691f3882985b71b60b1327c3",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.0614
+    },
+    {
+      "case_id": "H06",
+      "split": "development",
+      "case_sha256": "e6cddaecfa15a1216940b708719ca643d64ef9a9acf42b3a8fc8dd6fd82aac32",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "f1d0dec6778542b803800c75e7394bcf0201a39ebe22e801d5a093471a66a2b2",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.146
+    },
+    {
+      "case_id": "H07",
+      "split": "development",
+      "case_sha256": "4d58b1edf18b8fbf3ced8414075af7563c18500bd6b1348d4e3f3266ade238f4",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "96db16cebe50a3b99d00c9d3fae3328db3cea6a76a703c2db31054fa67b83611",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1334
+    },
+    {
+      "case_id": "H08",
+      "split": "development",
+      "case_sha256": "012a425dd6ecaa84c144a2cce2878f3c68819430c5939ffeef9c069d613b7469",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "d60070e3aa9df0e901ef541aa2b26ddb29fc2794b715b7a5b9847416042cb311",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 2,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1298
+    },
+    {
+      "case_id": "H09",
+      "split": "development",
+      "case_sha256": "2390a255c74c087d91258664f8eb6c045d68130e16ec5cf8d28ad017c0bd561a",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "72885f09f5b6ab7d35cc6ea0958b29ccbd554fcc2acd34cf7843e4a0d8043295",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1283
+    },
+    {
+      "case_id": "H10",
+      "split": "development",
+      "case_sha256": "a5f2617c351592811c74c0b6032369f686e222e4b85f18e7ed0d269449b6aaf8",
+      "gold_groups": 1,
+      "live_model_requested": false,
+      "response_sha256": "ac0dc13a78ccab1807a31c003afb6004653fbb56fd38a6fbd4e5bdaaa893637c",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1329
+    },
+    {
+      "case_id": "H11",
+      "split": "development",
+      "case_sha256": "4b8dd1b6e12c3209f4050dc9d32e240057058ee771c06a6e053de12964c813ed",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "c97d2243900236bdd2f60ef2544c27b1875461b1a9c5f6cbbb83c11df7c67916",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 2,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.1992
+    },
+    {
+      "case_id": "H12",
+      "split": "development",
+      "case_sha256": "e8ce32d66e2e99027ff4a2604ea498af21ab7278bbb2b049d2638ac99f01b0c2",
+      "gold_groups": 2,
+      "live_model_requested": false,
+      "response_sha256": "e8058f7a0e2fd418fbd736f08c83284a1d055e7e1e9b75cd3d0cee9d0ec22b88",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 2,
+        "claim_count": 0,
+        "claims_with_valid_source_ids": 0,
+        "mode": "evidence_only",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 0.2008
+    }
+  ]
+}

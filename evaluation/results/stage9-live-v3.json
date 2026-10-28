@@ -1,0 +1,231 @@
+{
+  "manifest": {
+    "pack_sha256": "4ede3e7df2d898717ccd67abd29ee611f51167b4236b4ddb5225d8b07042900c",
+    "files": {
+      "backend/app/qa.py": "bda07bee23a7893a6598f449f9b6349d09ad6c548040f22c381df8b64ebd4c7f",
+      "backend/app/model_client.py": "2dfa4a113add718f4d0425e814afd8a6effcfc1b9c8fee9f7c23d28e2ac2a8b2",
+      "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+      "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+      "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+      "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+      "backend/app/comparison.py": "2b5e1565a0efdec1b41e8b0a8b924924eeb8bd15a758ca0590f7d1723cc68eee",
+      "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+      "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+      "scripts/evaluate_qa.py": "92988d1d6b71ae520c9cb5cbc7e9191ae64fcbb24e9ae283b76eac81f0e5547e"
+    },
+    "run_id": "20261027T183858Z-d9e750af",
+    "started_at": "2026-10-27T18:38:58.734305+00:00",
+    "api_health": {
+      "status": "ok",
+      "version": "0.8.0",
+      "edition": "local-development",
+      "stage": "multilingual-retrieval-and-layout",
+      "model_configured": true,
+      "capabilities": {
+        "pdf_upload": true,
+        "native_pdf_parsing": true,
+        "source_anchors": true,
+        "content_dedup_baseline": true,
+        "page_checkpoint": true,
+        "ocr": true,
+        "ocr_supported": true,
+        "ocr_enabled": true,
+        "ocr_ready": true,
+        "dense_supported": true,
+        "dense_enabled": true,
+        "dense_ready": true,
+        "structured_tables": true,
+        "formula_latex": false,
+        "semantic_tables": false,
+        "citation_graph": true,
+        "evidence_outline": true,
+        "full_translation": false,
+        "writing_plans": true,
+        "csv_plotting": true,
+        "architecture_diagrams": true,
+        "intent_workflow": true,
+        "model_diagnostics": true,
+        "multi_user_auth": false,
+        "comparison_matrix": true,
+        "citation_navigation": true,
+        "translation": true,
+        "literature_search": true,
+        "arxiv_import": true,
+        "topic_tracking": true
+      },
+      "ocr_status": {
+        "supported": true,
+        "enabled": true,
+        "ready": true,
+        "reason": "本地OCR模型已准备并完成CPU会话加载验证"
+      },
+      "embedding_status": {
+        "supported": true,
+        "enabled": true,
+        "ready": true,
+        "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "reason": "ready"
+      }
+    },
+    "git_commit": "eb2659f3369be7429bf5ff7a68f09b044498f010",
+    "git_dirty": true,
+    "live_model_requested": true,
+    "max_generation_requests": 3,
+    "max_reserved_output_tokens": 4800,
+    "model": {
+      "profile": "compatible",
+      "endpoint_host": "api.deepseek.com",
+      "model": "deepseek-flash"
+    },
+    "scope": "20 previously observed development regression questions; no fresh held-out generalization claim",
+    "case_ids": [
+      "H07",
+      "H08",
+      "H11"
+    ],
+    "sources": {
+      "transformer": {
+        "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+        "document_id": "doc_a1482495af8e4aae8fef36a33fe1919c",
+        "version_label": "v7",
+        "parse_run_id": "parse_4f92d2b9321c4404bbb861a2e642f62f"
+      },
+      "bert": {
+        "sha256": "987545ffb087f1ece898142c403a516baeabeb70ce19089397fac6f7db12c3d4",
+        "document_id": "doc_6de9669edfe045dbba32a97ced6222e1",
+        "version_label": null,
+        "parse_run_id": "parse_d2984c376fee467db05c3316a56a436b"
+      },
+      "roberta": {
+        "sha256": "76a3872d244793563a5b000b818cbaf0ca8972ab1145d32be474c05b2a8f3070",
+        "document_id": "doc_ef43e7d20403429483a2bf4ad7d0d991",
+        "version_label": "v1",
+        "parse_run_id": "parse_086e1c5f3f9b4568a8b25fdc097b4583"
+      },
+      "t5": {
+        "sha256": "ad07e47cedf437a4156419ce5d3076e08a3e59bbfd6dac7cc53df1009cdcbe7f",
+        "document_id": "doc_5acc4ed0dab74aeb914ecc21af0ee4c4",
+        "version_label": "v4",
+        "parse_run_id": "parse_a07717a1ac9e4930908e46ff6a985983"
+      }
+    },
+    "method": "sequential; no retries; no gold in requests; no product tuning between selected holdout queries; small Chinese factual draft set",
+    "quality_notice": "All cases observed before this product revision. Improvements measure regression behavior only. Independent human quality review remains pending."
+  },
+  "overall": {
+    "case_count": 3,
+    "request_errors": 0,
+    "evidence_anchor_validity": 1.0,
+    "evidence_anchor_denominator": 18,
+    "gold_group_recall_at_6": 0.8,
+    "gold_group_denominator": 5,
+    "claim_source_id_coverage": 1.0,
+    "claim_denominator": 10,
+    "generated_case_count": 3,
+    "answered_case_count": 3,
+    "abstained_case_count": 0,
+    "model_fallback_count": 0,
+    "reviewed_cases": 0,
+    "review_coverage": 0.0,
+    "fully_correct_over_all_cases": null,
+    "fully_correct_over_answered_cases": null,
+    "citation_semantic_support": null,
+    "latency_seconds": {
+      "n": 3,
+      "p50": 2.1006,
+      "p95": 3.0036,
+      "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+    },
+    "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+  },
+  "by_split": {
+    "development": {
+      "case_count": 3,
+      "request_errors": 0,
+      "evidence_anchor_validity": 1.0,
+      "evidence_anchor_denominator": 18,
+      "gold_group_recall_at_6": 0.8,
+      "gold_group_denominator": 5,
+      "claim_source_id_coverage": 1.0,
+      "claim_denominator": 10,
+      "generated_case_count": 3,
+      "answered_case_count": 3,
+      "abstained_case_count": 0,
+      "model_fallback_count": 0,
+      "reviewed_cases": 0,
+      "review_coverage": 0.0,
+      "fully_correct_over_all_cases": null,
+      "fully_correct_over_answered_cases": null,
+      "citation_semantic_support": null,
+      "latency_seconds": {
+        "n": 3,
+        "p50": 2.1006,
+        "p95": 3.0036,
+        "method": "nearest-rank; sequential HTTP plus local validation incl. errors; not concurrent-load performance"
+      },
+      "quality_notice": "Gold and answer review remain pending unless explicitly attributed. Coordinate/ID checks do not establish semantic correctness."
+    }
+  },
+  "cases": [
+    {
+      "case_id": "H07",
+      "split": "development",
+      "case_sha256": "4d58b1edf18b8fbf3ced8414075af7563c18500bd6b1348d4e3f3266ade238f4",
+      "gold_groups": 1,
+      "live_model_requested": true,
+      "response_sha256": "eb5d480a2b166827a3aeaca4dab6d62b617b350dc17c8d3d83c4f28b1e2705c9",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 1,
+        "gold_groups_retrieved": 1,
+        "claim_count": 3,
+        "claims_with_valid_source_ids": 3,
+        "mode": "llm",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 2.1006
+    },
+    {
+      "case_id": "H08",
+      "split": "development",
+      "case_sha256": "012a425dd6ecaa84c144a2cce2878f3c68819430c5939ffeef9c069d613b7469",
+      "gold_groups": 2,
+      "live_model_requested": true,
+      "response_sha256": "a433d948a63307122a5feaac8a961d34d736f64a19d9ec4a67eafaf56eac87fc",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 1,
+        "claim_count": 2,
+        "claims_with_valid_source_ids": 2,
+        "mode": "llm",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 2.0961
+    },
+    {
+      "case_id": "H11",
+      "split": "development",
+      "case_sha256": "4b8dd1b6e12c3209f4050dc9d32e240057058ee771c06a6e053de12964c813ed",
+      "gold_groups": 2,
+      "live_model_requested": true,
+      "response_sha256": "e6f70d91560b7e6077549377472a9a4725909a6a8118b5a6aa5633b3827798a8",
+      "score": {
+        "evidence_count": 6,
+        "valid_anchor_count": 6,
+        "gold_groups": 2,
+        "gold_groups_retrieved": 2,
+        "claim_count": 5,
+        "claims_with_valid_source_ids": 5,
+        "mode": "llm",
+        "retrieval_mode": "bm25_dense_rrf",
+        "semantic_correctness": null
+      },
+      "elapsed_seconds": 3.0036
+    }
+  ]
+}

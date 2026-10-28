@@ -84,7 +84,8 @@ export interface AnswerResult {
   steps: { label: string; status: string; detail: string }[];
   warnings: string[];
   retrieval?: {
-    mode: 'bm25_dense_rrf' | 'bm25';
+    mode: 'bm25_dense_rrf' | 'bm25' | 'mixed';
+    index_required?: { document_id: string; parse_run_id: string; missing_chunks: number }[];
     enabled?: boolean;
     ready?: boolean;
     used?: boolean;

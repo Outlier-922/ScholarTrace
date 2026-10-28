@@ -17,7 +17,8 @@ sys.path.insert(0, str(ROOT))
 from scripts.eval_core import bind_sources, digest, request_body, score_response, summarize, validate_pack
 
 PRODUCT_FILES = ['backend/app/qa.py', 'backend/app/model_client.py', 'backend/app/semantic.py',
-                 'backend/app/source_scope.py', 'scripts/eval_core.py', 'scripts/evaluate_qa.py']
+                 'backend/app/source_scope.py','backend/app/parser.py','backend/app/store.py',
+                 'backend/app/comparison.py','backend/app/semantic_jobs.py', 'scripts/eval_core.py', 'scripts/evaluate_qa.py']
 
 
 def fingerprint(pack):
@@ -39,7 +40,6 @@ def main():
     parser.add_argument('--cases',nargs='+',help='Explicit case IDs; order follows pack')
     parser.add_argument('--live-model',action='store_true',help='Explicit paid model requests; maximum 8 questions per run')
     parser.add_argument('--output',type=Path,default=Path('data/stage8_evaluation'))
-    parser.add_argument('--reviews',type=Path,help='Attributed human review matching response hashes')
     args=parser.parse_args()
     if urlparse(args.api).hostname not in {'127.0.0.1','localhost','::1'}:
         parser.error('Evaluation runner only supports a loopback API.')
@@ -100,7 +100,7 @@ def main():
             row['elapsed_seconds']=round(time.perf_counter()-started,4);rows.append(row)
             (target/'raw.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding='utf-8')
             print(case['id']+': '+json.dumps(row.get('score',{'error_type':row.get('error_type')}),ensure_ascii=False),flush=True)
-    reviews=load_json(args.reviews) if args.reviews else []
+    reviews=[]  # Review saved responses offline with review_evaluation.py; never rerun to grade.
     report={'manifest':manifest,'overall':summarize(rows,reviews),
             'by_split':{split:summarize([row for row in rows if row['split']==split],reviews)
                         for split in sorted({row['split'] for row in rows})},

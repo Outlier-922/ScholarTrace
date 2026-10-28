@@ -54,18 +54,28 @@ def _extract_raw(page: fitz.Page) -> list[dict[str, Any]]:
     for block in page.get_text("dict", flags=fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_IMAGES).get("blocks", []):
         if block.get("type") != 0:
             continue
-        lines, sizes, flags = [], [], []
+        lines, layout_lines, sizes, flags = [], [], [], []
         for line in block.get("lines", []):
             line_text = "".join(span.get("text", "") for span in line.get("spans", []))
+            layout='';sup=''
+            for span in line.get('spans',[]):
+                text=span.get('text','')
+                if int(span.get('flags',0)) & 1 and text.strip():
+                    sup+=text
+                else:
+                    if sup:layout+='^{'+sup+'}';sup=''
+                    layout+=text
+            if sup:layout+='^{'+sup+'}'
             if line_text.strip():
                 lines.append(line_text.strip())
+                layout_lines.append(layout.strip())
             for span in line.get("spans", []):
                 if span.get("text", "").strip():
                     sizes.extend([float(span.get("size", 10))] * min(100, len(span["text"])))
                     flags.append(int(span.get("flags", 0)))
         text = "\n".join(lines).strip()
         if text:
-            raw.append({"text": text, "rect": list(block["bbox"]), "font_size": max(sizes) if sizes else 10,
+            raw.append({"text": text,"layout_text":"\n".join(layout_lines).strip(), "rect": list(block["bbox"]), "font_size": max(sizes) if sizes else 10,
                         "body_size": Counter(round(s, 1) for s in sizes).most_common(1)[0][0] if sizes else 10,
                         "bold": bool(flags) and sum(bool(flag & 16) for flag in flags) >= len(flags) / 2})
     return raw
@@ -327,6 +337,9 @@ def parse_document(document_id: str, expected_run_id: str | None = None) -> None
                         sections = sections[:(level or 1) - 1] + [value["text"]]
                     metadata = {"extraction": "rapidocr" if used_ocr else "native_pdf", "font_size": round(value["font_size"], 2),
                                 "is_candidate": kind.endswith("_candidate")}
+                    if not used_ocr and value.get('layout_text') != value['text']:
+                        metadata.update(layout_text=value['layout_text'],layout_format='superscript_braces_v1',
+                                        raw_text_sha256=hashlib.sha256(value['text'].encode()).hexdigest())
                     if used_ocr:
                         metadata.update(confidence=round(value["confidence"], 6), lines=value.get("ocr_lines", []),
                                         low_confidence=value["confidence"] < .8, verification_status="ocr_unverified")

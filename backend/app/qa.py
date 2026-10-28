@@ -33,6 +33,16 @@ STOPWORDS = set(
     "has have had their they we our than then according".split()
 )
 CONCEPTS = {
+    "词表": ["vocabulary"], "分词": ["tokenization", "tokenizer"],
+    "文本规模": ["corpus", "size"], "文本体积": ["corpus", "size"],
+    "数据集": ["dataset", "data"], "月份": ["month", "downloaded"],
+    "清洗": ["filtering", "clean"], "规模": ["size"],
+    "基线": ["baseline"], "步数": ["steps"],
+    "序列": ["sequence"], "长度": ["length"], "最大": ["maximum"],
+    "批量": ["batch", "size"], "参数": ["parameters"],
+    "掩码": ["masking"], "丢弃": ["drop", "tokens"], "比例": ["rate"],
+    "片段": ["span"], "替代": ["replace"], "共享": ["shared"],
+    "编码器": ["encoder"], "解码器": ["decoder"], "层": ["layers"], "维度": ["dimension"],
     "学习率": ["learning", "rate"],
     "批大小": ["batch", "size"],
     "批量大小": ["batch", "size"],
@@ -53,7 +63,9 @@ CONCEPTS = {
     "未来工作": ["future", "work"],
 }
 TERM_FORMS = {"gpus": "gpu", "models": "model", "parameters": "parameter", "scores": "score",
-              "steps": "step", "tokens": "token", "authors": "author"}
+              "steps": "step", "tokens": "token", "authors": "author", "sequences":"sequence",
+              "batches":"batch", "trained":"training", "train":"training", "pretraining":"training",
+              "datasets":"dataset", "units":"unit", "replaced":"replace", "drops":"drop","layers":"layer"}
 
 
 class AskRequest(BaseModel):
@@ -104,7 +116,7 @@ def _collect_sources(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not structure:
             continue
         reference_ids=source_scope.reference_block_ids(structure)
-        for block in structure.get("blocks", []):
+        for block_index,block in enumerate(structure.get("blocks", [])):
             text = str(block.get("text", "")).strip()
             if len(text) < 12 or block['id'] in reference_ids or _is_reference(block):
                 continue
@@ -117,6 +129,7 @@ def _collect_sources(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
                             "extraction": metadata.get("extraction", "native_pdf"),
                             "confidence": metadata.get("confidence"), "block_type": block.get("type"),
                             "section_path":block.get("section_path",[]),
+                            "source_order":block_index,
                             "metadata": metadata})
     return sources
 
@@ -135,15 +148,94 @@ def _source_phase(source):
     return _phase(source['text'][:300])
 
 
+def model_source_text(source):
+    """Layout representation is bound to the unchanged raw evidence text."""
+    metadata=source.get('metadata') or {}
+    layout=metadata.get('layout_text')
+    if (isinstance(layout,str) and metadata.get('raw_text_sha256') == hashlib.sha256(source['text'].encode()).hexdigest()
+            and metadata.get('layout_format') == 'superscript_braces_v1'):
+        return layout
+    return source['text']
+
+
+def _requested_sections(question):
+    return re.findall(r'(?:第\s*|\bsection\s+)(\d+(?:\.\d+)*)(?:\s*节|\b)',question,re.I)
+
+
+def _in_sections(source, sections):
+    return any(re.match(r'^\s*'+re.escape(section)+r'(?:\.|\s|$)',str(title))
+               for section in sections for title in source.get('section_path',[]))
+
+
+def _continuation_context(ranked,sources,limit,question):
+    """Reserve at most one slot for a query-related paragraph continuation.
+
+    Keep separate original IDs/boxes; never concatenate or create a new quote.
+    """
+    by_order={(s['document_id'],s['parse_run_id'],s['source_order']):s for s in sources}
+    selected=ranked[:limit]
+    if len(selected)<2:return selected
+    fields={term for term in _tokens(question,query=True) if re.fullmatch(r'[a-z]+',term)}
+    def linked(left,right):
+        return (left and right and left.get('block_type')==right.get('block_type')=='paragraph'
+                and left.get('extraction')==right.get('extraction')=='native_pdf'
+                and left.get('section_path')==right.get('section_path')
+                and right['page']-left['page'] in {0,1}
+                and not re.search(r'[.!?。！？:;]$',left['text'].rstrip())
+                and re.match(r'^[a-z]',right['text'].lstrip()))
+    candidates=[]
+    for rank,item in enumerate(selected):
+        matched=fields.intersection(_tokens(item['text']))
+        if len(matched)<min(2,len(fields)) or not matched:continue
+        key=(item['document_id'],item['parse_run_id'])
+        previous=by_order.get((*key,item['source_order']-1))
+        following=by_order.get((*key,item['source_order']+1))
+        neighbor=previous if linked(previous,item) else following if linked(item,following) else None
+        if neighbor:candidates.append((len(matched),item.get('bm25_score',0),-rank,item,neighbor))
+    if candidates:
+        *_,seed,neighbor=max(candidates,key=lambda candidate:candidate[:3])
+        if neighbor['id'] not in {item['id'] for item in selected}:
+            # Preserve the matching seed even when it is the last primary hit.
+            remove=next(index for index in range(len(selected)-1,-1,-1) if selected[index]['id']!=seed['id'])
+            selected.pop(remove)
+            position=next(index for index,item in enumerate(selected) if item['id']==seed['id'])+1
+            selected.insert(position,{**neighbor,'score':seed['score'],'retrieval_context':'adjacent_continuation'})
+    return selected
+
+
 def _retrieve(question: str, documents: list[dict[str, Any]], limit: int,
               diagnostics: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    documents=list({document['id']:document for document in documents}.values())
+    if len(documents)>1:
+        # Independent rankings prevent one paper's length or missing dense cache
+        # from suppressing the other paper. Round-robin slots are bounded by k.
+        pools=[];details=[]
+        for document in documents:
+            detail={}
+            pools.append(_retrieve(question,[document],limit,detail))
+            details.append({'document_id':document['id'],**detail})
+        selected=[]
+        for rank in range(limit):
+            for pool in pools:
+                if rank<len(pool):selected.append(pool[rank])
+                if len(selected)==limit:break
+            if len(selected)==limit:break
+        used=[detail.get('used',False) for detail in details]
+        if diagnostics is not None:
+            diagnostics.update(used=any(used),mode='bm25_dense_rrf' if all(used) else 'mixed' if any(used) else 'bm25',
+                               documents=details,index_required=[item for detail in details for item in detail.get('index_required',[])],
+                               coverage={document['id']:sum(item['document_id']==document['id'] for item in selected) for document in documents},
+                               reason='按文献分别检索并轮流分配候选；各篇实际检索模式和待索引状态分别记录。')
+        return selected
     sources = _collect_sources(documents)
     candidates = [(source, _tokens(source["text"])) for source in sources]
     candidates = [(source, terms) for source, terms in candidates if terms]
     if not candidates:
         return []
-    query = set(_tokens(question, query=True))
     requested_phase=_phase(question)
+    requested_sections=_requested_sections(question)
+    lexical_question=re.sub(r'(?:第\s*\d+(?:\.\d+)*\s*节|\bsection\s+\d+(?:\.\d+)*)',' ',question,flags=re.I)
+    query = set(_tokens(lexical_question, query=True))
     if not query:
         return []
     counts = [Counter(item[1]) for item in candidates]
@@ -161,7 +253,10 @@ def _retrieve(question: str, documents: list[dict[str, Any]], limit: int,
             df = document_frequency[term]
             inverse_frequency = math.log(1 + (len(candidates) - df + 0.5) / (df + 0.5))
             denominator = frequency + 1.2 * (0.25 + 0.75 * len(terms) / average_length)
-            score += inverse_frequency * frequency * 2.2 / denominator
+            # Alphanumeric model labels often repeat in score tables. Keep
+            # them as weak hints when the question also names a factual field.
+            weight=.25 if len(query)>1 and re.fullmatch(r'[a-z]+\d+',term) else 1.
+            score += weight * inverse_frequency * frequency * 2.2 / denominator
         if score <= 0:
             continue
         # Short titles/captions must not consume the evidence budget ahead of
@@ -183,30 +278,12 @@ def _retrieve(question: str, documents: list[dict[str, Any]], limit: int,
         sparse_scores = {item["id"]: item["score"] for item in ranked}
         dense_scores = dict(dense)
         ranked = [{**by_id[identity], "score": score, "bm25_score": sparse_scores.get(identity, 0.0), "dense_score": dense_scores.get(identity)} for identity, score in sorted(fused.items(), key=lambda item: item[1], reverse=True)]
-    if not re.search(r'\b(?:title|authors?|affiliations?|section|heading|contents|outline)\b|作者|标题|机构|目录|章节',question,re.I):
+    if requested_sections or not re.search(r'\b(?:title|authors?|affiliations?|section|heading|contents|outline)\b|作者|标题|机构|目录|章节',question,re.I):
         def relevance_tier(item):
-            phase=_source_phase(item)
-            phase_order=0 if not requested_phase or phase==requested_phase else 2 if phase else 1
-            return item.get('block_type') in {'title','heading'},phase_order,-item['score']
+            section_order=0 if not requested_sections or _in_sections(item,requested_sections) else 1
+            return item.get('block_type') in {'title','heading'},section_order,-item['score']
         ranked.sort(key=relevance_tier)
-    # Multi-document retrieval reserves one slot per paper with a hit, then fills
-    # by score.  This prevents a long document from suppressing all other papers.
-    selected: list[dict[str, Any]] = []
-    seen_documents: set[str] = set()
-    if len(documents) > 1:
-        for evidence in ranked:
-            if evidence["document_id"] not in seen_documents:
-                selected.append(evidence)
-                seen_documents.add(evidence["document_id"])
-                if len(selected) >= limit:
-                    return selected
-    chosen = {item["id"] for item in selected}
-    for evidence in ranked:
-        if evidence["id"] not in chosen:
-            selected.append(evidence)
-            if len(selected) >= limit:
-                break
-    return selected
+    return _continuation_context(ranked,sources,limit,question)
 
 
 def _validate_claims(payload: dict[str, Any], evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -224,7 +301,7 @@ def _validate_claims(payload: dict[str, Any], evidence: list[dict[str, Any]]) ->
             continue
         if not isinstance(ids, list) or not ids or any(not isinstance(i, str) or i not in sources for i in ids):
             continue
-        supporting_text = " ".join(sources[i]["text"] for i in ids)
+        supporting_text = " ".join(model_source_text(sources[i]) for i in ids)
         # Reject novel numeric literals; semantic support still needs later NLI
         # and human evaluation.  The UI must not call these fully verified facts.
         numbers = re.findall(r"(?<![\w])\d+(?:\.\d+)?(?:e[-+]?\d+)?", text, re.I)
@@ -247,7 +324,9 @@ async def _generate(question: str, evidence: list[dict[str, Any]]) -> dict[str, 
         "严格输出JSON对象：{\"claims\":[{\"text\":\"事实\",\"evidence_ids\":[\"ev_x\"]}],"
         "\"missing_information\":[\"缺失项\"]}。无依据时claims为空。"
     )
-    source_payload = [{"id": item["id"], "title": item["title"], "page": item["page"], "text": item["text"][:3500]} for item in evidence]
+    system += '文本中的^{...}保留PDF上标位置，可能是幂、单位或脚注；按上下文解释，不把2^{35}读成235。章节路径用于定位条件。'
+    source_payload = [{"id": item["id"], "title": item["title"], "page": item["page"],
+                       "section_path":item.get('section_path',[]),"text": model_source_text(item)[:3500]} for item in evidence]
     return await model_client.chat_json(system, {"question": question, "evidence": source_payload}, max_tokens=1600)
 
 
@@ -299,10 +378,13 @@ async def ask(request: AskRequest) -> dict[str, Any]:
     documents = source_scope.pin(documents,request.parse_runs)
     retrieval_details: dict[str, Any] = {}
     evidence = await run_in_threadpool(_retrieve, question, documents, request.limit, retrieval_details)
-    retrieval_mode = "bm25_dense_rrf" if retrieval_details.get("used") else "bm25"
+    retrieval_mode = retrieval_details.get('mode') or ("bm25_dense_rrf" if retrieval_details.get("used") else "bm25")
     warnings = ["已使用 BM25 + 多语言语义向量 + RRF 融合；重排与完整语义支持核验尚待完善。" if retrieval_details.get("used") else "当前使用 BM25 检索；语义模型未启用、未准备或该文献尚需预索引。"]
     if retrieval_details.get("reason") and not retrieval_details.get("used"):
         warnings.append(retrieval_details["reason"])
+    if retrieval_mode=='mixed':warnings.append('所选论文使用了不同检索路径：部分语义融合，部分BM25；可为待索引论文显式准备语义索引。')
+    if any(model_source_text(item)!=item['text'] for item in evidence):
+        warnings.append('部分来源含PDF上标；模型输入保留^{...}版式表示，摘录与坐标仍使用原始内容块，请核对原页。')
     if any(item.get("extraction") == "rapidocr" for item in evidence):
         warnings.append("部分证据来自 OCR，识别分数不等于正确率；数字、公式和实验设置请核对原页。")
     steps = [

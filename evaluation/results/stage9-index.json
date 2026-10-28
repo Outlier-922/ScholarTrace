@@ -1,0 +1,22 @@
+{
+  "id": "index_d47ea3540d8c4e2da17185ae9e86c9db",
+  "document_id": "doc_5acc4ed0dab74aeb914ecc21af0ee4c4",
+  "parse_run_id": "parse_a07717a1ac9e4930908e46ff6a985983",
+  "status": "completed",
+  "done": 919,
+  "total": 919,
+  "created_at": "2026-10-27T18:38:05.005299+00:00",
+  "updated_at": "2026-10-27T18:38:39.440687+00:00",
+  "error": null,
+  "report": {
+    "supported": true,
+    "enabled": true,
+    "ready": true,
+    "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "reason": "已使用真实多语言 ONNX 语义向量；相似度不是事实置信度。",
+    "used": true,
+    "indexed_chunks": 919,
+    "missing_chunks": 0,
+    "index_required": []
+  }
+}

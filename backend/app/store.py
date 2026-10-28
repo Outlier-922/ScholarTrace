@@ -176,7 +176,7 @@ def create_document(filename: str, path: str, sha256: str, page_count: int) -> d
             (document_id, work_id, version_id, run_id, filename, path, sha256, title, page_count, created, job_id))
         conn.execute("""INSERT INTO parse_runs
             (id,document_id,parser_name,parser_version,status,created_at,finished_at,config_json)
-            VALUES (?, ?, 'PyMuPDF + optional RapidOCR', '2', 'queued', ?, NULL, ?)""",
+            VALUES (?, ?, 'PyMuPDF + optional RapidOCR', '3', 'queued', ?, NULL, ?)""",
                      (run_id, document_id, created, json.dumps(default_parse_config())))
         conn.execute("INSERT INTO jobs VALUES (?, ?, 'parse_pdf', 'queued', 0, ?, '等待解析', NULL, ?, ?)",
                      (job_id, document_id, page_count, created, created))
@@ -227,7 +227,7 @@ def start_reprocess(document_id: str, config: dict[str, bool]) -> dict[str, Any]
         run_id, job_id, created = new_id("parse"), new_id("job"), now()
         conn.execute("""INSERT INTO parse_runs
             (id,document_id,parser_name,parser_version,status,created_at,finished_at,config_json)
-            VALUES (?,?,'PyMuPDF + optional RapidOCR','2','queued',?,NULL,?)""",
+            VALUES (?,?,'PyMuPDF + optional RapidOCR','3','queued',?,NULL,?)""",
                      (run_id, document_id, created, json.dumps(config)))
         conn.execute("INSERT INTO jobs VALUES (?,?,'parse_pdf','queued',0,?,'等待重新解析',NULL,?,?)",
                      (job_id, document_id, document["page_count"], created, created))

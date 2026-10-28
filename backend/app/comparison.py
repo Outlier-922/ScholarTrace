@@ -117,9 +117,10 @@ async def execute_comparison(request: ComparisonRequest,artifact_id=None):
                   '输出JSON:{"cells":[{"dimension":"key","value":"值","support_quote":"原文逐字摘录","evidence_ids":["ev_x"],"conditions":"实验阶段、数据集及单位"}]}。'
                   '证据不足则不输出该单元格。不得把不同论文或任务数值混合，不生成未报告实验。')
         system+='区分预训练、微调与不同模型规模的条件；原文数字格式照录，不把1e-4改写成10^-4。章节线索仅辅助定位，不等于事实。'
+        system+='text以^{...}保留上标，不拼成普通整数；support_quote必须逐字摘自raw_text。'
         for document in documents:
             payload = {"question":request.question,"paper": {"title": document["title"], "version": document.get("version_label")},
-                       "dimensions": [{"key": row["key"], "label": row["label"], "evidence": [{"id": source["id"], "text": source["text"][:3500]} for source in next(cell for cell in row["cells"] if cell["document_id"] == document["id"])["evidence"]]} for row in rows]}
+                       "dimensions": [{"key": row["key"], "label": row["label"], "evidence": [{"id": source["id"], "text": qa.model_source_text(source)[:3500],"raw_text":source['text'][:3500]} for source in next(cell for cell in row["cells"] if cell["document_id"] == document["id"])["evidence"]]} for row in rows]}
             try:
                 _apply_model_cells(rows, document["id"], await model_client.chat_json(system, payload, max_tokens=2500))
                 mode = "llm"

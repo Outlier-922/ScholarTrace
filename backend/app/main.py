@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from . import __version__, ocr, semantic, store
+from . import __version__, ocr, semantic, store, semantic_jobs
 from .parser import parse_document
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     store.init_db()
+    semantic_jobs.init()
     research_store.init_db()
     translation.resume_jobs()
     literature.start()
@@ -56,6 +57,7 @@ async def lifespan(app: FastAPI):
     for document_id in store.resumable_documents():
         _submit_parse(app, document_id)
     yield
+    await semantic_jobs.shutdown()
     await workflow.shutdown()
     await translation.shutdown()
     await literature.shutdown()
@@ -107,6 +109,7 @@ def _submit_parse(application: FastAPI, document_id: str) -> bool:
 
 app = FastAPI(title="ScholarTrace · 研迹", version=__version__, lifespan=lifespan,
               description="版本化文献与可定位原文证据。本地开发版：多文对比与联读。")
+app.include_router(semantic_jobs.router)
 origins = os.environ.get("SCHOLARTRACE_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173")
 app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in origins.split(",") if o.strip()],
                    allow_credentials=False, allow_methods=["GET", "POST", "PATCH", "DELETE"],
@@ -118,7 +121,7 @@ def health() -> dict[str, Any]:
     ocr_status = ocr.runtime_status()
     embedding_status = semantic.runtime_status()
     return {"status": "ok", "version": __version__, "edition": "local-development",
-            "stage": "intent-workflow-and-model-readiness",
+            "stage": "multilingual-retrieval-and-layout",
             "model_configured": all(os.environ.get(key, "").strip()
                                     for key in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL")),
             "capabilities": {"pdf_upload": True, "native_pdf_parsing": True, "source_anchors": True,

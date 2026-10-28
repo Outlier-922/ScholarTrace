@@ -158,7 +158,7 @@ def _chunks(sources: list[dict[str, Any]], tokenizer) -> list[dict[str, Any]]:
 
 
 def search(question: str, sources: list[dict[str, Any]], *, limit: int = 30,
-           force_index: bool = False) -> tuple[list[tuple[str, float]], dict[str, Any]]:
+           force_index: bool = False, progress=None) -> tuple[list[tuple[str, float]], dict[str, Any]]:
     status = runtime_status()
     details = {**status, "used": False, "indexed_chunks": 0, "missing_chunks": 0}
     if not status["ready"] or (not status["enabled"] and not force_index):
@@ -179,6 +179,9 @@ def search(question: str, sources: list[dict[str, Any]], *, limit: int = 30,
                     vectors[identity] = vector
     missing = [item for item in chunks if item["chunk_id"] not in vectors]
     details["missing_chunks"] = len(missing)
+    details['index_required']=[{'document_id':identity,'parse_run_id':run,'missing_chunks':sum(item['document_id']==identity and item.get('parse_run_id')==run for item in missing)}
+                               for identity,run in sorted({(item['document_id'],item.get('parse_run_id','')) for item in missing})]
+    if progress:progress(len(chunks)-len(missing),len(chunks))
     maximum = int(os.getenv("SCHOLARTRACE_MAX_INLINE_EMBED_CHUNKS", "384"))
     if len(missing) > maximum and not force_index:
         details["reason"] = f"尚有 {len(missing)} 个片段需要预索引，当前请求使用 BM25，避免阻塞长书阅读。"
@@ -205,6 +208,7 @@ def search(question: str, sources: list[dict[str, Any]], *, limit: int = 30,
             for document_id in {item["document_id"] for item in batch}:
                 if not store.get_document(document_id):
                     purge_document(document_id)
+            if progress:progress(min(len(chunks),len(chunks)-len(missing)+offset+len(batch)),len(chunks))
         query_offsets = tokenizer.encode(question, add_special_tokens=False).offsets
         if len(query_offsets) > 120:
             question = question[:query_offsets[119][1]]
@@ -220,7 +224,7 @@ def search(question: str, sources: list[dict[str, Any]], *, limit: int = 30,
         key = item["id"]
         scores[key] = max(score, scores.get(key, -1.0))
     ranking = sorted(scores.items(), key=lambda item: item[1], reverse=True)[:limit]
-    details.update(used=True, indexed_chunks=len(chunks), missing_chunks=0, reason="已使用真实多语言 ONNX 语义向量；相似度不是事实置信度。")
+    details.update(used=True, indexed_chunks=len(chunks), missing_chunks=0,index_required=[], reason="已使用真实多语言 ONNX 语义向量；相似度不是事实置信度。")
     return ranking, details
 
 
