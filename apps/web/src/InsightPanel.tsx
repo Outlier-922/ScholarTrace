@@ -39,7 +39,7 @@ export default function InsightPanel({ graphId, sources, documents, onSource, mo
     setBusy(true); setError('');
     try {
       const result = await request<Insight>(`/research-insights/${identity}`, { signal: abort.signal });
-      if (!abort.signal.aborted) setValue(result);
+      if (!abort.signal.aborted) { setValue(result); setHistory(current => current.some(item => item.id === result.id) ? current : [{ id: result.id, kind: result.kind, topic: result.topic, created_at: result.created_at }, ...current].slice(0, 60)); }
     } catch (cause) { if (!abort.signal.aborted) setError(String(cause)); }
     finally { if (!abort.signal.aborted) setBusy(false); }
   }
@@ -63,7 +63,7 @@ export default function InsightPanel({ graphId, sources, documents, onSource, mo
     </section>
     {history.length > 0 && <label>已保存的生成记录<select aria-label="综述与方向核对历史" value={value?.id || ''} disabled={busy} onChange={event => { if (event.target.value) void load(event.target.value); }}><option value="">选择历史记录</option>{history.map(item => <option key={item.id} value={item.id}>{item.kind === 'review' ? '综述' : '方向核对'} · {new Date(item.created_at).toLocaleString('zh-CN')} · {item.topic.slice(0, 35)}</option>)}</select></label>}
     {error && <p className="research-error" role="alert">{error}</p>}{value && <section className="insight-result" aria-label="生成与核对结果"><header><h3>{value.kind === 'review' ? '自动综述草稿 · 待核验' : '未来方向核对 · 模型建议'}</h3><a href={`/api/research-insights/${value.id}/export`}><Download size={13} />导出证据Markdown</a></header>
-      <ClaimCheckPanel insightId={value.id} readOnly={readOnly || busy} modelConfigured={modelConfigured} onSource={onSource} onScreened={setScreened} />
+      <ClaimCheckPanel insightId={value.id} readOnly={readOnly || busy} modelConfigured={modelConfigured} onSource={onSource} onScreened={setScreened} onOpenRevision={id => void load(id)} />
       <details open={!screened}><summary>原始草稿与原模型建议（保留生成记录）</summary>
       {value.kind === 'review' ? <>{value.sections?.length ? value.sections.map(section => <section key={section.title}><h4>{section.title}</h4>{section.claims.map((claim, index) => renderClaim(claim, `${section.title}-${index}`))}</section>) : <p>没有生成可保留的综述陈述，请查看证据提纲或缩小主题。</p>}<h4>论文覆盖</h4>{value.coverage?.map(source => <p key={source.document_id}>{source.title}：{source.status === 'has_candidate_claim' ? '有候选陈述，仍需核对' : '未覆盖，保留缺口'}</p>)}</> : <>{['retain_for_review', 'provisionally_addressed'].map(bucket => <details key={bucket} open={bucket === 'retain_for_review'}><summary>{bucket === 'retain_for_review' ? '保留核对的候选' : '模型建议已有处理的候选 · 可展开复核'}（{value.assessments?.filter(row => row.bucket === bucket).length || 0}）</summary>{value.assessments?.filter(row => row.bucket === bucket).map(row => <section key={row.document_id}><h4>{row.title}</h4><p>{relations[row.relation]} · {times[row.temporal_status]}</p><small>原版本日期：{row.source_date.date || '未知'}；候选版本日期：{row.candidate_date.date || '未知'}</small>{row.claim ? renderClaim(row.claim, row.document_id) : <p>没有通过来源/引文检查的核对理由。</p>}<small>{row.notice}</small></section>)}</details>)}</>}
       {value.kind === 'review' && <p className="graph-scope-note">未保留的输出条目：{value.rejected_rows || 0}。已显示陈述仍需核对语义支持。</p>}

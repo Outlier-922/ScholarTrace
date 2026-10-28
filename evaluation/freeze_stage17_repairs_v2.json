@@ -1,0 +1,37 @@
+{
+  "created_at": "2026-10-28T19:24:09.159895+00:00",
+  "scope": "After first revision response, before deterministic replay and separate real recheck. Prior snapshot/result remain immutable. No additional revision-generation request.",
+  "application_version": "0.14.0",
+  "first_revision_id": "172ad42e-04bc-4229-a213-c10f7a50c8e6",
+  "changes": [
+    "Local previous-page word-fragment candidates, kept as separate quotes.",
+    "Same-block repeated quotes can expand to one real continuous source span <=300 characters.",
+    "Saved provider response can be revalidated against a same-claim preview, without provider access."
+  ],
+  "remaining_model_requests": 1,
+  "remaining_reserved_output_tokens_maximum": 2400,
+  "fingerprint_format": "utf8_lf_text_v1",
+  "files": {
+    "backend/app/qa.py": "7e71fe26bed323e63d221957bc46a2a2f887fe6fd76bd6dc2941671fe353fee1",
+    "backend/app/model_client.py": "5dc193477ebbb9004c9ec430a22aab9afafe15e122073460121391ebcf4b5bdd",
+    "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+    "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+    "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+    "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+    "backend/app/comparison.py": "2b5e1565a0efdec1b41e8b0a8b924924eeb8bd15a758ca0590f7d1723cc68eee",
+    "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+    "backend/app/answer_fields.py": "0b9c45797acde532b4ba5e35c636256a3677662cf35864506ae25aa42302078a",
+    "backend/app/workflow.py": "b75272efdfbe3e2a279a6baab8ff03007079af891315a05992fcf22cc9994b28",
+    "backend/app/demo_access.py": "4943b392af56944f9c69efbe1e7e7a7232bef5b0ac013e2e520355840995a024",
+    "backend/app/main.py": "17f817ec3c2cf9560abc4f396a8f1be4af23e6dcc76c09f93102d8a6f9a9dcc7",
+    "backend/app/selection_translation.py": "f7cefe5a0efabfe972e1a3dd318f684269592e1bef44f33144687f40effe07e2",
+    "backend/app/evidence_repairs.py": "1647918d7ce84ce7c09342ec298539de7a1f645cc8745483d95578b2f8de62eb",
+    "backend/app/claim_checks.py": "fd26531637ad81ab23d7893299bf6c21fa6fb4b648c0671e18c12b4e778ecf10",
+    "backend/app/insights.py": "2888d73ab304bcd54f457d3d66c90b869e223a8740e8214c6da39eb60c880c75",
+    "backend/app/insight_store.py": "181897369226a29bb5a51ec7838984024c12dec4e304c5b5e85d019eb1485721",
+    "backend/app/graph.py": "62327d844fd86f3365091f2aefebe0fd93d8b17bd9e78cc10f442b930651fc9b",
+    "backend/app/graph_store.py": "eda8d9682f316f71e53241e8f29b4aa2d798284c4752c99f69ac6f75970a45ad",
+    "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+    "scripts/evaluate_qa.py": "f352a7dcb6c423f741b7a39a83da16c3d4247ebcc788a8fdffc19055f454446a"
+  }
+}

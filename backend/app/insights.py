@@ -268,6 +268,9 @@ def export(identity: str):
     if value['kind'] == 'check':
         from . import claim_checks
         return claim_checks.export(identity)
+    if value['kind'] == 'repair_plan':
+        from . import evidence_repairs
+        return evidence_repairs.export(identity)
     lines = ['# ' + ('自动综述草稿' if value['kind'] == 'review' else '未来工作全文核对'), '', value['topic'], '', '自动生成，语义仍需人工核对。', '']
     if value['kind'] == 'review':
         for section in value['sections']:
@@ -277,6 +280,13 @@ def export(identity: str):
     else:
         for row in value['assessments']:
             lines += ['## ' + row['title'], row['bucket'] + ' / ' + row['relation'] + ' / ' + row['temporal_status'], row['claim']['text'] if row['claim'] else '证据或输出检查不足。', '']
+    if value.get('repair'):
+        lines += ['## 修订轨迹（原稿保留）', f"原记录：{value['repair']['parent_insight_id']} / SHA256: {value['repair']['parent_digest']}", f"候选预览：{value['repair']['plan_id']}", '']
+        for item in value['repair']['items']:
+            lines += [f"### {item['claim_id']} / {item['status']}", '原句：' + item['original']['text'], '修订：' + (item['revised']['text'] if item['revised'] else '未形成可保留修订'), '理由（模型建议）：' + item['reason'], '']
+            lines += ['引文处理：' + note for note in item.get('quote_adjustments', [])]
+        if value['repair'].get('reused_response_from'):
+            lines += ['复用响应来源：' + value['repair']['reused_response_from'] + '；本次未再生成。', '']
     lines += ['## 原文证据与解析锚点', '']
     for item in value['evidence']:
         lines += [f"### {item['id']} · {item['title']} · PDF第{item['page']}页", f"ParseRun: {item['parse_run_id']} / Block: {item['block_id']} / bbox: {item['bbox']}", '> ' + item['text'].replace('\n', '\n> '), '']

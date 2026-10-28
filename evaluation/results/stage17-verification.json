@@ -1,0 +1,142 @@
+{
+  "application_version": "0.14.0",
+  "as_of": "2026-10-29",
+  "tests": {
+    "passed": 355,
+    "warning_count": 1,
+    "seconds": 77.57,
+    "notice": "One existing Starlette deprecation warning. Synthetic tests do not score academic quality."
+  },
+  "build": {
+    "typescript": "passed",
+    "vite": "passed",
+    "modules": 1606,
+    "vite_seconds": 2.71
+  },
+  "live_model_requests": 2,
+  "reserved_output_tokens_maximum": 4800,
+  "actual_billing_tokens_known": false,
+  "records": [
+    {
+      "id": "7283d2b4-53c3-4dd8-84ec-b1fd40c4c271",
+      "kind": "repair_plan",
+      "anchor_instances": 8,
+      "export_status": 200,
+      "export_sha256": "6535bf8e9c3dd496c21b88f3d85dcadef6e20f7ce2c35f17cc82829ca3479bfc"
+    },
+    {
+      "id": "172ad42e-04bc-4229-a213-c10f7a50c8e6",
+      "kind": "review",
+      "anchor_instances": 8,
+      "export_status": 200,
+      "export_sha256": "f71838c532e47f85899af0fbc015ff3381fa45aa303112a21e2b2c41c039e7ca"
+    },
+    {
+      "id": "08753e2f-3b80-4551-bdb7-cf8cd06d14fe",
+      "kind": "repair_plan",
+      "anchor_instances": 9,
+      "export_status": 200,
+      "export_sha256": "eb1358afe1a9a36a002ccfe763c55e1c7019843b5e3eb9024ce4c77d237c2f69"
+    },
+    {
+      "id": "4ddba575-f81e-49ad-8d6d-e85a1e89e2b1",
+      "kind": "review",
+      "anchor_instances": 9,
+      "export_status": 200,
+      "export_sha256": "140cb7f431bd42ec2f96d106ecc77e5f33d9dbbbd18b34868e40ded87f889f5c"
+    },
+    {
+      "id": "f7156338-606c-41e8-b6ff-14ae91b24508",
+      "kind": "check",
+      "anchor_instances": 9,
+      "export_status": 200,
+      "export_sha256": "691086485910091ad2d7a0d69b5c9aa157b50df387572945c1fbf03ac2f37656"
+    }
+  ],
+  "unchanged_originals": [
+    {
+      "id": "bb750311-5831-4ee5-bf3d-48a30f5f6c86",
+      "digest": "7b18efb0b4f7b579276eb2b49e67e9ce3ca29719735c1401ce9243264641f6c8",
+      "unchanged": true
+    },
+    {
+      "id": "cee5c5ff-2ed4-42d8-a0f3-dd3c01389486",
+      "digest": "f5aa2e6378b28f98d847680576ba315cebc92847ff502847e4e6c56090c98b0a",
+      "unchanged": true
+    }
+  ],
+  "reused_response_unchanged": true,
+  "response_digest": "07d3e300fd8dc691389a528cdf5a2404e7bd89350d1aa5c57d03d08b8cba3b7a",
+  "recheck_counts": {
+    "contradicted": 0,
+    "insufficient": 0,
+    "partial": 0,
+    "supported": 3
+  },
+  "ui": {
+    "desktop": {
+      "viewport": 1280,
+      "document_width": 1265
+    },
+    "mobile": {
+      "viewport": 390,
+      "document_width": 375,
+      "dialog_client_width": 329,
+      "dialog_scroll_width": 329
+    },
+    "source_jump": {
+      "page": 3,
+      "selected_highlights": 1,
+      "text": "4We note that in the literature the bidirectional Trans-"
+    }
+  },
+  "semantic_quality_passed": false,
+  "submission_ready": false,
+  "fingerprint_format": "utf8_lf_text_v1",
+  "final_product_files": {
+    "backend/app/qa.py": "7e71fe26bed323e63d221957bc46a2a2f887fe6fd76bd6dc2941671fe353fee1",
+    "backend/app/model_client.py": "5dc193477ebbb9004c9ec430a22aab9afafe15e122073460121391ebcf4b5bdd",
+    "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+    "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+    "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+    "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+    "backend/app/comparison.py": "2b5e1565a0efdec1b41e8b0a8b924924eeb8bd15a758ca0590f7d1723cc68eee",
+    "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+    "backend/app/answer_fields.py": "0b9c45797acde532b4ba5e35c636256a3677662cf35864506ae25aa42302078a",
+    "backend/app/workflow.py": "b75272efdfbe3e2a279a6baab8ff03007079af891315a05992fcf22cc9994b28",
+    "backend/app/demo_access.py": "4943b392af56944f9c69efbe1e7e7a7232bef5b0ac013e2e520355840995a024",
+    "backend/app/main.py": "17f817ec3c2cf9560abc4f396a8f1be4af23e6dcc76c09f93102d8a6f9a9dcc7",
+    "backend/app/selection_translation.py": "f7cefe5a0efabfe972e1a3dd318f684269592e1bef44f33144687f40effe07e2",
+    "backend/app/evidence_repairs.py": "1647918d7ce84ce7c09342ec298539de7a1f645cc8745483d95578b2f8de62eb",
+    "backend/app/claim_checks.py": "fd26531637ad81ab23d7893299bf6c21fa6fb4b648c0671e18c12b4e778ecf10",
+    "backend/app/insights.py": "2888d73ab304bcd54f457d3d66c90b869e223a8740e8214c6da39eb60c880c75",
+    "backend/app/insight_store.py": "181897369226a29bb5a51ec7838984024c12dec4e304c5b5e85d019eb1485721",
+    "backend/app/graph.py": "62327d844fd86f3365091f2aefebe0fd93d8b17bd9e78cc10f442b930651fc9b",
+    "backend/app/graph_store.py": "eda8d9682f316f71e53241e8f29b4aa2d798284c4752c99f69ac6f75970a45ad",
+    "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+    "scripts/evaluate_qa.py": "f352a7dcb6c423f741b7a39a83da16c3d4247ebcc788a8fdffc19055f454446a"
+  },
+  "post_v2_backend_changes": [],
+  "ui_files": {
+    "apps/web/src/EvidenceRepairPanel.tsx": "302f085118835cb8d5ceff0c8badf365ce26583df91cb50daf27e19c05d279c2",
+    "apps/web/src/ClaimCheckPanel.tsx": "e730f14adf94ae02a02ada46edd970b79ab6f4533e9a0c1dd4d2a4dbce75a5dd",
+    "apps/web/src/InsightPanel.tsx": "01b74d0d2e36a50b8844846928d636636ef0822bfdd80da75c21c47e53a7dfdb",
+    "apps/web/src/insights.css": "66a147550da38f7408a97e1ab4bb2f8ecc12e690a86a44f580aed7ea4f963141"
+  },
+  "temporary_service_cleanup": {
+    "first_attempt": "Automatic approval review could not complete due to account usage limit; stop action did not execute.",
+    "resumed_check": "PID 49728 already absent when checked through normal approval path; no process stopped.",
+    "user_port_5173": "Untouched."
+  },
+  "resumed_default_workspace": {
+    "ports": [
+      8000,
+      5173
+    ],
+    "version": "0.14.0",
+    "health": "ok",
+    "repair_routes_registered": true,
+    "pending_model_jobs_before_start": 0,
+    "additional_model_requests": 0
+  }
+}

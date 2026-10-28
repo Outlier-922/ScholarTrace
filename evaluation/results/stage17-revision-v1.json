@@ -1,0 +1,429 @@
+{
+  "graph_id": "8dd8b1bd-7b0a-43b3-ba7f-4bf8f2f1d1fa",
+  "kind": "review",
+  "topic": "Transformer编码器与BERT预训练目标、双向上下文和局限",
+  "sources": [
+    {
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "title": "Attention Is All You Need",
+      "sha256": "0a9bff1be3575cf9fe26a4a3d3a9175bc791ecec90de8b9deba4cff75d2b9476"
+    },
+    {
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      "sha256": "987545ffb087f1ece898142c403a516baeabeb70ce19089397fac6f7db12c3d4"
+    }
+  ],
+  "id": "172ad42e-04bc-4229-a213-c10f7a50c8e6",
+  "created_at": "2026-10-28T19:17:58.534816+00:00",
+  "check_id": "cee5c5ff-2ed4-42d8-a0f3-dd3c01389486",
+  "semantic_verified": false,
+  "model_identity": "662343a299fde05d6e5ad412",
+  "repair": {
+    "plan_id": "7283d2b4-53c3-4dd8-84ec-b1fd40c4c271",
+    "parent_insight_id": "bb750311-5831-4ee5-bf3d-48a30f5f6c86",
+    "parent_digest": "7b18efb0b4f7b579276eb2b49e67e9ce3ca29719735c1401ce9243264641f6c8",
+    "check_id": "cee5c5ff-2ed4-42d8-a0f3-dd3c01389486",
+    "prompt_version": "narrow-with-evidence-v1",
+    "items": [
+      {
+        "claim_id": "s0c0",
+        "original": {
+          "claim_id": "s0c0",
+          "section": "研究背景",
+          "text": "Transformer 架构完全基于注意力机制，摒弃了循环和卷积结构，并在机器翻译任务上表现出更优的质量和更高的并行性。",
+          "evidence_ids": [
+            "ev_9a96c89ea629518bb9a7"
+          ],
+          "status": "source_checked",
+          "kind": "paper_fact",
+          "quotes": [
+            {
+              "evidence_id": "ev_9a96c89ea629518bb9a7",
+              "quote": "We propose a new simple network architecture, the Transformer,\nbased solely on attention mechanisms, dispensing with recurrence and convolutions\nentirely.",
+              "model_quote": "We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.",
+              "match": "normalized_pdf_text",
+              "start": 238,
+              "end": 392
+            }
+          ],
+          "semantic_verified": false
+        },
+        "revised": null,
+        "status": "unresolved",
+        "reason": "原句基本可支持，但“更优的质量和更高的并行性”需按原文限定为两项机器翻译任务上的质量更优与更可并行；补入“训练时间显著更少”有原文支持。"
+      },
+      {
+        "claim_id": "s2c0",
+        "original": {
+          "claim_id": "s2c0",
+          "section": "局限与边界",
+          "text": "BERT 的预训练依赖掩码语言模型，需要随机掩码输入 token 并预测其原始 id，这一目标本身引入了训练与微调之间的不一致性，但原文未进一步讨论该局限。",
+          "evidence_ids": [
+            "ev_da750071fb07b0aa3c50"
+          ],
+          "status": "source_checked",
+          "kind": "paper_fact",
+          "quotes": [
+            {
+              "evidence_id": "ev_da750071fb07b0aa3c50",
+              "quote": "The\nmasked language model randomly masks some of\nthe tokens from the input, and the objective is to\npredict the original vocabulary id of the masked",
+              "model_quote": "The masked language model randomly masks some of the tokens from the input, and the objective is to predict the original vocabulary id of the masked",
+              "match": "normalized_pdf_text",
+              "start": 318,
+              "end": 466
+            }
+          ],
+          "semantic_verified": false
+        },
+        "revised": {
+          "text": "BERT 的预训练使用掩码语言模型目标：随机掩码输入中的部分 token，并预测被掩码 token 的原始词汇 id。",
+          "evidence_ids": [
+            "evr_7ccf846a40ce85375487",
+            "evr_949204f86c89680ec062"
+          ],
+          "status": "source_checked",
+          "kind": "paper_fact",
+          "quotes": [
+            {
+              "evidence_id": "evr_7ccf846a40ce85375487",
+              "quote": "The\nmasked language model randomly masks some of\nthe tokens from the input, and the objective is to\npredict the original vocabulary id of the masked",
+              "model_quote": "The masked language model randomly masks some of the tokens from the input, and the objective is to predict the original vocabulary id of the masked",
+              "match": "normalized_pdf_text",
+              "start": 318,
+              "end": 466
+            },
+            {
+              "evidence_id": "evr_949204f86c89680ec062",
+              "quote": "we simply mask some percentage of the input\ntokens at random, and then predict those masked\ntokens",
+              "model_quote": "we simply mask some percentage of the input tokens at random, and then predict those masked tokens",
+              "match": "normalized_pdf_text",
+              "start": 57,
+              "end": 155
+            }
+          ],
+          "semantic_verified": false
+        },
+        "status": "rewritten",
+        "reason": "掩码语言模型的目标可支持；“训练与微调之间的不一致性”在给定证据中无支持，删去；原文未讨论该局限的断言也无法由给定片段支持，删去。"
+      },
+      {
+        "claim_id": "s1c0",
+        "original": {
+          "claim_id": "s1c0",
+          "section": "方法与路线",
+          "text": "在 BERT 的术语中，仅使用左上下文的 Transformer 版本被称为“Transformer 解码器”，可用于文本生成；而双向版本则被称为“Transformer 编码器”。",
+          "evidence_ids": [
+            "ev_c8a196f7d20cc6d78e87"
+          ],
+          "status": "source_checked",
+          "kind": "paper_fact",
+          "quotes": [
+            {
+              "evidence_id": "ev_c8a196f7d20cc6d78e87",
+              "quote": "former is often referred to as a “Transformer encoder” while\nthe left-context-only version is referred to as a “Transformer\ndecoder” since it can be used for text generation.",
+              "model_quote": "former is often referred to as a “Transformer encoder” while the left-context-only version is referred to as a “Transformer decoder” since it can be used for text generation.",
+              "match": "normalized_pdf_text",
+              "start": 0,
+              "end": 174
+            }
+          ],
+          "semantic_verified": false
+        },
+        "revised": {
+          "text": "在 BERT 的术语中，（双向）Transformer 常被称为“Transformer 编码器”，而仅使用左上下文的版本被称为“Transformer 解码器”，因为它可用于文本生成。",
+          "evidence_ids": [
+            "evr_5bba50731c02d307f580"
+          ],
+          "status": "source_checked",
+          "kind": "paper_fact",
+          "quotes": [
+            {
+              "evidence_id": "evr_5bba50731c02d307f580",
+              "quote": "former is often referred to as a “Transformer encoder” while\nthe left-context-only version is referred to as a “Transformer\ndecoder” since it can be used for text generation",
+              "model_quote": "former is often referred to as a “Transformer encoder” while the left-context-only version is referred to as a “Transformer decoder” since it can be used for text generation",
+              "match": "normalized_pdf_text",
+              "start": 0,
+              "end": 173
+            }
+          ],
+          "semantic_verified": false
+        },
+        "status": "rewritten",
+        "reason": "术语对应关系可支持；但“双向版本被称为 Transformer 编码器”需按原文补足“（双向）Transformer 常被称为 Transformer 编码器”，并保留仅左上下文版本可用于文本生成。"
+      }
+    ]
+  },
+  "model_proposal": {
+    "revisions": [
+      {
+        "claim_id": "s0c0",
+        "action": "revise",
+        "reason": "原句基本可支持，但“更优的质量和更高的并行性”需按原文限定为两项机器翻译任务上的质量更优与更可并行；补入“训练时间显著更少”有原文支持。",
+        "claim": {
+          "kind": "paper_fact",
+          "text": "Transformer 是仅基于注意力机制、完全摒弃循环和卷积的新网络架构；在两项机器翻译任务上，这些模型质量更优、更可并行，且训练所需时间显著更少。",
+          "evidence_ids": [
+            "evr_dc8ac288398b8a3f0791",
+            "evr_57c28e24fe0d7ff95d3b"
+          ],
+          "quotes": [
+            {
+              "evidence_id": "evr_dc8ac288398b8a3f0791",
+              "quote": "based solely on attention mechanisms, dispensing with recurrence and convolutions entirely"
+            },
+            {
+              "evidence_id": "evr_dc8ac288398b8a3f0791",
+              "quote": "Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train"
+            },
+            {
+              "evidence_id": "evr_57c28e24fe0d7ff95d3b",
+              "quote": "relying entirely on an attention mechanism to draw global dependencies between input and output"
+            }
+          ]
+        }
+      },
+      {
+        "claim_id": "s2c0",
+        "action": "revise",
+        "reason": "掩码语言模型的目标可支持；“训练与微调之间的不一致性”在给定证据中无支持，删去；原文未讨论该局限的断言也无法由给定片段支持，删去。",
+        "claim": {
+          "kind": "paper_fact",
+          "text": "BERT 的预训练使用掩码语言模型目标：随机掩码输入中的部分 token，并预测被掩码 token 的原始词汇 id。",
+          "evidence_ids": [
+            "evr_7ccf846a40ce85375487",
+            "evr_949204f86c89680ec062"
+          ],
+          "quotes": [
+            {
+              "evidence_id": "evr_7ccf846a40ce85375487",
+              "quote": "The masked language model randomly masks some of the tokens from the input, and the objective is to predict the original vocabulary id of the masked"
+            },
+            {
+              "evidence_id": "evr_949204f86c89680ec062",
+              "quote": "we simply mask some percentage of the input tokens at random, and then predict those masked tokens"
+            }
+          ]
+        }
+      },
+      {
+        "claim_id": "s1c0",
+        "action": "revise",
+        "reason": "术语对应关系可支持；但“双向版本被称为 Transformer 编码器”需按原文补足“（双向）Transformer 常被称为 Transformer 编码器”，并保留仅左上下文版本可用于文本生成。",
+        "claim": {
+          "kind": "paper_fact",
+          "text": "在 BERT 的术语中，（双向）Transformer 常被称为“Transformer 编码器”，而仅使用左上下文的版本被称为“Transformer 解码器”，因为它可用于文本生成。",
+          "evidence_ids": [
+            "evr_5bba50731c02d307f580"
+          ],
+          "quotes": [
+            {
+              "evidence_id": "evr_5bba50731c02d307f580",
+              "quote": "former is often referred to as a “Transformer encoder” while the left-context-only version is referred to as a “Transformer decoder” since it can be used for text generation"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "warnings": [
+    "修订稿只包含本次所选陈述；未选内容仍在原稿，不代表已覆盖全部论文。",
+    "补证据或改写不等于事实确认，请对修订稿重新核验；原稿和旧核验不覆盖。"
+  ],
+  "sections": [
+    {
+      "title": "局限与边界",
+      "claims": [
+        {
+          "text": "BERT 的预训练使用掩码语言模型目标：随机掩码输入中的部分 token，并预测被掩码 token 的原始词汇 id。",
+          "evidence_ids": [
+            "evr_7ccf846a40ce85375487",
+            "evr_949204f86c89680ec062"
+          ],
+          "status": "source_checked",
+          "kind": "paper_fact",
+          "quotes": [
+            {
+              "evidence_id": "evr_7ccf846a40ce85375487",
+              "quote": "The\nmasked language model randomly masks some of\nthe tokens from the input, and the objective is to\npredict the original vocabulary id of the masked",
+              "model_quote": "The masked language model randomly masks some of the tokens from the input, and the objective is to predict the original vocabulary id of the masked",
+              "match": "normalized_pdf_text",
+              "start": 318,
+              "end": 466
+            },
+            {
+              "evidence_id": "evr_949204f86c89680ec062",
+              "quote": "we simply mask some percentage of the input\ntokens at random, and then predict those masked\ntokens",
+              "model_quote": "we simply mask some percentage of the input tokens at random, and then predict those masked tokens",
+              "match": "normalized_pdf_text",
+              "start": 57,
+              "end": 155
+            }
+          ],
+          "semantic_verified": false
+        }
+      ]
+    },
+    {
+      "title": "方法与路线",
+      "claims": [
+        {
+          "text": "在 BERT 的术语中，（双向）Transformer 常被称为“Transformer 编码器”，而仅使用左上下文的版本被称为“Transformer 解码器”，因为它可用于文本生成。",
+          "evidence_ids": [
+            "evr_5bba50731c02d307f580"
+          ],
+          "status": "source_checked",
+          "kind": "paper_fact",
+          "quotes": [
+            {
+              "evidence_id": "evr_5bba50731c02d307f580",
+              "quote": "former is often referred to as a “Transformer encoder” while\nthe left-context-only version is referred to as a “Transformer\ndecoder” since it can be used for text generation",
+              "model_quote": "former is often referred to as a “Transformer encoder” while the left-context-only version is referred to as a “Transformer decoder” since it can be used for text generation",
+              "match": "normalized_pdf_text",
+              "start": 0,
+              "end": 173
+            }
+          ],
+          "semantic_verified": false
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "title": "Attention Is All You Need",
+      "status": "not_covered"
+    },
+    {
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      "status": "has_candidate_claim"
+    }
+  ],
+  "rejected_rows": 1,
+  "evidence_refs": [
+    {
+      "id": "evr_dc8ac288398b8a3f0791",
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "block_id": "blk_8891f4860fe44939925d4b852e489bea",
+      "page": 1,
+      "bbox": [
+        0.235075,
+        0.456041,
+        0.767626,
+        0.661552
+      ],
+      "text_sha256": "9416d2943b531a720f54f52cd3f46bacdc7a7cedf405da812c3b9bafd3173f3a",
+      "excerpt_sha256": "9416d2943b531a720f54f52cd3f46bacdc7a7cedf405da812c3b9bafd3173f3a"
+    },
+    {
+      "id": "evr_57c28e24fe0d7ff95d3b",
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "block_id": "blk_10276c4c5ec24fbe969bc262a876f338",
+      "page": 2,
+      "bbox": [
+        0.175966,
+        0.190335,
+        0.82637,
+        0.244331
+      ],
+      "text_sha256": "08fabb9c996bd2a1179638b67759f6155d6017102665ad313beff9f7c8a2e849",
+      "excerpt_sha256": "08fabb9c996bd2a1179638b67759f6155d6017102665ad313beff9f7c8a2e849"
+    },
+    {
+      "id": "evr_7ccf846a40ce85375487",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_d1fd490ee0704e749f33cdcd99f9ef02",
+      "page": 1,
+      "bbox": [
+        0.516191,
+        0.751582,
+        0.88286,
+        0.909384
+      ],
+      "text_sha256": "66d26fca94b0d212b7f1a43209ec01d93672acfc37c18fa9dc665daa5bd46f0f",
+      "excerpt_sha256": "66d26fca94b0d212b7f1a43209ec01d93672acfc37c18fa9dc665daa5bd46f0f"
+    },
+    {
+      "id": "evr_949204f86c89680ec062",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_61c245e610b0498cb9da92436692a345",
+      "page": 4,
+      "bbox": [
+        0.516191,
+        0.077794,
+        0.88286,
+        0.299971
+      ],
+      "text_sha256": "b62aa342e9f8cb1422a2dcffdb013a8752a98b6e1adf1719921e97e1a80ab400",
+      "excerpt_sha256": "b62aa342e9f8cb1422a2dcffdb013a8752a98b6e1adf1719921e97e1a80ab400"
+    },
+    {
+      "id": "evr_acf94790e4bfa0db08f0",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_b57b8f5d96f04e64943a388c08a99d15",
+      "page": 1,
+      "bbox": [
+        0.516191,
+        0.509553,
+        0.88286,
+        0.747824
+      ],
+      "text_sha256": "fff91a80b0271599a6874e2ef5010063cdc9d501968c31c4b401a0f88157a066",
+      "excerpt_sha256": "fff91a80b0271599a6874e2ef5010063cdc9d501968c31c4b401a0f88157a066"
+    },
+    {
+      "id": "evr_5bba50731c02d307f580",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_cfd7c5f51ad34e1188e9759b4e08e243",
+      "page": 4,
+      "bbox": [
+        0.120952,
+        0.87451,
+        0.487621,
+        0.908827
+      ],
+      "text_sha256": "1ce0c0f55b6500e80d785cc70c20fd8a3d27830107fbddc733f8ab0c645fdbbd",
+      "excerpt_sha256": "1ce0c0f55b6500e80d785cc70c20fd8a3d27830107fbddc733f8ab0c645fdbbd"
+    },
+    {
+      "id": "evr_3285155585e1c5cc3088",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_0224823822674c77b8286c5070c83865",
+      "page": 3,
+      "bbox": [
+        0.516191,
+        0.739455,
+        0.882865,
+        0.832882
+      ],
+      "text_sha256": "0ff2c059f8c71d2aefc8aaff91eb2028d7b91a6a9688de74d69492d1c66d49f8",
+      "excerpt_sha256": "f491d74dfb233d2852b53d564f086870ee6dc813f9309873f6dd3f5f600b0a16"
+    },
+    {
+      "id": "evr_f5730010be86ea3e02e0",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_dc61b50e53984fa9a6010cd59784846b",
+      "page": 4,
+      "bbox": [
+        0.120952,
+        0.703946,
+        0.487624,
+        0.861865
+      ],
+      "text_sha256": "ecf16eee00d1b88d77f3ba2061a94e55602779d35364ee261a565ee4a729eb8d",
+      "excerpt_sha256": "ecf16eee00d1b88d77f3ba2061a94e55602779d35364ee261a565ee4a729eb8d"
+    }
+  ]
+}
