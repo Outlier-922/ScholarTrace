@@ -1,0 +1,108 @@
+{
+  "id": "94e5a43f-5574-47c2-b508-9b59a150b78b",
+  "graph_id": "8dd8b1bd-7b0a-43b3-ba7f-4bf8f2f1d1fa",
+  "kind": "future",
+  "created_at": "2026-10-28T18:26:58.788444+00:00",
+  "topic": "We are excited about the future of attention-based models and plan to apply them to other tasks. We\nplan to extend the Transformer to problems involving input and output modalities other than text and\nto investigate local, restricted attention mechanisms to efﬁciently handle large inputs and outputs\nsuch as images, audio and video. Making generation less sequential is another research goals of ours.",
+  "sources": [
+    {
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "title": "Attention Is All You Need",
+      "sha256": "0a9bff1be3575cf9fe26a4a3d3a9175bc791ecec90de8b9deba4cff75d2b9476"
+    },
+    {
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      "sha256": "987545ffb087f1ece898142c403a516baeabeb70ce19089397fac6f7db12c3d4"
+    }
+  ],
+  "assessments": [
+    {
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      "relation": "insufficient",
+      "claim": null,
+      "temporal_status": "unknown",
+      "source_date": {
+        "date": null,
+        "basis": null,
+        "version": "v1"
+      },
+      "candidate_date": {
+        "date": null,
+        "basis": null,
+        "version": null
+      },
+      "bucket": "retain_for_review",
+      "semantic_verified": false,
+      "notice": "仅模型建议归组，尚未独立确认解决；日期不明、条件或部分问题仍需核对。"
+    }
+  ],
+  "semantic_verified": false,
+  "model_identity": "662343a299fde05d6e5ad412",
+  "warnings": [
+    "“已有处理候选”是可展开的临时分组，不删除原方向，不代表事实已确认。",
+    "保留组不证明问题未解决或具备创新性；未自动下载、阅读其他候选全文。"
+  ],
+  "evidence_refs": [
+    {
+      "id": "ev_blk_5e214461ffd14592a483c20195737be7",
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "block_id": "blk_5e214461ffd14592a483c20195737be7",
+      "page": 10,
+      "bbox": [
+        0.175706,
+        0.247228,
+        0.826157,
+        0.301086
+      ],
+      "text_sha256": "5a009f68c464ee081aefc6c9604ee2a24ed1dd700f28917ecddfb8205cecfa37"
+    },
+    {
+      "id": "ev_5f13b3eb3081feeeb52c",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_832c15e13c3c43e9a12e061f31365761",
+      "page": 5,
+      "bbox": [
+        0.120952,
+        0.590335,
+        0.487621,
+        0.796417
+      ],
+      "text_sha256": "550aae5bb81b5ed3cb1a90526c3176c91ea456103b152f7450005f267e8e066b"
+    },
+    {
+      "id": "ev_9d63457d40870289e26a",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_52e2ba83eabd4c69af097be1bb68a9d1",
+      "page": 5,
+      "bbox": [
+        0.516191,
+        0.270252,
+        0.88286,
+        0.382903
+      ],
+      "text_sha256": "d149dea57fd51a4b1fb689f65c1b398304b87979f064918811ffc1c3c7fc9596"
+    },
+    {
+      "id": "ev_c8a196f7d20cc6d78e87",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_cfd7c5f51ad34e1188e9759b4e08e243",
+      "page": 4,
+      "bbox": [
+        0.120952,
+        0.87451,
+        0.487621,
+        0.908827
+      ],
+      "text_sha256": "1ce0c0f55b6500e80d785cc70c20fd8a3d27830107fbddc733f8ab0c645fdbbd"
+    }
+  ],
+  "notice": "Observed development smoke only; source/quote checks are not semantic verification."
+}

@@ -1,5 +1,5 @@
 {
-  "application_version": "0.11.0",
+  "application_version": "0.12.0",
   "as_of": "2026-10-29",
   "scope": "按用户提供赛题逐项整理的工程交付判断；不是主办方认证、评分百分比或豁免清单。",
   "items": [
@@ -17,12 +17,12 @@
     {"id":"M4-DISCOVERY","required":true,"state":"partial","requirement":"论文/参考文献自动下钻入库与引用价值筛选","current":"arXiv/Crossref、身份确认与确切版本入库可用；引用含金量筛选及批量自动下钻不足","proof_paths":["docs/STAGE4_TEST_REPORT.md"]},
     {"id":"M4-RECOMMEND","required":true,"state":"partial","requirement":"动态追踪、开源优先、反馈与推荐拓展","current":"有限窗口主题追踪及共享反馈基线；推荐质量和多用户拓展未完成","proof_paths":["docs/STAGE4_TEST_REPORT.md"]},
     {"id":"M5-GRAPH","required":true,"state":"partial","requirement":"批量文献引用网络与基石分析","current":"局部书目网络和PageRank可用；20篇全文规模、消歧及分析质量仍需验收","proof_paths":["docs/STAGE5_TEST_REPORT.md"]},
-    {"id":"M5-REVIEW","required":true,"state":"partial","requirement":"自动领域综述","current":"只有可溯源的综述证据提纲，未完成自动学术综述质量闭环","proof_paths":["docs/STAGE5_TEST_REPORT.md"]},
-    {"id":"M5-FUTURE","required":true,"state":"missing","requirement":"结合后续进展排除已解决旧idea","current":"只提供未来工作原文与后续候选，未实现解决程度判定","proof_paths":[]},
+    {"id":"M5-REVIEW","required":true,"state":"partial","requirement":"自动领域综述","current":"已加入1-8篇来源的自动综述草稿、短引文与覆盖检查；真实样本仍有语义超出引文，无学术质量通过结论","proof_paths":["docs/STAGE5_TEST_REPORT.md","docs/STAGE15_TEST_REPORT.md"]},
+    {"id":"M5-FUTURE","required":true,"state":"partial","requirement":"结合后续进展排除已解决旧idea","current":"已加入所选候选全文的双边证据核对与确切版本日期临时分组；未确认已解决，真实样本证据不足，不是完整旧idea排除","proof_paths":["docs/STAGE15_TEST_REPORT.md"]},
     {"id":"M6-WRITING","required":true,"state":"partial","requirement":"从idea输出学术框架与真实References","current":"来源框架、注册书目和导出可用；模板式，学术生成质量不足","proof_paths":["docs/STAGE6_TEST_REPORT.md"]},
     {"id":"M6-PLOT","required":true,"state":"verified","requirement":"CSV科学图表及架构图可复现导出","current":"六类图、统计配置、图注及重画脚本已验证；自由自然语言分析不在该通过范围","proof_paths":["docs/STAGE6_TEST_REPORT.md"]},
     {"id":"M6-ENGLISH","required":true,"state":"partial","requirement":"中文学术内容翻成英文","current":"支持英文目标任务/选区；领域译文质量尚未系统验收","proof_paths":["docs/STAGE3_TEST_REPORT.md","docs/STAGE14_TEST_REPORT.md"]},
-    {"id":"AGENT-LOOP","required":true,"state":"partial","requirement":"意图规划、工具执行与科研流程闭环","current":"模型建议+白名单、预算和恢复可用；自主重规划与跨模块完整意图覆盖不足；不强制特定框架","proof_paths":["docs/STAGE7_TEST_REPORT.md"]},
+    {"id":"AGENT-LOOP","required":true,"state":"partial","requirement":"意图规划、工具执行与科研流程闭环","current":"六种白名单工具含综述，预算/来源固定/恢复与导出可用；完整意图覆盖和自主重规划不足；不强制特定框架","proof_paths":["docs/STAGE7_TEST_REPORT.md","docs/STAGE15_TEST_REPORT.md"]},
     {"id":"D-CODE","required":true,"state":"external_pending","requirement":"源码仓库可供评审访问并保留历史","current":"本地Git历史已保存；远程评审访问尚未验证","proof_paths":[]},
     {"id":"D-PDF","required":true,"state":"partial","requirement":"当前最终版本技术PDF不超过30页","current":"已有14页0.9.0草稿，需同步最终功能、测试和部署","proof_paths":["docs/STAGE12_TEST_REPORT.md"]},
     {"id":"D-VIDEO","required":true,"state":"missing","requirement":"5-8分钟、1080p及以上、普通话MP4演示","current":"只有脚本，无正式成片","proof_paths":[]},

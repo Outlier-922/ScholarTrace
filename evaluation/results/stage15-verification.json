@@ -1,0 +1,76 @@
+{
+  "application_version": "0.12.0",
+  "as_of": "2026-10-29",
+  "test_result": "305 passed, 1 existing warning",
+  "test_seconds": 51.52,
+  "build": {
+    "typescript": "passed",
+    "vite": "passed",
+    "modules": 1604,
+    "vite_seconds": 2.66
+  },
+  "live_requests": 3,
+  "maximum_reserved_output_tokens": 6600,
+  "billing_usage_known": false,
+  "records": [
+    {
+      "id": "6da4ab3a-565b-4bff-b51c-3d66c3873605",
+      "kind": "review",
+      "anchor_checks": 6,
+      "export_status": 200,
+      "export_sha256": "9c2a0ce6b8b848633d7d8087893a31d3a2303cb9206d02207948b15a1ba80975"
+    },
+    {
+      "id": "bb750311-5831-4ee5-bf3d-48a30f5f6c86",
+      "kind": "review",
+      "anchor_checks": 8,
+      "export_status": 200,
+      "export_sha256": "629804a4fd3e7f2e6c9e257b46c9bc4829577e1699b4a9bc8f8e1374fa269525"
+    },
+    {
+      "id": "94e5a43f-5574-47c2-b508-9b59a150b78b",
+      "kind": "future",
+      "anchor_checks": 4,
+      "export_status": 200,
+      "export_sha256": "464c59fccff83032416fb491d94e485f4df84add6f1aed7f231e66c281cd0fea"
+    }
+  ],
+  "ui": {
+    "source_jump_selected_highlights": 1,
+    "desktop": {
+      "viewport": 1280,
+      "document_width": 1265
+    },
+    "mobile": {
+      "viewport": 390,
+      "document_width": 375,
+      "dialog_client_width": 329,
+      "dialog_scroll_width": 329
+    }
+  },
+  "semantic_quality_passed": false,
+  "submission_ready": false,
+  "fingerprint_format": "utf8_lf_text_v1",
+  "final_product_files": {
+    "backend/app/qa.py": "7e71fe26bed323e63d221957bc46a2a2f887fe6fd76bd6dc2941671fe353fee1",
+    "backend/app/model_client.py": "5dc193477ebbb9004c9ec430a22aab9afafe15e122073460121391ebcf4b5bdd",
+    "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+    "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+    "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+    "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+    "backend/app/comparison.py": "2b5e1565a0efdec1b41e8b0a8b924924eeb8bd15a758ca0590f7d1723cc68eee",
+    "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+    "backend/app/answer_fields.py": "0b9c45797acde532b4ba5e35c636256a3677662cf35864506ae25aa42302078a",
+    "backend/app/workflow.py": "b75272efdfbe3e2a279a6baab8ff03007079af891315a05992fcf22cc9994b28",
+    "backend/app/demo_access.py": "4943b392af56944f9c69efbe1e7e7a7232bef5b0ac013e2e520355840995a024",
+    "backend/app/main.py": "c54b239b981a275751c20c8b82bb68ed237136095b55a7284ce05d80297b383e",
+    "backend/app/selection_translation.py": "f7cefe5a0efabfe972e1a3dd318f684269592e1bef44f33144687f40effe07e2",
+    "backend/app/insights.py": "8ccf72145f66f96b0d805245cfff58effa6585d53a97380b87155e0123decf63",
+    "backend/app/insight_store.py": "181897369226a29bb5a51ec7838984024c12dec4e304c5b5e85d019eb1485721",
+    "backend/app/graph.py": "62327d844fd86f3365091f2aefebe0fd93d8b17bd9e78cc10f442b930651fc9b",
+    "backend/app/graph_store.py": "eda8d9682f316f71e53241e8f29b4aa2d798284c4752c99f69ac6f75970a45ad",
+    "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+    "scripts/evaluate_qa.py": "dac5b1d099f02a19e17ae422a5739844f1e568d58c90d39dbbfe9c7a3ff6d371"
+  },
+  "fingerprint_notice": "Final snapshot after live checks and hard output cap; not a pre-registered independent evaluation or fingerprint of v1 smoke code."
+}

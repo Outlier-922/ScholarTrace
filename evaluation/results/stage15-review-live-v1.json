@@ -1,0 +1,135 @@
+{
+  "id": "6da4ab3a-565b-4bff-b51c-3d66c3873605",
+  "graph_id": "8dd8b1bd-7b0a-43b3-ba7f-4bf8f2f1d1fa",
+  "kind": "review",
+  "created_at": "2026-10-28T18:15:08.747285+00:00",
+  "topic": "Transformer编码器与BERT预训练目标、双向上下文和局限",
+  "sections": [
+    {
+      "title": "研究背景",
+      "claims": [
+        {
+          "text": "在仅使用 WSJ 训练集 40K 句子的条件下，Transformer 仍优于 Berkeley-Parser。",
+          "evidence_ids": [
+            "ev_b1c0b9afe888f0381505"
+          ],
+          "status": "source_checked",
+          "kind": "paper_fact",
+          "quotes": [
+            {
+              "evidence_id": "ev_b1c0b9afe888f0381505",
+              "quote": "even when training only on the WSJ training set of 40K sentences"
+            }
+          ],
+          "semantic_verified": false
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "title": "Attention Is All You Need",
+      "status": "has_candidate_claim"
+    },
+    {
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      "status": "not_covered"
+    }
+  ],
+  "rejected_rows": 7,
+  "semantic_verified": false,
+  "model_identity": "662343a299fde05d6e5ad412",
+  "warnings": [
+    "自动综述草稿，逐字引文/数字检查不证明语义支持；请核对条件和遗漏。",
+    "未覆盖论文保留缺口；此处不穷尽领域，也不把外部元数据摘要当全文。"
+  ],
+  "evidence_refs": [
+    {
+      "id": "ev_8546ee6bdcc93fe77eb8",
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "block_id": "blk_205f39fcf43b40da842ba66cfad1ed2e",
+      "page": 5,
+      "bbox": [
+        0.176471,
+        0.678961,
+        0.637029,
+        0.69154
+      ],
+      "text_sha256": "842bda1add649e63e6de03012e505b208617435d234ef0f29e09894f5ea8a8bd"
+    },
+    {
+      "id": "ev_9a96c89ea629518bb9a7",
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "block_id": "blk_8891f4860fe44939925d4b852e489bea",
+      "page": 1,
+      "bbox": [
+        0.235075,
+        0.456041,
+        0.767626,
+        0.661552
+      ],
+      "text_sha256": "9416d2943b531a720f54f52cd3f46bacdc7a7cedf405da812c3b9bafd3173f3a"
+    },
+    {
+      "id": "ev_b1c0b9afe888f0381505",
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "block_id": "blk_dab5459e7f9f49ee990acabdc7d730c5",
+      "page": 9,
+      "bbox": [
+        0.176471,
+        0.885711,
+        0.826236,
+        0.91213
+      ],
+      "text_sha256": "fc687c9652c85b36ea38718ad42e197c50b73ab4381c374e9b59e52b98715789"
+    },
+    {
+      "id": "ev_d908f3547f0ad9b772d0",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_c9274e5560f64ad3a3582a11c414db1f",
+      "page": 4,
+      "bbox": [
+        0.516191,
+        0.303107,
+        0.882866,
+        0.541378
+      ],
+      "text_sha256": "03df095dcdcc0c622311344abf75930eef33239114c0843a2cc5b90df3bbac53"
+    },
+    {
+      "id": "ev_c8a196f7d20cc6d78e87",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_cfd7c5f51ad34e1188e9759b4e08e243",
+      "page": 4,
+      "bbox": [
+        0.120952,
+        0.87451,
+        0.487621,
+        0.908827
+      ],
+      "text_sha256": "1ce0c0f55b6500e80d785cc70c20fd8a3d27830107fbddc733f8ab0c645fdbbd"
+    },
+    {
+      "id": "ev_baf1735a5d91d6405cf9",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_25a524118237401ebde9519af797f849",
+      "page": 9,
+      "bbox": [
+        0.516191,
+        0.542504,
+        0.88286,
+        0.668118
+      ],
+      "text_sha256": "9cf8978f3f11ad74bf3c79a615c0b2d7498dd68cf2a7a03095081f942f48a5aa"
+    }
+  ],
+  "notice": "First smoke result retained: 1 claim, 7 rejected rows, BERT uncovered; no independent semantic review."
+}

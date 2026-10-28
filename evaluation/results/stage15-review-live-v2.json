@@ -1,0 +1,248 @@
+{
+  "id": "bb750311-5831-4ee5-bf3d-48a30f5f6c86",
+  "graph_id": "8dd8b1bd-7b0a-43b3-ba7f-4bf8f2f1d1fa",
+  "kind": "review",
+  "created_at": "2026-10-28T18:20:44.247325+00:00",
+  "topic": "Transformer编码器与BERT预训练目标、双向上下文和局限",
+  "sources": [
+    {
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "title": "Attention Is All You Need",
+      "sha256": "0a9bff1be3575cf9fe26a4a3d3a9175bc791ecec90de8b9deba4cff75d2b9476"
+    },
+    {
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      "sha256": "987545ffb087f1ece898142c403a516baeabeb70ce19089397fac6f7db12c3d4"
+    }
+  ],
+  "sections": [
+    {
+      "title": "研究背景",
+      "claims": [
+        {
+          "text": "Transformer 架构完全基于注意力机制，摒弃了循环和卷积结构，并在机器翻译任务上表现出更优的质量和更高的并行性。",
+          "evidence_ids": [
+            "ev_9a96c89ea629518bb9a7"
+          ],
+          "status": "source_checked",
+          "kind": "paper_fact",
+          "quotes": [
+            {
+              "evidence_id": "ev_9a96c89ea629518bb9a7",
+              "quote": "We propose a new simple network architecture, the Transformer,\nbased solely on attention mechanisms, dispensing with recurrence and convolutions\nentirely.",
+              "model_quote": "We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.",
+              "match": "normalized_pdf_text",
+              "start": 238,
+              "end": 392
+            }
+          ],
+          "semantic_verified": false
+        },
+        {
+          "text": "Transformer 的编码器和解码器均由堆叠的自注意力层和逐点全连接层构成。",
+          "evidence_ids": [
+            "ev_6c63fcc4b21224dfc700"
+          ],
+          "status": "source_checked",
+          "kind": "paper_fact",
+          "quotes": [
+            {
+              "evidence_id": "ev_6c63fcc4b21224dfc700",
+              "quote": "The Transformer follows this overall architecture using stacked self-attention and point-wise, fully\nconnected layers for both the encoder and decoder",
+              "model_quote": "The Transformer follows this overall architecture using stacked self-attention and point-wise, fully connected layers for both the encoder and decoder",
+              "match": "normalized_pdf_text",
+              "start": 0,
+              "end": 150
+            }
+          ],
+          "semantic_verified": false
+        }
+      ]
+    },
+    {
+      "title": "方法与路线",
+      "claims": [
+        {
+          "text": "在 BERT 的术语中，仅使用左上下文的 Transformer 版本被称为“Transformer 解码器”，可用于文本生成；而双向版本则被称为“Transformer 编码器”。",
+          "evidence_ids": [
+            "ev_c8a196f7d20cc6d78e87"
+          ],
+          "status": "source_checked",
+          "kind": "paper_fact",
+          "quotes": [
+            {
+              "evidence_id": "ev_c8a196f7d20cc6d78e87",
+              "quote": "former is often referred to as a “Transformer encoder” while\nthe left-context-only version is referred to as a “Transformer\ndecoder” since it can be used for text generation.",
+              "model_quote": "former is often referred to as a “Transformer encoder” while the left-context-only version is referred to as a “Transformer decoder” since it can be used for text generation.",
+              "match": "normalized_pdf_text",
+              "start": 0,
+              "end": 174
+            }
+          ],
+          "semantic_verified": false
+        }
+      ]
+    },
+    {
+      "title": "局限与边界",
+      "claims": [
+        {
+          "text": "BERT 的预训练依赖掩码语言模型，需要随机掩码输入 token 并预测其原始 id，这一目标本身引入了训练与微调之间的不一致性，但原文未进一步讨论该局限。",
+          "evidence_ids": [
+            "ev_da750071fb07b0aa3c50"
+          ],
+          "status": "source_checked",
+          "kind": "paper_fact",
+          "quotes": [
+            {
+              "evidence_id": "ev_da750071fb07b0aa3c50",
+              "quote": "The\nmasked language model randomly masks some of\nthe tokens from the input, and the objective is to\npredict the original vocabulary id of the masked",
+              "model_quote": "The masked language model randomly masks some of the tokens from the input, and the objective is to predict the original vocabulary id of the masked",
+              "match": "normalized_pdf_text",
+              "start": 318,
+              "end": 466
+            }
+          ],
+          "semantic_verified": false
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "title": "Attention Is All You Need",
+      "status": "has_candidate_claim"
+    },
+    {
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      "status": "has_candidate_claim"
+    }
+  ],
+  "rejected_rows": 4,
+  "semantic_verified": false,
+  "model_identity": "662343a299fde05d6e5ad412",
+  "warnings": [
+    "自动综述草稿，逐字引文/数字检查不证明语义支持；请核对条件和遗漏。",
+    "未覆盖论文保留缺口；此处不穷尽领域，也不把外部元数据摘要当全文。"
+  ],
+  "evidence_refs": [
+    {
+      "id": "ev_9a96c89ea629518bb9a7",
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "block_id": "blk_8891f4860fe44939925d4b852e489bea",
+      "page": 1,
+      "bbox": [
+        0.235075,
+        0.456041,
+        0.767626,
+        0.661552
+      ],
+      "text_sha256": "9416d2943b531a720f54f52cd3f46bacdc7a7cedf405da812c3b9bafd3173f3a"
+    },
+    {
+      "id": "ev_6c63fcc4b21224dfc700",
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "block_id": "blk_5286669af5df492b99cdf76abbfa4cb9",
+      "page": 2,
+      "bbox": [
+        0.175966,
+        0.674456,
+        0.825568,
+        0.71464
+      ],
+      "text_sha256": "a61c59add3caaaaf7a5026968bae27292a7e1aaab170540c464a0569fcafd8e5"
+    },
+    {
+      "id": "ev_8546ee6bdcc93fe77eb8",
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "block_id": "blk_205f39fcf43b40da842ba66cfad1ed2e",
+      "page": 5,
+      "bbox": [
+        0.176471,
+        0.678961,
+        0.637029,
+        0.69154
+      ],
+      "text_sha256": "842bda1add649e63e6de03012e505b208617435d234ef0f29e09894f5ea8a8bd"
+    },
+    {
+      "id": "ev_910c823c735131fe02fa",
+      "document_id": "doc_06b54c02de644224bda6197849310ee9",
+      "parse_run_id": "parse_f1819f34b2e849289466d159a4c85c9d",
+      "block_id": "blk_5ac5a7f3b0e447dfab461ab00c7a1033",
+      "page": 1,
+      "bbox": [
+        0.195788,
+        0.884251,
+        0.461842,
+        0.911617
+      ],
+      "text_sha256": "bee7270565af90833d6c0110b3aa35aec6acc85ee9a1f098089d1db70208e621"
+    },
+    {
+      "id": "ev_38f8f4b8eb7a8abbeded",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_efe71b8a202148d5a91f12780322a6f9",
+      "page": 1,
+      "bbox": [
+        0.149524,
+        0.291985,
+        0.459052,
+        0.502625
+      ],
+      "text_sha256": "bf4a1a40df6338410a479f3959463b3bcb07645e60662fabf1389d89d0d13584"
+    },
+    {
+      "id": "ev_da750071fb07b0aa3c50",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_d1fd490ee0704e749f33cdcd99f9ef02",
+      "page": 1,
+      "bbox": [
+        0.516191,
+        0.751582,
+        0.88286,
+        0.909384
+      ],
+      "text_sha256": "66d26fca94b0d212b7f1a43209ec01d93672acfc37c18fa9dc665daa5bd46f0f"
+    },
+    {
+      "id": "ev_c8a196f7d20cc6d78e87",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_cfd7c5f51ad34e1188e9759b4e08e243",
+      "page": 4,
+      "bbox": [
+        0.120952,
+        0.87451,
+        0.487621,
+        0.908827
+      ],
+      "text_sha256": "1ce0c0f55b6500e80d785cc70c20fd8a3d27830107fbddc733f8ab0c645fdbbd"
+    },
+    {
+      "id": "ev_dc58247a4268cbd23b91",
+      "document_id": "doc_2aab24bc3bb84a67b128264bd4c248c1",
+      "parse_run_id": "parse_4619dfab7baa492c835ea79bdbcde9cd",
+      "block_id": "blk_92284e7ca5624ea2befe0d91f3146cb0",
+      "page": 3,
+      "bbox": [
+        0.516191,
+        0.626023,
+        0.882859,
+        0.67117
+      ],
+      "text_sha256": "f5158b0812e07aea4d354fe5f6ca500c7bb990b4a0e9e6467c7fe89f0eb427d7"
+    }
+  ],
+  "notice": "Observed development smoke only; source/quote checks are not semantic verification."
+}

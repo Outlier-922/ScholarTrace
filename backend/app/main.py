@@ -44,6 +44,7 @@ async def lifespan(app: FastAPI):
     studio.repo.init_db()
     workflow.repo.init_db()
     model_status.init_db()
+    insight_store.init_db()
     if not demo_access.read_only():
         translation.resume_jobs()
         literature.start()
@@ -141,6 +142,7 @@ def health() -> dict[str, Any]:
                              "structured_tables": importlib.util.find_spec(f"{__package__}.tables") is not None,
                              "formula_latex": False, "semantic_tables": False,
                              "citation_graph": True, "evidence_outline": True, "full_translation": False,
+                             "grounded_review_draft": True, "future_work_screening": True,
                              "writing_plans": True, "csv_plotting": True, "architecture_diagrams": True,
                              "intent_workflow": True, "model_diagnostics": True,
                              "multi_user_auth": False, "comparison_matrix": True,
@@ -288,6 +290,7 @@ def remove_document(document_id: str) -> dict[str, Any]:
     graph.repo.purge_document(document_id)
     studio.repo.purge_document(document_id)
     workflow.repo.purge_document(document_id)
+    insight_store.purge_document(document_id)
     return {"deleted": True, "document_id": document_id}
 
 
@@ -410,6 +413,8 @@ app.include_router(workflow.router)
 app.include_router(model_status.router)
 from . import selection_translation
 app.include_router(selection_translation.router)
+from . import insights, insight_store
+app.include_router(insights.router)
 
 # Serve only the explicit production build, never the repository or data root.
 if os.getenv('SCHOLARTRACE_SERVE_WEB', 'false').lower() == 'true':
