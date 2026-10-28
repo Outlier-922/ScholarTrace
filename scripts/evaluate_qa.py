@@ -19,7 +19,7 @@ from scripts.eval_core import bind_sources, digest, request_body, score_response
 PRODUCT_FILES = ['backend/app/qa.py', 'backend/app/model_client.py', 'backend/app/semantic.py',
                  'backend/app/source_scope.py','backend/app/parser.py','backend/app/store.py',
                  'backend/app/comparison.py','backend/app/semantic_jobs.py','backend/app/answer_fields.py',
-                 'backend/app/workflow.py','backend/app/demo_access.py','backend/app/main.py',
+                 'backend/app/workflow.py','backend/app/demo_access.py','backend/app/main.py','backend/app/selection_translation.py',
                  'scripts/eval_core.py', 'scripts/evaluate_qa.py']
 
 

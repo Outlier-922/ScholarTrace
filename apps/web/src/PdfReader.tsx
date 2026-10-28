@@ -8,6 +8,7 @@ import './pdf-text-layer.css';
 import type { DocumentBlock, DocumentStructure, ResearchDocument } from './types';
 import BlockContent, { isOcrBlock } from './BlockContent';
 import TranslationPane from './TranslationPane';
+import SelectionTranslation from './SelectionTranslation';
 import type { TranslationHandle } from './TranslationPane';
 import { request } from './api';
 
@@ -27,10 +28,11 @@ interface Props {
   ocrReady?: boolean;
   onRequestReprocess?: () => void;
   modelConfigured?: boolean;
+  readOnly?: boolean;
   onFindReference?: (text: string) => void;
 }
 
-export default function PdfReader({ document, structure, page, onPage, selectedBlock, onSelectBlock, ocrReady = false, onRequestReprocess, modelConfigured = false, onFindReference }: Props) {
+export default function PdfReader({ document, structure, page, onPage, selectedBlock, onSelectBlock, ocrReady = false, onRequestReprocess, modelConfigured = false, readOnly = false, onFindReference }: Props) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -250,6 +252,7 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
         </div>
         <button className={`icon-button block-toggle ${showBlocks ? 'is-on' : ''}`} disabled={view === 'text'} onClick={() => setShowBlocks(!showBlocks)} title="显示解析内容块" aria-label="显示解析内容块" aria-pressed={showBlocks}><ScanLine size={17} /></button>
       </div>
+      <SelectionTranslation root={scrollRef} documentId={document.id} runId={structure?.parse_run_id} page={page} blocks={pageBlocks} modelConfigured={modelConfigured} readOnly={readOnly} bounds={displayBounds} onSource={block => { onSelectBlock(block); setView('pdf'); }} />
       {readingHistory.length > 0 && <div className="citation-return"><button onClick={returnToCitation}><ArrowLeft size={13} />返回正文引用处</button></div>}
       {activeCitation && <div className="citation-picker" role="group" aria-label="选择组合引用中的条目"><span>{activeCitation.marker_text} · 选择条目</span>{citations?.references.filter(item => activeCitation.reference_ids.includes(item.id)).map(item => <button key={item.id} title={item.text} onClick={() => jumpReference(activeCitation, item.id)}>[{item.marker}] {item.text.replace(/^\[\d+\]\s*/, '').slice(0, 55)}…</button>)}<button onClick={() => setActiveCitation(null)}>关闭</button></div>}
       {view === 'parallel' && <div className="parallel-options"><label><input type="checkbox" checked={linked} onChange={event => setLinked(event.target.checked)} />按段落联动滚动</label><span>公式和代码保留原文；自动翻译请核验。</span></div>}

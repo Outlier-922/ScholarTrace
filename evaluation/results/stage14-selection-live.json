@@ -1,0 +1,22 @@
+{
+  "application_version": "0.11.0",
+  "explicit_generation_requests": 1,
+  "max_reserved_output_tokens": 1600,
+  "cache_records": 1,
+  "selection": {
+    "document_id": "doc_d7821ac124c54d418325f189793ce688",
+    "parse_run_id": "parse_07f28d7b37064924bb5813ccfee5c207",
+    "block_id": "blk_7aa76dfc75f84fb9bfab9a51b9cc3195",
+    "page": 1,
+    "start": 0,
+    "end": 40,
+    "source_text": "The synthetic training batch size is 32.",
+    "target_language": "zh"
+  },
+  "translation": "合成训练批次大小为32。",
+  "cache_key": "ecef30c135f3aba65b4cd9c4c1a6129e40d459254123765fd3cfe35d14be82e3",
+  "block_text_sha256": "840e605081924da89fbd30ae5836f3b8066481d500ee8c9146351c72c488d470",
+  "model_identity": "662343a299fde05d6e5ad412",
+  "semantic_verified": false,
+  "quality_notice": "One short synthetic-sentence smoke check, not independent translation quality assessment."
+}
