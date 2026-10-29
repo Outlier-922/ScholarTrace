@@ -14,7 +14,7 @@ from fastapi.responses import Response,PlainTextResponse
 from pydantic import BaseModel,ConfigDict,Field
 from starlette.concurrency import run_in_threadpool
 from . import comparison,graph,model_client,qa,source_scope,store,studio,insights
-from . import workflow_store as repo
+from . import workflow_store as repo,workflow_policy as policy
 
 router=APIRouter(prefix='/api/research-tasks',tags=['intent-workflow'])
 _workers:dict[str,asyncio.Task]={}
@@ -44,16 +44,27 @@ class PlanRequest(BaseModel):
     max_model_calls:int=Field(default=6,ge=0,le=12)
     max_output_tokens:int=Field(default=14000,ge=600,le=30000)
     max_active_seconds:int=Field(default=300,ge=5,le=900)
+    recovery_policy:Literal['stop','local_fallback']='local_fallback'
+    max_replans:int=Field(default=2,ge=0,le=3)
+
+
+INTENT_PATTERNS={'comparison':r'对比|比较|compare|comparison',
+                'graph':r'图谱|引用网络|citation graph|citation network',
+                'review':r'综述|literature review|survey',
+                'writing':r'写作|论文框架|写.*提纲|writing|outline',
+                'diagram':r'流程图|架构图|diagram|flowchart'}
+
+
+def blocked_actions(goal):
+    clauses=re.split(r'[，,。；;\n]|但是|\bbut\b',goal.casefold())
+    return {tool for tool,pattern in INTENT_PATTERNS.items()
+            if any(re.search(pattern,clause) and re.search(r'不要|无需|不需要|别做|do not|without|skip',clause) for clause in clauses)}
 
 
 def infer(goal):
     # Split into clauses so "不要引用图谱" cannot accidentally enable that tool.
     clauses=re.split(r'[，,。；;\n]',goal.casefold())
-    patterns={'comparison':r'对比|比较|compare|comparison',
-              'graph':r'图谱|引用网络|citation graph|citation network',
-              'review':r'综述|literature review|survey',
-              'writing':r'写作|论文框架|写.*提纲|writing|outline',
-              'diagram':r'流程图|架构图|diagram|flowchart'}
+    patterns=INTENT_PATTERNS
     actions=['evidence']
     for tool,pattern in patterns.items():
         if any(re.search(pattern,clause) and not re.search(r'不要|无需|不需要|别做|do not|without|skip',clause) for clause in clauses):actions.append(tool)
@@ -72,7 +83,7 @@ async def plan(body:PlanRequest):
     if len(docs)>5:raise HTTPException(422,'当前任务最多选择5个不同作品')
     if body.use_model and not model_client.configuration()['ready']:raise HTTPException(409,'请先通过本机配置入口设置模型，或关闭执行时使用模型')
     actions,dimensions=infer(body.goal);mode='rules';warnings=[]
-    if body.planner=='model':
+    if body.planner=='model' and not body.actions:
         if not model_client.configuration()['ready']:raise HTTPException(409,'模型尚未配置，可先使用规则规划')
         try:
             proposed=await model_client.chat_json(
@@ -81,10 +92,14 @@ async def plan(body:PlanRequest):
             proposed_actions=proposed.get('actions');proposed_dimensions=proposed.get('dimensions',dimensions)
             if not isinstance(proposed_actions,list) or not proposed_actions or any(item not in TOOLS for item in proposed_actions) or len(proposed_actions)>6:raise ValueError('invalid_plan')
             if not isinstance(proposed_dimensions,list) or any(item not in comparison.DIMENSIONS for item in proposed_dimensions) or not 1<=len(proposed_dimensions)<=4:raise ValueError('invalid_dimensions')
-            actions=list(dict.fromkeys(['evidence']+proposed_actions));dimensions=proposed_dimensions;mode='model_proposal'
+            blocked=blocked_actions(body.goal)
+            if set(actions)-set(proposed_actions):warnings.append('模型建议遗漏了可识别的意图输出，已保留这些请求。')
+            actions=[action for action in dict.fromkeys(actions+proposed_actions) if action not in blocked];dimensions=list(dict.fromkeys(dimensions+proposed_dimensions))[:4];mode='model_proposal'
+            if blocked.intersection(proposed_actions):warnings.append('模型建议包含意图中明确排除的工具，已移除。')
         except (httpx.HTTPError,ValueError,TypeError,KeyError,IndexError):
             warnings.append('模型规划未返回有效受控计划，已明确降级到规则规划。')
     if body.actions:actions=list(dict.fromkeys(['evidence']+body.actions))
+    if body.actions and body.planner=='model':warnings.append('已使用手动输出选择，本次没有调用模型规划。')
     if body.dimensions:dimensions=list(dict.fromkeys(body.dimensions))
     if any(key not in comparison.DIMENSIONS for key in dimensions):raise HTTPException(422,'不支持的比较维度')
     actions=[action for action in TOOLS if action in actions]
@@ -102,12 +117,15 @@ async def plan(body:PlanRequest):
         steps.append({'id':action,'tool':action,**TOOLS[action],'depends_on':[] if index==0 else [actions[index-1]],
                       'status':'waiting','attempts':0,'artifact_id':str(uuid.uuid5(uuid.UUID(identity),action)),'result':None})
     task={'id':identity,'goal':body.goal,'status':'planned','control':None,'created_at':now,'updated_at':now,'revision':1,
-          'planner_mode':mode,'engine':'bounded-sqlite-state-machine-v1','use_model':body.use_model,
-          'model_identity':model_client.identity() if body.use_model else None,'planner_model_calls':1 if body.planner=='model' else 0,
+          'planner_mode':mode,'engine':'bounded-feedback-state-machine-v2','use_model':body.use_model,
+          'model_identity':model_client.identity() if body.use_model else None,'planner_model_calls':1 if body.planner=='model' and not body.actions else 0,
+          'recovery_policy':body.recovery_policy,'max_replans':body.max_replans,'execution_model_disabled':False,
+          'policy_version':policy.VERSION,'plan_history':[],
           'sources':[{'document_id':document['id'],'parse_run_id':document['parse_run_id'],'title':document['title'],'filename':document['filename'],'sha256':document['sha256'],'version_label':document.get('version_label')} for document in docs],
           'dimensions':dimensions,'steps':steps,'warnings':warnings,'gaps':gaps,'events':[],
           'budgets':{key:getattr(body,key) for key in ['max_tool_calls','max_model_calls','max_output_tokens','max_active_seconds']},
           'usage':{'tool_calls':0,'active_seconds':0.,'model':model_client.CallBudget(0,0).snapshot()},'query_expansions':0}
+    policy.snapshot(task,'initial_plan')
     repo.event(task,'计划已创建',f'{len(steps)} 个步骤；仅使用选定版本，尚未执行。')
     try:repo.create(task)
     except ValueError:raise HTTPException(409,'规划期间来源已删除')
@@ -151,11 +169,11 @@ async def control(identity:str,body:Control):
             payload['control']='pause';payload['status']='pause_requested' if status in {'running','pause_requested'} else 'paused'
         else:
             if status not in {'planned','paused','failed','budget_exhausted'}:raise ValueError('invalid_state')
-            if payload['use_model'] and (not model_client.configuration()['ready'] or payload['model_identity']!=model_client.identity()):raise ValueError('model_changed')
+            if payload['use_model'] and not payload.get('execution_model_disabled') and (not model_client.configuration()['ready'] or payload['model_identity']!=model_client.identity()):raise ValueError('model_changed')
             for key in payload['budgets']:
                 if getattr(body,key,None) is not None:payload['budgets'][key]=getattr(body,key)
             for step in payload['steps']:
-                if step['status']=='failed':step['status']='waiting'
+                if step['status']=='failed' and not step.get('resolved_by'):step['status']='waiting'
             payload['control']=None;payload['status']='queued'
         repo.event(payload,{'start':'任务排队','resume':'继续任务','pause':'请求在步骤边界暂停','cancel':'取消任务'}[body.action])
     try:value=repo.mutate(identity,change,body.expected_revision)
@@ -200,7 +218,7 @@ def scope(payload):
 async def retrieve(payload,supplement=False):
     documents=scope(payload)
     if supplement:
-        first=next((step['result'] for step in payload['steps'] if step['id']=='evidence'),None) or {}
+        first=next((step['result'] for step in payload['steps'] if step['tool']=='evidence' and step['status']=='completed' and step.get('result')),None) or {}
         documents=[document for document in documents if document['id'] in first.get('uncovered_documents',[])]
     use_dimension_queries=supplement or any(step['tool']=='comparison' for step in payload['steps'])
     question=payload['goal']+(' '+ ' '.join(comparison.DIMENSIONS[key]['query'] for key in payload['dimensions']) if use_dimension_queries else '')
@@ -210,8 +228,9 @@ async def retrieve(payload,supplement=False):
             'retrieval':retrieval,'answer':'原文候选证据，尚未形成语义核验后的回答。'}
     if payload['use_model'] and evidence:
         try:proposed=await qa._generate(payload['goal'],evidence)
-        except ValueError as error:
-            if str(error)!='model_budget_exhausted':raise
+        except (httpx.HTTPError,ValueError) as error:
+            if not isinstance(error,ValueError) or str(error)!='model_budget_exhausted':
+                raise policy.ModelStepFailure(result,error) from error
             result['model_error']='budget_exhausted'
             return result
         result['claims']=qa._validate_claims(proposed,evidence);result['mode']='llm'
@@ -222,6 +241,10 @@ async def retrieve(payload,supplement=False):
 
 
 async def execute(payload,step):
+    if step.get('recovery_for'):
+        failed=next(item for item in payload['steps'] if item['id']==step['recovery_for'])
+        result=failed['partial_result']
+        return {**result,'recovery':{'from_step':failed['id'],'mode':'local_only','model_retried':False}}
     sources=payload['sources'];ids=[source['document_id'] for source in sources];runs={source['document_id']:source['parse_run_id'] for source in sources}
     if step['tool']=='evidence':return await retrieve(payload,step['id']=='supplement')
     if step['tool']=='comparison':
@@ -231,20 +254,28 @@ async def execute(payload,step):
     if step['tool']=='review':
         source_graph_id=str(uuid.uuid5(uuid.UUID(payload['id']),'review-source-graph'))
         source_graph=await graph.execute_graph(graph.GraphRequest(document_ids=ids,parse_runs=runs,topic=payload['goal'][:200],resolve_metadata=False),source_graph_id)
+        model_failures=[]
         if payload['use_model']:
             try:
                 result=await insights.execute_review(source_graph['id'],insights.ReviewRequest(),step['artifact_id'])
                 return {**result,'mode':'llm','answer':'\n\n'.join(section['title']+'\n'+'\n'.join(claim['text'] for claim in section['claims']) for section in result['sections'])}
             except HTTPException as error:
-                if error.status_code!=429:raise
+                if error.status_code not in {429,502,503}:raise
+                model_failures.append({'error_code':'model_budget_exhausted' if error.status_code==429 else 'model_provider_or_output_failed','http_status':error.status_code})
+            except (httpx.HTTPError,ValueError) as error:
+                model_failures.append({'error_code':type(error).__name__})
         outline=await run_in_threadpool(graph.outline_payload,source_graph)
-        return {**outline,'mode':'evidence_only','answer':'综述原文提纲；本步未启用模型或已达到预算，尚未生成学术综述。','evidence':[item for section in outline['sections'] for item in section['evidence']]}
+        return {**outline,'mode':'evidence_only','answer':'综述原文提纲；本步未生成学术综述，模型关闭、预算或调用失败见记录。','model_failures':model_failures,'evidence':[item for section in outline['sections'] for item in section['evidence']]}
     if step['tool']=='writing':
         return await run_in_threadpool(studio.build_draft,studio.DraftRequest(idea=payload['goal'],document_ids=ids,parse_runs=runs),artifact_id=step['artifact_id'])
     if step['tool']=='diagram':
-        nodes=[{'id':'N'+str(index),'label':item['label']} for index,item in enumerate(payload['steps']) if item['tool']!='diagram']
+        shown=[item for item in payload['steps'] if item['tool']!='diagram']
+        names={item['id']:'N'+str(index) for index,item in enumerate(shown)}
+        nodes=[{'id':names[item['id']],'label':item['label']} for item in shown]
+        edges=[{'source':names[dependency],'target':names[item['id']]} for item in shown for dependency in item['depends_on'] if dependency in names]
+        edges += [{'source':names[item['recovery_for']],'target':names[item['id']]} for item in shown if item.get('recovery_for') in names]
         if len(nodes)<2:nodes=[{'id':'N0','label':'选定版本文献'},{'id':'N1','label':'检索与人工核验'}]
-        edges=[{'source':nodes[index]['id'],'target':nodes[index+1]['id']} for index in range(len(nodes)-1)]
+        if not edges:edges=[{'source':nodes[index]['id'],'target':nodes[index+1]['id']} for index in range(len(nodes)-1)]
         return await run_in_threadpool(studio.render_asset,'diagram',{'title':'研究任务流程 · 设计草图','nodes':nodes,'edges':edges},artifact_id=step['artifact_id'])
     raise ValueError('tool_not_allowed')
 
@@ -254,11 +285,15 @@ def validate_result(payload,result):
     evidence=list(result.get('evidence',[]))
     for row in result.get('rows',[]):
         for cell in row['cells']:evidence+=cell['evidence']
+    indexes={}
     for item in evidence:
         if sources.get(item['document_id'])!=item.get('parse_run_id'):raise ValueError('source_scope_changed')
-        structure=store.get_structure(item['document_id'],parse_run_id=item['parse_run_id'])
-        block=next((block for block in (structure or {}).get('blocks',[]) if block['id']==item['block_id']),None)
-        if not block or block['text']!=item['text'] or block['bbox']!=item['bbox']:raise ValueError('anchor_mismatch')
+        key=(item['document_id'],item['parse_run_id'])
+        if key not in indexes:
+            structure=store.get_structure(item['document_id'],parse_run_id=item['parse_run_id'])
+            indexes[key]={block['id']:block for block in (structure or {}).get('blocks',[])}
+        block=indexes[key].get(item['block_id'])
+        if not block or any(block[field]!=item[field] for field in ('text','bbox','page')):raise ValueError('anchor_mismatch')
 
 
 async def run(identity):
@@ -270,15 +305,23 @@ async def run(identity):
             if current['control'] in {'pause','cancel'}:
                 repo.mutate(identity,lambda payload:payload.update(status='paused' if payload['control']=='pause' else 'cancelled'))
                 return
+            if current['status']!='running':return
             step=next((step for step in current['steps'] if step['status']=='waiting'),None)
             if not step:
                 repo.mutate(identity,lambda payload:payload.update(status='completed_with_gaps' if payload['gaps'] else 'completed'))
+                return
+            states={item['id']:item['status'] for item in current['steps']}
+            if any(states.get(dependency)!='completed' for dependency in step['depends_on']):
+                def blocked(payload):
+                    payload['status']='failed'
+                    repo.event(payload,'步骤依赖未满足','停止执行，未跳过未完成依赖或调用后续工具。')
+                repo.mutate(identity,blocked)
                 return
             if current['usage']['tool_calls']>=current['budgets']['max_tool_calls'] or current['usage']['active_seconds']>=current['budgets']['max_active_seconds']:
                 def exhausted(payload):
                     payload['status']='budget_exhausted';repo.event(payload,'到达执行预算','保留完成产物；如需继续，明确调整预算后恢复。')
                 repo.mutate(identity,exhausted);return
-            if current['use_model'] and current['model_identity']!=model_client.identity():raise ValueError('model_changed')
+            if current['use_model'] and not current.get('execution_model_disabled') and current['model_identity']!=model_client.identity():raise ValueError('model_changed')
             def begin(payload):
                 if payload['control']:return
                 target=next(item for item in payload['steps'] if item['id']==step['id'])
@@ -293,15 +336,31 @@ async def run(identity):
             def observe(values):repo.mutate(identity,lambda payload:payload['usage'].update(model=values))
             budget.observer=observe
             try:
-                with model_client.metered(budget):result=await execute(current,step)
+                effective={**current,'use_model':current['use_model'] and not current.get('execution_model_disabled',False) and step.get('model_allowed',True)}
+                with model_client.metered(budget):result=await execute(effective,step)
                 await run_in_threadpool(validate_result,current,result)
             except asyncio.CancelledError:
                 raise
             except Exception as error:
+                if isinstance(error,policy.ModelStepFailure):
+                    await run_in_threadpool(validate_result,current,error.partial_result)
+                    def recover(payload):
+                        payload['usage']['active_seconds']+=round(time.monotonic()-started,3)
+                        payload['usage']['model']=budget.snapshot()
+                        if policy.recover_model_failure(payload,step['id'],error.partial_result,error.error_code):
+                            repo.event(payload,'调整计划：转本地恢复','失败尝试保留；后续不再发出模型请求。')
+                        else:
+                            target=next(item for item in payload['steps'] if item['id']==step['id'])
+                            target.update(status='failed',error_code=error.error_code,partial_result=error.partial_result)
+                            payload['status']='failed';repo.event(payload,'恢复策略未允许调整','已停止，保留原文与失败尝试。')
+                    recovered=repo.mutate(identity,recover)
+                    if recovered['status']=='running':continue
+                    return
                 def failed(payload):
                     target=next(item for item in payload['steps'] if item['id']==step['id'])
                     target.update(status='failed',error_code=type(error).__name__)
                     payload['usage']['active_seconds']+=round(time.monotonic()-started,3)
+                    payload['usage']['model']=budget.snapshot()
                     payload['status']='failed';repo.event(payload,'步骤失败：'+step['label'],'保留既有产物；错误响应正文和密钥不会显示。')
                 repo.mutate(identity,failed);return
             def complete(payload):
@@ -310,14 +369,26 @@ async def run(identity):
                 target.pop('error_code',None)
                 payload['usage']['active_seconds']+=round(time.monotonic()-started,3)
                 payload['usage']['model']=budget.snapshot()
+                if step.get('recovery_for'):
+                    parent=next(item for item in payload['steps'] if item['id']==step['recovery_for'])
+                    parent['recovery_status']='local_completed'
                 if budget.exhausted and '达到模型请求/输出预留预算，部分步骤仅保留原文候选。' not in payload['gaps']:payload['gaps'].append('达到模型请求/输出预留预算，部分步骤仅保留原文候选。')
                 repo.event(payload,'完成：'+step['label'])
-                if step['tool']=='evidence' and result.get('uncovered_documents') and payload['query_expansions']==0:
+                if budget.exhausted or result.get('model_failures'):
+                    if policy.disable_after_degradation(payload,'model_budget_or_tool_degradation'):
+                        repo.event(payload,'调整计划：后续仅用本地工具','不增加模型额度，不自动重试。')
+                    elif result.get('model_failures') and not payload.get('execution_model_disabled'):
+                        payload['status']='failed';payload['gaps'].append('模型工具已降级；策略或调整次数不允许继续重排，后续步骤停止。')
+                        repo.event(payload,'模型降级后停止','当前产物保留，后续工具未自动执行。')
+                if step['tool']=='evidence' and result.get('uncovered_documents') and payload['query_expansions']==0 and ('plan_history' not in payload or policy.allowed(payload)):
                     position=payload['steps'].index(target)+1
                     payload['steps'].insert(position,{'id':'supplement','tool':'evidence','label':'补检索缺失文献','role':'证据检索','hint':'按所选维度拓宽关键词，相关性仍需核对','depends_on':[step['id']],'status':'waiting','attempts':0,'artifact_id':str(uuid.uuid5(uuid.UUID(identity),'supplement')),'result':None})
+                    for later in payload['steps'][position+1:]:
+                        later['depends_on']=['supplement' if dependency==step['id'] else dependency for dependency in later['depends_on']]
+                    if 'plan_history' in payload:policy.snapshot(payload,'missing_documents','插入一次缺失文献补检索，仍使用原来源与总预算。')
                     payload['query_expansions']=1;repo.event(payload,'增加一次补检索','部分所选文献没有命中；最多补检索一轮，仍受总调用预算约束。')
                 elif step['tool']=='evidence' and result.get('uncovered_documents'):
-                    payload['gaps'].append('补检索后仍有文献无命中；检索不到不证明原文未报告。')
+                    payload['gaps'].append('仍有文献无命中；未再自动补检索，检索不到不证明原文未报告。')
             repo.mutate(identity,complete)
     except asyncio.CancelledError:
         try:
@@ -331,7 +402,12 @@ async def run(identity):
         raise
     except (ValueError,HTTPException):
         if repo.get(identity):
-            repo.mutate(identity,lambda payload:payload.update(status='failed'))
+            def invalid(payload):
+                payload['status']='failed'
+                for step in payload['steps']:
+                    if step['status']=='running':step.update(status='failed',error_code='source_or_model_scope_changed')
+                repo.event(payload,'来源或执行范围校验未通过','停止执行，不以本地恢复绕过来源检查。')
+            repo.mutate(identity,invalid)
 
 
 def markdown(payload):
@@ -340,11 +416,16 @@ def markdown(payload):
     lines += [f'- {source["title"]} / {source["filename"]} / {source["parse_run_id"]} / SHA-256 {source["sha256"]}' for source in payload['sources']]
     for step in payload['steps']:
         lines+=['','## '+step['label'],f'状态：{step["status"]}；调用尝试：{step["attempts"]}。']
+        if step.get('resolved_by'):lines+=['失败尝试保留；本地替代步骤：'+step['resolved_by']+'。']
         result=step.get('result') or {}
         if step['tool'] in {'evidence','review'}:
             lines+=['',result.get('answer','')]
             for item in result.get('evidence',[]):lines += ['',f'原文候选 / {item["title"]} / PDF 第 {item["page"]} 页 / {item["parse_run_id"]} / {item["block_id"]}',item['text']]
         elif result:lines+=['',f'受控产物 ID：{result.get("id",step["artifact_id"])}；类型：{step["tool"]}。']
+    lines+=['','## 计划版本与反馈','']
+    for version in payload.get('plan_history',[]):
+        lines += [f"- v{version['version']} / {version['reason']} / {version['detail']}",
+                  '  步骤：'+' → '.join(step['id'] for step in version['steps'])]
     lines+=['','## 待核验项','']+['- '+gap for gap in dict.fromkeys(payload['gaps']+payload['warnings'])]
     lines+=['','## 预算与记录','',json.dumps(payload['usage'],ensure_ascii=False), '']
     lines += [f'{event["time"]} · {event["label"]} · {event["detail"]}' for event in payload['events']]
@@ -360,6 +441,7 @@ def export(identity:str,format:Literal['markdown','json','bundle']='bundle'):
     with zipfile.ZipFile(stream,'w',zipfile.ZIP_DEFLATED) as archive:
         archive.writestr('task.md',markdown(payload))
         archive.writestr('task.json',json.dumps(payload,ensure_ascii=False,indent=2))
+        archive.writestr('plan-history.json',json.dumps(payload.get('plan_history',[]),ensure_ascii=False,indent=2))
         for step in payload['steps']:
             if not (result:=step.get('result')):continue
             if step['tool']=='comparison':archive.writestr('comparison.md',comparison.export_comparison(result['id']).body)
