@@ -6,7 +6,7 @@
     {"id":"M1-UPLOAD","required":true,"state":"verified","requirement":"单篇/批量PDF管理与持久化","current":"已实现并以官方/合成PDF测试","proof_paths":["docs/STAGE1_TEST_REPORT.md","docs/STAGE13_TEST_REPORT.md"]},
     {"id":"M1-VERSION","required":true,"state":"partial","requirement":"基于内容的语义去重和版本建议","current":"哈希、元数据和内容重合基线可用；语义身份泛化及版本差异质量不足","proof_paths":["docs/STAGE1_TEST_REPORT.md"]},
     {"id":"M1-OCR","required":true,"state":"verified","requirement":"官方扫描件可解析和定位","current":"15页真实OCR及原图回跳已验证；质量分数不当准确率","proof_paths":["docs/STAGE2_TEST_REPORT.md"]},
-    {"id":"M1-LONG","required":true,"state":"partial","requirement":"541页长书分块、索引及资源鲁棒性","current":"原生解析已跑通；完整索引、资源与并发验收不足","proof_paths":["docs/STAGE1_TEST_REPORT.md"]},
+    {"id":"M1-LONG","required":true,"state":"verified","requirement":"541页长书分块、索引及资源鲁棒性","current":"541页快照分块、5867片段经恢复建库、跨进程复用/按页加载/4路读取/锚点/进程工作集已实测；首次冷索引软时间目标未过，性能边界保留","proof_paths":["docs/STAGE1_TEST_REPORT.md","docs/STAGE22_TEST_REPORT.md"]},
     {"id":"M1-STRUCTURE","required":true,"state":"partial","requirement":"作者机构、层级树、图表与参考文献结构化","current":"目录、块与原生表格行列重建/手工修订可用；机构、扫描表格及复杂图表结构仍不完整","proof_paths":["docs/STAGE2_TEST_REPORT.md","docs/STAGE19_TEST_REPORT.md"]},
     {"id":"M1-FORMULA","required":true,"state":"partial","requirement":"公式LaTeX细粒度抽取","current":"原生字形/坐标转写候选、原图与手工历史可用；扫描公式只支持原图手工路径，复杂公式及识别质量未全面验收","proof_paths":["docs/STAGE18_TEST_REPORT.md"]},
     {"id":"M2-TRACE","required":true,"state":"verified","requirement":"回答引用回到确切版本和原文位置","current":"文件/ParseRun/原块及原生格位置绑定，问答/比较历史的来源与字符范围失效检查","proof_paths":["docs/STAGE11_TEST_REPORT.md","docs/STAGE20_TEST_REPORT.md","docs/STAGE21_TEST_REPORT.md"]},
