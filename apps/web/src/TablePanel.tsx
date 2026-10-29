@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { postJSON, request } from './api';
 import './tables.css';
+import type { TableReference } from './types';
 
 type Box = [number,number,number,number];
 interface Cell { row:number; column:number; text:string|null; bbox:Box; row_span:number; covered_by:number[]|null; }
-interface Source { id:string; anchor?:{id:string}|null; requested_column_cuts:number[]|null; bbox:Box; crop_bbox:Box; header_bottom:number; grid:{status:string; columns:{label:string}[]; rows:(string|null)[][]; cells:Cell[]; cuts?:number[]; row_edges?:number[]; warnings:string[]; unassigned:{row:number;text:string;reason:string}[]}; }
+interface Source { id:string; document_id:string; parse_run_id:string; page:number; anchor?:{id:string}|null; requested_column_cuts:number[]|null; bbox:Box; crop_bbox:Box; header_bottom:number; grid:{status:string; columns:{label:string}[]; rows:(string|null)[][]; cells:Cell[]; cuts?:number[]; row_edges?:number[]; warnings:string[]; unassigned:{row:number;text:string;reason:string}[]}; }
 interface Revision { id:string; rows:(string|null)[][]; labels:string[]; note:string; created_at:string; }
 interface Option { block_id:string; bbox:Box; header_bottom:number; row_count:number; col_count:number; }
-interface Props { documentId:string; runId:string; page:number; readOnly:boolean; onSource:(bbox:Box,label:string)=>void; }
+interface Props { documentId:string; runId:string; page:number; readOnly:boolean; title:string; onUse:(reference:TableReference)=>void; onSource:(bbox:Box,label:string)=>void; }
 
-export default function TablePanel({documentId,runId,page,readOnly,onSource}:Props) {
+export default function TablePanel({documentId,runId,page,readOnly,title,onUse,onSource}:Props) {
   const [options,setOptions]=useState<Option[]>([]),[anchor,setAnchor]=useState('');
   const [box,setBox]=useState(['','','','']),[header,setHeader]=useState(''),[cuts,setCuts]=useState('');
   const [source,setSource]=useState<Source|null>(null),[sources,setSources]=useState<{id:string;created_at:string}[]>([]);
@@ -45,6 +46,9 @@ export default function TablePanel({documentId,runId,page,readOnly,onSource}:Pro
   }
   function changeCell(value:string|null){if(selected)setRows(old=>old.map((row,i)=>i===selected.row?row.map((v,j)=>j===selected.column?value:v):row));}
   const c=source?.crop_bbox;const sx=(x:number)=>c?(x-c[0])/(c[2]-c[0])*1000:0;const sy=(y:number)=>c?(y-c[1])/(c[3]-c[1])*1000:0;
+  const savedRows=current?.rows||source?.grid.rows;const savedLabels=current?.labels||source?.grid.columns.map(c=>c.label);
+  const dirty=JSON.stringify(rows)!==JSON.stringify(savedRows)||JSON.stringify(labels)!==JSON.stringify(savedLabels);
+  function useForQA(onlySelected:boolean){if(!source||dirty)return;onUse({source_id:source.id,revision_id:current?.id||null,document_id:source.document_id,parse_run_id:source.parse_run_id,title,page:source.page,row_indices:onlySelected&&selected?[selected.row]:null});}
   const exported=source?`/api/table-regions/${source.id}/export?format=`:'';const revisionParam=current?`&revision_id=${current.id}`:'';
   return <section className="table-panel" aria-label="表格重建与修订"><h3>表格原图与行列核对</h3><p>第{page}页 · 按表头和原生文字位置重建候选，不调用大模型。空白不会自动填成上一行值。</p>
     <label>已有表格候选<select aria-label="已有表格候选" value={anchor} disabled={busy||readOnly} onChange={e=>{clear();setAnchor(e.target.value);const o=options.find(o=>o.block_id===e.target.value);if(o){setBox(o.bbox.map(v=>(v*100).toFixed(4)));setHeader((o.header_bottom*100).toFixed(4));setCuts('');}}}><option value="">手动指定区域</option>{options.map((o,i)=><option key={o.block_id} value={o.block_id}>候选{i+1} · 原提取{o.row_count}行×{o.col_count}列</option>)}</select></label>
@@ -58,7 +62,7 @@ export default function TablePanel({documentId,runId,page,readOnly,onSource}:Pro
       {selected&&<div className="table-cell-editor"><strong>第{selected.row+1}行 · 第{selected.column+1}列{selected.row_span>1&&` · 跨${selected.row_span}行`}</strong><textarea aria-label="选中表格单元格" value={rows[selected.row][selected.column]??''} maxLength={1000} disabled={busy||readOnly} onChange={e=>changeCell(e.target.value)}/><label><input type="checkbox" checked={rows[selected.row][selected.column]===null} disabled={busy||readOnly} onChange={e=>changeCell(e.target.checked?null:'')}/>此位置未提取值</label><button onClick={()=>onSource(selected.bbox,`表格第${selected.row+1}行第${selected.column+1}列`)}>原页定位所选单元格</button><small>这里显示原候选的坐标；手工改值仍需独立核对，不会自动成为原文证据。</small></div>}
       <label>修订说明<input aria-label="表格修订说明" value={note} maxLength={500} disabled={busy||readOnly} onChange={e=>setNote(e.target.value)}/></label><button disabled={busy||readOnly||!note.trim()||labels.some(l=>!l.trim())} onClick={()=>void act('save')}>另存表格修订（保留原候选）</button>
       {history.length>0&&<select aria-label="表格修订历史" disabled={busy} value={current?.id||''} onChange={e=>{const r=history.find(r=>r.id===e.target.value)||null;setCurrent(r);setRows(r?.rows||source.grid.rows);setLabels(r?.labels||source.grid.columns.map(c=>c.label));setNote('');setSelected(null);}}><option value="">原始重建候选</option>{history.map(r=><option value={r.id} key={r.id}>{new Date(r.created_at).toLocaleString('zh-CN')} · 手工修订</option>)}</select>}{current&&<p>手工修订 · 未独立核验：{current.note}</p>}
-      <div className="table-exports"><a href={exported+'csv'+revisionParam}>导出CSV</a><a href={exported+'json'+revisionParam}>导出完整来源JSON</a></div><small>CSV不保留跨行、未提取值与手工空值的区别，请同时保存来源JSON。修订仅用于此核对区，尚未写回原解析或问答索引。</small></>:<p>未获得原生文字表格。本轮不执行扫描表格OCR，也不从图片猜测单元格。</p>}
+      <button disabled={busy||readOnly||dirty} onClick={()=>useForQA(false)}>整表加入问答核对</button><button disabled={busy||readOnly||dirty||!selected} onClick={()=>useForQA(true)}>仅所选行加入问答</button><small>只加入已保存版本。原生候选参与检索；手工改动独立对照，不发送给模型。{dirty&&'请先保存改动或切回原候选。'}</small><div className="table-exports"><a href={exported+'csv'+revisionParam}>导出CSV</a><a href={exported+'json'+revisionParam}>导出完整来源JSON</a></div><small>CSV不保留跨行、未提取值与手工空值的区别，请同时保存来源JSON。可将已保存版本加入本次问答；原解析不被覆盖，手工改动不作为论文事实依据。</small></>:<p>未获得原生文字表格。本轮不执行扫描表格OCR，也不从图片猜测单元格。</p>}
     </>}
   </section>;
 }

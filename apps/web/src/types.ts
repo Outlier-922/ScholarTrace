@@ -73,6 +73,13 @@ export interface Evidence {
   score: number;
   extraction?: string;
   confidence?: number;
+  source_kind?: 'table_cell' | 'table_draft';
+  table_cell?: {source_id:string; revision_id:null; row:number; column:number; column_label:string; value:string; origin:string};
+}
+
+export interface TableReference { source_id:string; revision_id:string|null; document_id:string; parse_run_id:string; title:string; page:number; row_indices:number[]|null; }
+export interface TableDraft extends Evidence {
+  table_draft:{source_id:string;revision_id:string;row:number;changes:{column:number;label:string;before:string|null;after:string|null;bbox:number[]}[];header_changes:{column:number;before:string;after:string}[];note:string;sent_to_model:false};
 }
 
 export interface AnswerResult {
@@ -83,9 +90,11 @@ export interface AnswerResult {
   missing_information: string[];
   steps: { label: string; status: string; detail: string }[];
   warnings: string[];
+  table_drafts?:TableDraft[];
+  table_context?:{source_id:string;revision_id:string|null;document_id:string;parse_run_id:string;row_indices:number[]|null;available:boolean}[];
   answer_coverage?: { document_id: string; title: string; field: string; label: string; status: string; evidence_ids: string[] }[];
   retrieval?: {
-    mode: 'bm25_dense_rrf' | 'bm25' | 'mixed';
+    mode: 'bm25_dense_rrf' | 'bm25' | 'mixed' | 'table_bm25' | 'mixed_tables';
     index_required?: { document_id: string; parse_run_id: string; missing_chunks: number }[];
     enabled?: boolean;
     ready?: boolean;

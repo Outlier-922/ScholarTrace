@@ -21,7 +21,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import semantic, store, source_scope, answer_fields
+from . import semantic, store, source_scope, answer_fields, table_qa
 from starlette.concurrency import run_in_threadpool
 
 router = APIRouter(prefix="/api", tags=["evidence"])
@@ -75,6 +75,8 @@ class AskRequest(BaseModel):
     limit: int = Field(default=6, ge=1, le=12)
     parse_runs: dict[str,str] = Field(default_factory=dict,max_length=30)
     use_model: bool = True
+    table_sources:list[table_qa.Selection]=Field(default_factory=list,max_length=6)
+    table_only:bool=False
 
 
 def _tokens(text: str, *, query: bool = False) -> list[str]:
@@ -367,6 +369,16 @@ def _validate_claims(payload: dict[str, Any], evidence: list[dict[str, Any]]) ->
         original_numbers = set(re.findall(r"(?<![\w])\d+(?:\.\d+)?(?:e[-+]?\d+)?", supporting_text, re.I))
         if any(number not in original_numbers for number in numbers):
             continue
+        table_items=[sources[i] for i in ids if sources[i].get('source_kind')=='table_cell']
+        if table_items:
+            # Compile the actual row/column/value, never relabel a model-invented
+            # narrative as a source fact. Mixed prose/table claims must be split.
+            if len(table_items)!=1 or len(ids)!=1 or table_items[0]['table_cell']['value'] not in text:continue
+            for item in table_items:
+                compiled={'text':item['text'],'evidence_ids':[item['id']],'status':'table_candidate',
+                          'table_cell':item['table_cell'],'semantic_verified':False}
+                if compiled not in verified:verified.append(compiled)
+            continue
         value={"text": text.strip(), "evidence_ids": list(dict.fromkeys(ids)), "status": "source_checked"}
         if isinstance(claim.get('field'),str) and claim['field'] in answer_fields.FIELDS and claim.get('document_id') and all(sources[identity].get('document_id')==claim['document_id'] for identity in ids):
             value.update(field=claim['field'],document_id=claim['document_id'])
@@ -396,8 +408,12 @@ async def _generate(question: str, evidence: list[dict[str, Any]]) -> dict[str, 
         "\"missing_information\":[\"缺失项\"]}。无依据时claims为空。"
     )
     system += '文本中的^{...}保留PDF上标位置，可能是幂、单位或脚注；不要把上标拼成普通整数。章节路径用于定位条件。除非问题要求公式，不输出公式；不完整公式不能当作已恢复的公式。'
+    has_table=any(item.get('source_kind')=='table_cell' for item in evidence)
+    if has_table:system += 'table_cell为原生表格重建候选；每条陈述只引用一个格，保留行上下文、列名、值，不推断空白或合并值。表格与段落陈述分开，表格陈述最终按来源重建，不能用额外叙述改变行列归属。'
     source_payload = [{"id": item["id"], "document_id":item.get('document_id','unknown'),"title": item["title"], "page": item["page"],
                        "section_path":item.get('section_path',[]),"text": model_source_text(item)[:3500]} for item in evidence]
+    if has_table:
+        for original,prepared in zip(evidence,source_payload):prepared['source_kind']=original.get('source_kind','original_block')
     keys=answer_fields.requested(question)
     payload={"question":question,"evidence":source_payload}
     if keys:
@@ -424,20 +440,26 @@ def _save_run(result: dict[str, Any], question: str, document_ids: list[str]) ->
 def _filter_deleted_sources(result: dict[str, Any], document_ids: list[str]) -> None:
     """Recheck after model awaits, not just when reading a historical run."""
     deleted = {identity for identity in document_ids if not store.get_document(identity)}
-    if not deleted:
-        return
-    result["evidence"] = [item for item in result.get("evidence", []) if item["document_id"] not in deleted]
+    previous=result.get('evidence',[])
+    invalid_table={item['id'] for item in previous if not table_qa.valid_evidence(item)}
+    draft_values=result.get('table_drafts',[])
+    valid_drafts=[v for v in draft_values if v['document_id'] not in deleted and table_qa.valid_evidence(v)]
+    if not deleted and not invalid_table and len(valid_drafts)==len(draft_values):return
+    result['table_drafts']=valid_drafts
+    result["evidence"] = [item for item in previous if item["document_id"] not in deleted and item['id'] not in invalid_table]
+    for reference in result.get('table_context',[]):
+        if reference['document_id'] in deleted or not table_qa.repo.get(reference['source_id']) or reference.get('revision_id') and not table_qa.repo.get(reference['revision_id']):reference['available']=False
     valid_ids = {item["id"] for item in result["evidence"]}
     result["claims"] = [claim for claim in result.get("claims", []) if all(identity in valid_ids for identity in claim["evidence_ids"])]
     for cell in result.get('answer_coverage',[]):
-        if cell['document_id'] in deleted:
+        if cell['document_id'] in deleted or any(identity in invalid_table for identity in cell.get('evidence_ids',[])):
             cell.update(status='source_unavailable',evidence_ids=[])
     if result["claims"]:
         result["answer"] = format_answer(result['claims'],result['evidence'])
     else:
-        result["answer"] = "本任务的部分来源已删除，请重新检索。"
+        result["answer"] = "本任务的部分来源已删除，请重新检索。" if deleted else "表格来源状态已变化，请重新检索；以下仅保留仍可核对的候选。"
         result["mode"] = "evidence_only"
-    warning = "历史来源已删除，已移除失效证据和依赖这些来源的陈述。"
+    warning = "历史来源已删除，已移除失效证据和依赖这些来源的陈述。" if deleted else "表格来源或手工版本已失效，已移除相关候选和陈述。"
     if warning not in result["warnings"]:
         result["warnings"].append(warning)
 
@@ -459,16 +481,38 @@ async def ask(request: AskRequest) -> dict[str, Any]:
     else:
         documents = all_documents
     documents = [item for item in documents if item.get("status") in ("ready", "partial")]
-    documents = source_scope.pin(documents,request.parse_runs)
+    if request.table_only and not request.table_sources:raise HTTPException(422,'仅表格检索需要先选择表格来源。')
+    selected_tables,pinned_runs=table_qa.resolve(request.table_sources,documents,request.parse_runs)
+    documents = source_scope.pin(documents,pinned_runs)
     retrieval_details: dict[str, Any] = {}
-    evidence = await run_in_threadpool(_retrieve_question, question, documents, request.limit, retrieval_details)
+    evidence=[]
+    if not request.table_only:
+        evidence = await run_in_threadpool(_retrieve_question, question, documents, request.limit, retrieval_details)
+    drafts=[]
+    if selected_tables:
+        table_hits,drafts,table_details=await run_in_threadpool(table_qa.retrieve,question,selected_tables,documents,request.limit,_tokens)
+        if request.table_only:
+            evidence=table_hits;retrieval_details=table_details
+        else:
+            combined=[]
+            for index in range(request.limit):
+                for pool in (table_hits,evidence):
+                    if index<len(pool) and pool[index]['id'] not in {v['id'] for v in combined}:combined.append(pool[index])
+                    if len(combined)>=request.limit:break
+                if len(combined)>=request.limit:break
+            evidence=combined
+            retrieval_details={**retrieval_details,'mode':'mixed_tables','table_retrieval':table_details}
+
     retrieval_mode = retrieval_details.get('mode') or ("bm25_dense_rrf" if retrieval_details.get("used") else "bm25")
     warnings = ["已使用 BM25 + 多语言语义向量 + RRF 融合；重排与完整语义支持核验尚待完善。" if retrieval_details.get("used") else "当前使用 BM25 检索；语义模型未启用、未准备或该文献尚需预索引。"]
+    if request.table_only:warnings=['本次仅检索固定版本的原生表格候选，未执行全文或语义索引检索。']
     if retrieval_details.get("reason") and not retrieval_details.get("used"):
         warnings.append(retrieval_details["reason"])
     if retrieval_mode=='mixed':warnings.append('所选论文使用了不同检索路径：部分语义融合，部分BM25；可为待索引论文显式准备语义索引。')
     if retrieval_details.get('field_queries_truncated'):warnings.append('已达到12次本地字段补检索上限，部分字段未单独补检索；请缩小范围后核对。')
     if len(answer_fields.requested(question,limit=None))>8:warnings.append('本次仅识别前8类字段，请拆分较长问题逐项核对。')
+    if selected_tables:
+        warnings.append('所选表格固定到具体解析版本；原生行列仍为未核验候选。手工稿仅对照，不发送模型、不作为论文证据。')
     if any(model_source_text(item)!=item['text'] for item in evidence):
         warnings.append('部分来源含PDF上标；模型输入保留^{...}版式表示，摘录与坐标仍使用原始内容块，请核对原页。')
     if any(item.get("extraction") == "rapidocr" for item in evidence):
@@ -478,6 +522,7 @@ async def ask(request: AskRequest) -> dict[str, Any]:
         {"label": "检索原文证据", "status": "completed", "detail": f"{'BM25 + Dense + RRF' if retrieval_details.get('used') else 'BM25'} 返回 {len(evidence)} 个原文块，排除参考文献条目"},
         {"label": "检查来源锚点", "status": "completed", "detail": "证据绑定具体文件、内容块、页码和坐标"},
     ]
+    if selected_tables:steps.append({'label':'表格来源与手工稿隔离','status':'completed','detail':f'固定{len(selected_tables)}份来源；表格陈述按原生行/列/值编排，{len(drafts)}条手工对照未发送模型。'})
     result: dict[str, Any] = {
         "run_id": str(uuid.uuid4()),
         "mode": "evidence_only",
@@ -489,6 +534,8 @@ async def ask(request: AskRequest) -> dict[str, Any]:
         "warnings": warnings,
         "retrieval": {"mode": retrieval_mode, **retrieval_details},
         "answer_coverage": [],
+        "table_drafts":drafts,
+        "table_context":[{'source_id':v['id'],'revision_id':r['id'] if r else None,'document_id':v['document_id'],'parse_run_id':v['parse_run_id'],'row_indices':rows,'available':True} for v,r,rows in selected_tables],
     }
     if not evidence:
         result["answer"] = "未检索到足以回答这个问题的原文证据。请检查文献范围、解析状态，或换用论文中的关键词。"

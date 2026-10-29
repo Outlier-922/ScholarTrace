@@ -142,7 +142,7 @@ def health() -> dict[str, Any]:
                              "dense_supported": embedding_status["supported"],
                              "dense_enabled": embedding_status["enabled"], "dense_ready": embedding_status["ready"],
                              "structured_tables": importlib.util.find_spec(f"{__package__}.tables") is not None,
-                             "formula_latex": False, "formula_latex_candidates": True, "table_grid_refinement": True, "semantic_tables": False,
+                             "formula_latex": False, "formula_latex_candidates": True, "table_grid_refinement": True, "pinned_table_qa": True, "semantic_tables": False,
                              "citation_graph": True, "evidence_outline": True, "full_translation": False,
                              "grounded_review_draft": True, "future_work_screening": True,
                              "writing_plans": True, "csv_plotting": True, "architecture_diagrams": True,
