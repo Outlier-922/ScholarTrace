@@ -4,7 +4,7 @@ import hashlib
 import json
 import uuid
 
-VERSION = 'bounded-feedback-v1'
+VERSION = 'bounded-feedback-v2'
 
 
 class ModelStepFailure(Exception):
@@ -20,7 +20,7 @@ def snapshot(payload, reason, detail=''):
     record = {'version': version, 'reason': reason, 'detail': detail,
               'source_digest': hashlib.sha256(json.dumps(payload['sources'], sort_keys=True, ensure_ascii=False).encode()).hexdigest(),
               'execution_model_disabled': payload.get('execution_model_disabled', False),
-              'steps': [{key: copy.deepcopy(step[key]) for key in ('id', 'tool', 'depends_on', 'recovery_for', 'model_allowed') if key in step}
+              'steps': [{key: copy.deepcopy(step[key]) for key in ('id', 'tool', 'depends_on', 'recovery_for', 'model_allowed', 'translation_index') if key in step}
                         for step in payload['steps']]}
     history.append(record)
     payload['plan_version'] = version
@@ -35,11 +35,11 @@ def recover_model_failure(payload, step_id, partial_result, error_code):
     if not payload.get('use_model') or payload.get('execution_model_disabled') or payload.get('recovery_policy') != 'local_fallback' or not allowed(payload):
         return False
     target = next(step for step in payload['steps'] if step['id'] == step_id)
-    if target['tool'] != 'evidence' or target.get('recovery_for') or target.get('resolved_by'):
+    if target['tool'] not in {'evidence','translation'} or target.get('recovery_for') or target.get('resolved_by'):
         return False
     recovery_id = 'local-recovery-' + step_id
     target.update(status='failed', error_code=error_code, partial_result=partial_result, resolved_by=recovery_id)
-    recovery = {'id': recovery_id, 'tool': 'evidence', 'label': '保留原文并继续本地流程',
+    recovery = {'id': recovery_id, 'tool': target['tool'], 'label': '保留原文并继续本地流程',
                 'role': '反馈恢复', 'hint': '复用已检索原文；不重发模型请求，后续步骤使用本地工具',
                 'depends_on': list(target['depends_on']), 'status': 'waiting', 'attempts': 0,
                 'artifact_id': str(uuid.uuid5(uuid.UUID(payload['id']), recovery_id)),

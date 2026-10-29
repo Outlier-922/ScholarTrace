@@ -1,0 +1,76 @@
+{
+  "application_version": "0.20.0",
+  "client_date": "2026-10-29",
+  "git_baseline": "e1f42e4",
+  "scope": "One already-observed official DistilBERT paragraph, no paid retries; source-only preview and cached local chain. Not a held-out quality benchmark.",
+  "fingerprint_format": "utf8_lf_text_v1",
+  "external_provider_call_cap": 1,
+  "model_identity": "662343a299fde05d6e5ad412",
+  "source": {
+    "document_id": "doc_d2f494b8a32f4b64999b6da6f74adad7",
+    "filename": "1910.01108v4.pdf",
+    "sha256": "a70c78e2b4db85bfee7696e19829571a3b05f69c616db5c039f6f4eb33b1a0b6",
+    "parse_run_id": "parse_828fd9e7162c4192a1c9ebe64b1ac885",
+    "page": 1,
+    "block_id": "blk_22f3fef0a9a54b94abe8a706ff329e96",
+    "block_sha256": "b5e15f80ed913aaf555945147d2f48f9b16dfa307c90fcca51a3ae954117dde5"
+  },
+  "translation_spec": {
+    "passages": [
+      {
+        "document_id": "doc_d2f494b8a32f4b64999b6da6f74adad7",
+        "parse_run_id": "parse_828fd9e7162c4192a1c9ebe64b1ac885",
+        "page": 1,
+        "block_id": "blk_22f3fef0a9a54b94abe8a706ff329e96"
+      }
+    ],
+    "target_language": "zh",
+    "glossary": {
+      "Transfer Learning": "迁移学习"
+    }
+  },
+  "files": {
+    "backend/app/qa.py": "e9aefe5fe538c8a0e525b63dd12229d40ec9604bd23ff067f3a70206cd167d3e",
+    "backend/app/model_client.py": "5dc193477ebbb9004c9ec430a22aab9afafe15e122073460121391ebcf4b5bdd",
+    "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+    "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+    "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+    "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+    "backend/app/comparison.py": "a67867e14713588a0588fa249d36acc6b3fc7e38075c0079bc631eab3d84e3f3",
+    "backend/app/comparison_quotes.py": "5d279f89dc4267e08db361bb6323d1663d03b8aa72dcab762a631861be7016cb",
+    "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+    "backend/app/answer_fields.py": "0b9c45797acde532b4ba5e35c636256a3677662cf35864506ae25aa42302078a",
+    "backend/app/workflow.py": "1bb175baff387ad35d24caa564ae48df6ed4983bf1da64f8f26b962d1d1a0eae",
+    "backend/app/workflow_policy.py": "42ecf81c6e81fa9bc36f5f3b8ca3d25cb9cc077a05af1d4b620f699d4f5c819e",
+    "backend/app/workflow_translation.py": "17e395d62c709f8e1c208531082696efe052457df2ad0e78f8a23ae7718ee089",
+    "backend/app/demo_access.py": "4943b392af56944f9c69efbe1e7e7a7232bef5b0ac013e2e520355840995a024",
+    "backend/app/main.py": "3272aa2a3ca96fb35749ebafa553979c9003077ce5e7e9f706e80b12bd0c16d6",
+    "backend/app/selection_translation.py": "f7cefe5a0efabfe972e1a3dd318f684269592e1bef44f33144687f40effe07e2",
+    "backend/app/table_qa.py": "fbdc1b170c4f52777d73836ac5be4214c834c1dfba3fa66f07fd17aa23ff1514",
+    "backend/app/table_refinement.py": "02523f6544cc2ae346b51f374b87db79b245dfd7c7ef458bfc9250de1edd0019",
+    "backend/app/table_refine_native.py": "e5305444a3b58a438fa1e8678b94d57a208da599380fb9862d55b7a0c027cb89",
+    "backend/app/table_refine_store.py": "e6ae223521146d211b3e2875e896e27e4263435af8f33ba2ed43cd3a44cf921d",
+    "backend/app/formulas.py": "99da952f880b6235de1a049ea35924e32af2f832075939bc9383404d315934aa",
+    "backend/app/formula_native.py": "6d6387a0ef610990ecd3a97d002c0bcc849a1815a865c8f088af94d2cf675c2d",
+    "backend/app/formula_store.py": "80d04a97a6ac44f4b0c6987009bc7b01a89fc1f3591c4b1e3feb7455f32871c6",
+    "backend/app/evidence_repairs.py": "1647918d7ce84ce7c09342ec298539de7a1f645cc8745483d95578b2f8de62eb",
+    "backend/app/claim_checks.py": "fd26531637ad81ab23d7893299bf6c21fa6fb4b648c0671e18c12b4e778ecf10",
+    "backend/app/insights.py": "2888d73ab304bcd54f457d3d66c90b869e223a8740e8214c6da39eb60c880c75",
+    "backend/app/insight_store.py": "181897369226a29bb5a51ec7838984024c12dec4e304c5b5e85d019eb1485721",
+    "backend/app/graph.py": "62327d844fd86f3365091f2aefebe0fd93d8b17bd9e78cc10f442b930651fc9b",
+    "backend/app/graph_store.py": "eda8d9682f316f71e53241e8f29b4aa2d798284c4752c99f69ac6f75970a45ad",
+    "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+    "scripts/evaluate_qa.py": "d77647f055abb5c4ea3033b28a07c0ae338770205899f228486ca0026e8051ee",
+    "apps/web/src/App.tsx": "defef00e922aaef41674575ee45d85dd7f3c6cfaec42fb25b9d9c4fdfd8fe9c5",
+    "apps/web/src/TaskPanel.tsx": "6f62cd4a90c05f3ca0447bf096cfec4a26fce94074a40df239bf9ae80e03b0cd",
+    "apps/web/src/TaskTranslation.tsx": "2799f9e1f987a0127a50755a9cb95495bf20c5daa7e32c7766443c4ae488f0c8",
+    "apps/web/src/tasks-translation.css": "2dbd415e54df91ae02f0ec2ee2f593de5bab9b75c40055f29d96e8a4c2eee710",
+    "apps/web/src/tasks-feedback.css": "05b7627c64dabef73823ecae4b3d2df287bc6d85571cb643cae9c5fa45f42686",
+    "apps/web/package.json": "053d50c46b3e18c5d9f96e290cbed362542b7ffa05fca775a980330c885e4ce6",
+    "apps/web/pnpm-lock.yaml": "266621f18518b8ba0e59eaf8f01fe43ad010db0210b03002e108b8e35de2d367",
+    "tests/test_workflow_translation.py": "5d144afb31c2dd5857b68699db8d913b20799dcb277d1f6029af20bf26f5a491",
+    "scripts/verify_workflow_translation.py": "96ebbbf1208fdac9c4493ccb45da0c5f3df03e0207dfb5ceba75842abbc6f356"
+  },
+  "predecessor": "evaluation/freeze_stage24_workflow_translation_v1.json",
+  "ui_after_live_change": "Reset glossary validity when reopening the picker; no backend, prompt, source or additional provider request change."
+}
