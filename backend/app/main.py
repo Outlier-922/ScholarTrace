@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI):
     model_status.init_db()
     insight_store.init_db()
     formulas.repo.init_db()
+    table_refinement.repo.init_db()
     if not demo_access.read_only():
         translation.resume_jobs()
         literature.start()
@@ -141,7 +142,7 @@ def health() -> dict[str, Any]:
                              "dense_supported": embedding_status["supported"],
                              "dense_enabled": embedding_status["enabled"], "dense_ready": embedding_status["ready"],
                              "structured_tables": importlib.util.find_spec(f"{__package__}.tables") is not None,
-                             "formula_latex": False, "formula_latex_candidates": True, "semantic_tables": False,
+                             "formula_latex": False, "formula_latex_candidates": True, "table_grid_refinement": True, "semantic_tables": False,
                              "citation_graph": True, "evidence_outline": True, "full_translation": False,
                              "grounded_review_draft": True, "future_work_screening": True,
                              "writing_plans": True, "csv_plotting": True, "architecture_diagrams": True,
@@ -293,6 +294,7 @@ def remove_document(document_id: str) -> dict[str, Any]:
     workflow.repo.purge_document(document_id)
     insight_store.purge_document(document_id)
     formulas.repo.purge_document(document_id)
+    table_refinement.repo.purge_document(document_id)
     return {"deleted": True, "document_id": document_id}
 
 
@@ -423,6 +425,8 @@ from . import evidence_repairs
 app.include_router(evidence_repairs.router)
 from . import formulas
 app.include_router(formulas.router)
+from . import table_refinement
+app.include_router(table_refinement.router)
 
 # Serve only the explicit production build, never the repository or data root.
 if os.getenv('SCHOLARTRACE_SERVE_WEB', 'false').lower() == 'true':
