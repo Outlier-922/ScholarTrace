@@ -1,5 +1,5 @@
 {
-  "application_version": "0.23.0",
+  "application_version": "0.24.0",
   "as_of": "2026-10-30",
   "scope": "按用户提供赛题逐项整理的工程交付判断；不是主办方认证、评分百分比或豁免清单。",
   "items": [
@@ -13,7 +13,7 @@
     {"id":"M2-QUALITY","required":true,"state":"partial","requirement":"细粒度单文与跨文问题可核验且完整","current":"字段/原生表格问答和引文绑定多文对比可用；仍有检索缺失和语义归属问题，未通过完整学术质量验收","proof_paths":["docs/STAGE10_TEST_REPORT.md","docs/STAGE11_TEST_REPORT.md","docs/STAGE20_TEST_REPORT.md","docs/STAGE21_TEST_REPORT.md"]},
     {"id":"M3-CITATION","required":true,"state":"verified","requirement":"正文数字引用与References双向跳转","current":"数字及组合引用已有原文位置往返；作者年份扩展仍待做","proof_paths":["docs/STAGE3_TEST_REPORT.md"]},
     {"id":"M3-SELECTION","required":true,"state":"partial","requirement":"局部划词/选区翻译","current":"原PDF/结构文本选区链路已加入，单块唯一定位；复杂版式、移动端和术语质量待扩大验收","proof_paths":["docs/STAGE14_TEST_REPORT.md"]},
-    {"id":"M3-PARALLEL","required":true,"state":"partial","requirement":"全文翻译、中英对比与双向联动","current":"有有界翻译和段落联动，任务编排支持明确1—4段、术语缓存及逐段检查点；全文/长书质量与完整对齐未完成（STAGE24_TEST_REPORT.md）","proof_paths":["docs/STAGE3_TEST_REPORT.md","docs/STAGE24_TEST_REPORT.md"]},
+    {"id":"M3-PARALLEL","required":true,"state":"partial","requirement":"全文翻译、中英对比与双向联动","current":"全文/页范围计划、独立批次预算、缓存、检查点、原页对照、校订历史及编排等待/继续已实测；短篇有真实语义误译，全文/长书译文质量及完整对齐仍待验收（STAGE28_TEST_REPORT.md）","proof_paths":["docs/STAGE3_TEST_REPORT.md","docs/STAGE24_TEST_REPORT.md","docs/STAGE28_TEST_REPORT.md"]},
     {"id":"M4-DISCOVERY","required":true,"state":"partial","requirement":"论文/参考文献自动下钻入库与引用价值筛选","current":"arXiv/Crossref、确切版本入库、条件发现及单篇确认全文后的研究任务交接可用；引用价值与批量自动下钻/下载编排未完成（STAGE27_TEST_REPORT.md）","proof_paths":["docs/STAGE4_TEST_REPORT.md","docs/STAGE25_TEST_REPORT.md","docs/STAGE27_TEST_REPORT.md"]},
     {"id":"M4-RECOMMEND","required":true,"state":"partial","requirement":"动态追踪、开源优先、反馈与推荐拓展","current":"有限窗口主题追踪及共享反馈基线；推荐质量和多用户拓展未完成","proof_paths":["docs/STAGE4_TEST_REPORT.md"]},
     {"id":"M5-GRAPH","required":true,"state":"partial","requirement":"批量文献引用网络与基石分析","current":"局部书目网络和PageRank可用；20篇全文规模、消歧及分析质量仍需验收","proof_paths":["docs/STAGE5_TEST_REPORT.md"]},
@@ -22,7 +22,7 @@
     {"id":"M6-WRITING","required":true,"state":"partial","requirement":"从idea输出学术框架与真实References","current":"来源框架、注册书目和导出可用；模板式，学术生成质量不足","proof_paths":["docs/STAGE6_TEST_REPORT.md"]},
     {"id":"M6-PLOT","required":true,"state":"verified","requirement":"CSV科学图表及架构图可复现导出","current":"六类图、统计配置、图注及重画脚本已验证；已接入任务内CSV哈希/明确规则、预算恢复和复现包；自由自然语言分析不在该通过范围","proof_paths":["docs/STAGE6_TEST_REPORT.md","docs/STAGE26_TEST_REPORT.md"]},
     {"id":"M6-ENGLISH","required":true,"state":"partial","requirement":"中文学术内容翻成英文","current":"支持英文目标任务/选区；领域译文质量尚未系统验收","proof_paths":["docs/STAGE3_TEST_REPORT.md","docs/STAGE14_TEST_REPORT.md"]},
-    {"id":"AGENT-LOOP","required":true,"state":"partial","requirement":"意图规划、工具执行与科研流程闭环","current":"九种受控工具及单篇确认全文交接/历史ParseRun/确切文档新任务可用；父任务不变，模型默认关闭；批量自动下载编排、全文翻译、复杂意图及科研质量仍不足（STAGE27_TEST_REPORT.md）；不强制特定框架","proof_paths":["docs/STAGE7_TEST_REPORT.md","docs/STAGE15_TEST_REPORT.md","docs/STAGE23_TEST_REPORT.md","docs/STAGE24_TEST_REPORT.md","docs/STAGE25_TEST_REPORT.md","docs/STAGE26_TEST_REPORT.md","docs/STAGE27_TEST_REPORT.md"]},
+    {"id":"AGENT-LOOP","required":true,"state":"partial","requirement":"意图规划、工具执行与科研流程闭环","current":"九种受控工具、确切全文交接、固定CSV规则及全文分批等待/恢复可用；编排与翻译额度分开；批量自动下载、复杂意图及科研输出质量仍不足（STAGE28_TEST_REPORT.md）；不强制特定框架","proof_paths":["docs/STAGE7_TEST_REPORT.md","docs/STAGE15_TEST_REPORT.md","docs/STAGE23_TEST_REPORT.md","docs/STAGE24_TEST_REPORT.md","docs/STAGE25_TEST_REPORT.md","docs/STAGE26_TEST_REPORT.md","docs/STAGE27_TEST_REPORT.md","docs/STAGE28_TEST_REPORT.md"]},
     {"id":"D-CODE","required":true,"state":"external_pending","requirement":"源码仓库可供评审访问并保留历史","current":"本地Git历史已保存；远程评审访问尚未验证","proof_paths":[]},
     {"id":"D-PDF","required":true,"state":"partial","requirement":"当前最终版本技术PDF不超过30页","current":"已有14页0.9.0草稿，需同步最终功能、测试和部署","proof_paths":["docs/STAGE12_TEST_REPORT.md"]},
     {"id":"D-VIDEO","required":true,"state":"missing","requirement":"5-8分钟、1080p及以上、普通话MP4演示","current":"只有脚本，无正式成片","proof_paths":[]},

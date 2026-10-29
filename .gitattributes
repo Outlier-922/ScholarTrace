@@ -15,3 +15,6 @@ output/stage26/stage26_focused_first.txt -text -diff
 
 # Preserve the first raw handoff test failure transcript.
 output/stage27/stage27_focused_first.txt -text -diff
+
+# Preserve raw stage28 compiler/test/live transcripts, including empty output.
+output/stage28/stage28_*.txt -text -diff

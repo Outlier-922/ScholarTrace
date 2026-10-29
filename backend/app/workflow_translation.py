@@ -4,10 +4,10 @@ import json
 
 import httpx
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import Literal
 
-from . import model_client, research_store, store, translation
+from . import model_client, research_store, store, translation, document_translation
 from .workflow_policy import ModelStepFailure
 
 
@@ -19,11 +19,39 @@ class Passage(BaseModel):
     page: int = Field(ge=1)
 
 
+class DocumentScope(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    document_id:str
+    parse_run_id:str
+    scope:Literal['document','pages']='document'
+    page_start:int|None=Field(default=None,ge=1)
+    page_end:int|None=Field(default=None,ge=1)
+
+
 class TranslationSpec(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    passages: list[Passage] = Field(min_length=1, max_length=4)
+    passages: list[Passage] = Field(default_factory=list, max_length=4)
+    document:DocumentScope|None=None
     target_language: Literal['zh', 'en'] = 'zh'
     glossary: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode='after')
+    def explicit_scope(self):
+        if bool(self.passages)==bool(self.document):raise ValueError('请选择明确段落或全文/页范围，两种范围不可同时使用')
+        return self
+
+
+class DocumentPending(Exception):
+    def __init__(self,result):self.result=result
+
+
+def prepare_document(spec,documents):
+    if not spec or not spec.document:return None
+    choice=next((document for document in documents if document['id']==spec.document.document_id),None)
+    if not choice or choice['parse_run_id']!=spec.document.parse_run_id:raise HTTPException(409,'全文翻译范围不属于最终选定文献版本')
+    body=document_translation.PlanRequest(**spec.document.model_dump(),target_language=spec.target_language,glossary=spec.glossary)
+    preview=document_translation.build_plan(body,persist=False)
+    return {'request':body.model_dump(),'manifest_digest':preview['manifest_digest'],'estimate':preview['estimate'],'total':preview['total'],'counts':preview['counts'],'source':preview['source']}
 
 
 def prepare(spec, documents):
@@ -61,6 +89,14 @@ def source_block(evidence):
 
 
 async def execute(payload, step):
+    if frozen:=payload.get('translation_document'):
+        job=document_translation.build_plan(document_translation.PlanRequest(**frozen['request']),artifact_id=step['artifact_id'])
+        if job['manifest_digest']!=frozen['manifest_digest']:raise ValueError('translation_manifest_changed')
+        result={'id':job['id'],'mode':'document_translation','translation_status':job['status'],'counts':job['counts'],'total':job['total'],'totals':job['totals'],
+                'document_source':job['source'],'semantic_verified':False,'answer':'全文计划独立按批确认预算；完成后继续编排，不会自动增加模型调用。'}
+        if job['status'] not in {'completed','completed_with_gaps'}:raise DocumentPending(result)
+        document_translation.source(job)
+        return result
     if payload.get('translation_model_identity') != model_client.identity():
         raise ValueError('translation_model_changed')
     evidence = payload['translation_passages'][step['translation_index']]
@@ -96,6 +132,9 @@ async def execute(payload, step):
 
 
 def markdown(result):
+    if result.get('mode')=='document_translation':
+        return '\n\n'.join(['# 全文翻译计划',result['document_source']['title'],result['answer'],
+            '状态：'+result['translation_status']+'；语义未核验。',json.dumps({'counts':result['counts'],'totals':result['totals'],'source':result['document_source']},ensure_ascii=False,indent=2)])
     evidence = result['evidence'][0]
     return '\n\n'.join(['# 段落翻译候选',
                          f"{evidence['title']} / PDF第{evidence['page']}页 / {evidence['parse_run_id']} / {evidence['block_id']}",

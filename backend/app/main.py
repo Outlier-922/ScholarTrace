@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
     store.init_db()
     semantic_jobs.init()
     research_store.init_db()
+    document_translation.repo.init_db()
     literature.repo.init_db()
     graph.repo.init_db()
     studio.repo.init_db()
@@ -49,6 +50,7 @@ async def lifespan(app: FastAPI):
     table_refinement.repo.init_db()
     if not demo_access.read_only():
         translation.resume_jobs()
+        document_translation.start()
         literature.start()
         workflow.start()
         workflow.repo.recover()
@@ -66,6 +68,7 @@ async def lifespan(app: FastAPI):
     yield
     await semantic_jobs.shutdown()
     await workflow.shutdown()
+    await document_translation.shutdown()
     await translation.shutdown()
     await literature.shutdown()
     app.state.parse_executor.shutdown(wait=True, cancel_futures=True)
@@ -288,6 +291,7 @@ def remove_document(document_id: str) -> dict[str, Any]:
         raise HTTPException(404, "文献不存在")
     semantic.purge_document(document_id)
     research_store.purge_document(document_id)
+    document_translation.repo.purge_document(document_id)
     literature.repo.purge_document(document_id)
     graph.repo.purge_document(document_id)
     studio.repo.purge_document(document_id)
@@ -406,11 +410,12 @@ except ModuleNotFoundError as exc:
 else:
     app.include_router(qa.router)
 
-from . import comparison, reading, research_store, translation, literature, graph, studio, workflow, model_status
+from . import comparison, reading, research_store, translation, literature, graph, studio, workflow, model_status, document_translation
 app.include_router(comparison.router)
 app.include_router(reading.router)
 app.include_router(translation.router)
 app.include_router(literature.router)
+app.include_router(document_translation.router)
 app.include_router(graph.router)
 app.include_router(studio.router)
 app.include_router(workflow.router)

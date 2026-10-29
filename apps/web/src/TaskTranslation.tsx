@@ -4,7 +4,8 @@ import type { Evidence, ResearchDocument } from './types';
 import './tasks-translation.css';
 
 export type TranslationPassage = { document_id: string; parse_run_id: string; block_id: string; page: number };
-export type TranslationSpec = { passages: TranslationPassage[]; target_language: 'zh' | 'en'; glossary: Record<string, string> };
+export type TranslationDocumentScope={document_id:string;parse_run_id:string;scope:'document'|'pages';page_start?:number|null;page_end?:number|null};
+export type TranslationSpec = { document?:TranslationDocumentScope; passages: TranslationPassage[]; target_language: 'zh' | 'en'; glossary: Record<string, string> };
 type Block = { id: string; type: string; page: number; text: string; section_path?: string[] };
 export type TranslationResult = { translation?: string | null; translation_status?: string; target_language?: string; glossary?: Record<string, string> };
 
@@ -17,7 +18,7 @@ export function TaskTranslationPicker({ documents, value, onChange, onValidityCh
   const [error, setError] = useState('');
   const [terms, setTerms] = useState(Object.entries(value.glossary).map(([key, target]) => key + '=' + target).join('\n'));
   useEffect(() => { onValidityChange(true); }, [onValidityChange]);
-  const document = documents.find(item => item.id === documentId) || documents[0];
+  const document = documents.find(item => item.id === (value.document?.document_id||documentId)) || documents[0];
   async function readPage() {
     if (!document?.parse_run_id) { setError('文献解析版本尚未就绪，请刷新后选择。'); return; }
     setBusy(true); setError(''); setBlocks([]); setLoaded(null);
@@ -39,14 +40,14 @@ export function TaskTranslationPicker({ documents, value, onChange, onValidityCh
     setError(''); onValidityChange(true); onChange({ ...value, glossary });
   }
   return <section className="task-translation-picker" aria-label="选择任务待译段落">
-    <h4>先选原文，再确认翻译</h4><p>最多4个正文段落，每段单独保存检查点。此处只读取本地页面；翻译范围会在执行前列入计划。</p>
+    <h4>先选原文，再确认翻译</h4><p>手选最多4段；全文或页范围会建立独立分批计划，研究任务等待译文处理后继续。</p><label className="studio-field">范围方式<select aria-label="任务翻译范围方式" value={value.document?.scope||'passages'} onChange={event=>{if(event.target.value==='passages'){onChange({...value,document:undefined,passages:[]});return;}if(document?.parse_run_id)onChange({...value,passages:[],document:{document_id:document.id,parse_run_id:document.parse_run_id,scope:event.target.value as 'document'|'pages',...(event.target.value==='pages'?{page_start:1,page_end:document.page_count}:{})}});}}><option value="passages">手选原文段落</option><option value="document">全文计划</option><option value="pages">页范围计划</option></select></label>{value.document&&<><label className="studio-field">全文翻译文献<select aria-label="全文翻译文献" value={value.document.document_id} onChange={event=>{const doc=documents.find(item=>item.id===event.target.value);if(doc?.parse_run_id)onChange({...value,document:{...value.document!,document_id:doc.id,parse_run_id:doc.parse_run_id,...(value.document!.scope==='pages'?{page_start:1,page_end:doc.page_count}:{})}});}}>{documents.map(doc=><option key={doc.id} value={doc.id}>{doc.title}</option>)}</select></label>{value.document.scope==='pages'&&<div className="document-translation-fields">{(['page_start','page_end'] as const).map(key=><label key={key}>{key==='page_start'?'起始页':'结束页'}<input aria-label={'任务翻译'+(key==='page_start'?'起始页':'结束页')} type="number" min={1} max={document?.page_count||1} value={value.document?.[key]??1} onChange={event=>onChange({...value,document:{...value.document!,[key]:Number(event.target.value)}})}/></label>)}</div>}<p>先固定文件、解析版本和整个范围。执行到该步骤会暂停；在全文计划中明确确认每批模型权限与额度，原样保留和未支持块分别列出。</p></>}{!value.document&&<>
     <div className="task-translation-selectors"><label className="studio-field">原文文献<select aria-label="待译文献" disabled={busy} value={document?.id || ''} onChange={event => { setDocumentId(event.target.value); setPage(1); setBlocks([]); setLoaded(null); }}>{documents.map(item => <option key={item.id} value={item.id}>{item.title} · {item.version_label || item.filename}</option>)}</select></label><label className="studio-field">PDF页码<input aria-label="待译PDF页码" disabled={busy} type="number" min={1} max={document?.page_count || 1} value={page} onChange={event => { setPage(Number(event.target.value)); setBlocks([]); setLoaded(null); }} /></label><button className="secondary-button" disabled={busy || !document || page < 1 || page > document.page_count} onClick={() => void readPage()}>{busy ? '读取中…' : '读取本页段落'}</button></div>
     <div className="task-translation-blocks">{loaded && !blocks.length && <p>本页没有可选正文段落，请换页；图表、公式和书目不加入本步骤。</p>}{loaded && blocks.map(block => {
       const selected = value.passages.some(item => item.document_id === loaded.document_id && item.parse_run_id === loaded.parse_run_id && item.block_id === block.id);
       return <label key={block.id}><input type="checkbox" aria-label={'选择待译段落：' + block.text.slice(0, 65)} checked={selected} disabled={!selected && value.passages.length >= 4} onChange={event => onChange({ ...value, passages: event.target.checked ? [...value.passages, { ...loaded, block_id: block.id, page: block.page }] : value.passages.filter(item => !(item.document_id === loaded.document_id && item.block_id === block.id && item.parse_run_id === loaded.parse_run_id)) })} /><span>{block.text}</span></label>;
     })}</div>
     <div className="task-translation-selected"><strong>已选 {value.passages.length}/4 段</strong>{value.passages.map((item, index) => <div key={item.document_id + item.block_id}><span>{index + 1}. {documents.find(document => document.id === item.document_id)?.title || '来源已移出当前文献选择'} · PDF第{item.page}页</span><button className="text-button" aria-label={'移除待译段落 ' + (index + 1)} onClick={() => onChange({ ...value, passages: value.passages.filter((_, selected) => selected !== index) })}>移除</button></div>)}</div>
-    <label className="studio-field">目标语言<select aria-label="任务翻译目标语言" value={value.target_language} onChange={event => onChange({ ...value, target_language: event.target.value as 'zh' | 'en' })}><option value="zh">中文</option><option value="en">英文</option></select></label><label className="studio-field">术语表（可选，每行“原词=译法”）<textarea aria-label="任务翻译术语表" value={terms} rows={2} maxLength={10000} onChange={event => updateTerms(event.target.value)} /></label>
+    </>}<label className="studio-field">目标语言<select aria-label="任务翻译目标语言" value={value.target_language} onChange={event => onChange({ ...value, target_language: event.target.value as 'zh' | 'en' })}><option value="zh">中文</option><option value="en">英文</option></select></label><label className="studio-field">术语表（可选，每行“原词=译法”）<textarea aria-label="任务翻译术语表" value={terms} rows={2} maxLength={10000} onChange={event => updateTerms(event.target.value)} /></label>
     {error && <p role="alert">{error}</p>}<small>未允许模型且无匹配缓存时只保留待译原文。缓存按原文、版本、目标语言、术语表与模型绑定；译文不自动作为论文事实。</small>
   </section>;
 }
