@@ -13,7 +13,7 @@ from fastapi import APIRouter,HTTPException
 from fastapi.responses import Response,PlainTextResponse
 from pydantic import BaseModel,ConfigDict,Field
 from starlette.concurrency import run_in_threadpool
-from . import comparison,graph,model_client,qa,source_scope,store,studio,insights,workflow_translation,workflow_discovery,workflow_plot
+from . import comparison,graph,model_client,qa,source_scope,store,studio,insights,workflow_translation,workflow_discovery,workflow_plot,literature_handoff
 from . import workflow_store as repo,workflow_policy as policy
 
 router=APIRouter(prefix='/api/research-tasks',tags=['intent-workflow'])
@@ -39,6 +39,8 @@ class PlanRequest(BaseModel):
     model_config=ConfigDict(extra='forbid')
     goal:str=Field(min_length=4,max_length=2000)
     document_ids:list[str]=Field(min_length=1,max_length=8)
+    parse_runs:dict[str,str]=Field(default_factory=dict,max_length=8)
+    handoff_id:str|None=None
     actions:list[Action]=Field(default_factory=list,max_length=9)
     dimensions:list[str]=Field(default_factory=list,max_length=4)
     translation:workflow_translation.TranslationSpec|None=None
@@ -83,10 +85,20 @@ def infer(goal):
 
 @router.post('')
 async def plan(body:PlanRequest):
+    handoff=literature_handoff.ready(body.handoff_id) if body.handoff_id else None
+    runs=dict(body.parse_runs)
+    if handoff:
+        bound=handoff['source']
+        if bound['id'] not in body.document_ids:raise HTTPException(422,'新任务必须包含交接的全文来源')
+        if runs.get(bound['id'],bound['parse_run_id'])!=bound['parse_run_id']:raise HTTPException(409,'不得替换已交接的解析版本')
+        runs[bound['id']]=bound['parse_run_id']
     docs=[store.get_document(identity) for identity in dict.fromkeys(body.document_ids)]
     if any(document is None for document in docs):raise HTTPException(404,'所选文献不存在')
-    if any(document['status'] not in {'ready','partial'} for document in docs):raise HTTPException(409,'请先等待所选文献解析完成')
-    docs=[choice['document'] for choice in graph.choose_sources(docs)]
+    if any(document['status'] not in {'ready','partial'} and document['id'] not in runs for document in docs):raise HTTPException(409,'请先等待所选文献解析完成')
+    docs=source_scope.pin(docs,runs)
+    if any(store.get_parse_run(document['id'],document['parse_run_id'])['status'] not in {'ready','partial'} for document in docs):raise HTTPException(409,'选定的解析版本尚不可用')
+    selected={graph.doc_key(next(document for document in docs if document['id']==bound['id'])):bound['id']} if handoff else None
+    docs=[choice['document'] for choice in graph.choose_sources(docs,selected)]
     if len(docs)>5:raise HTTPException(422,'当前任务最多选择5个不同作品')
     actions,dimensions=infer(body.goal);mode='rules';warnings=[]
     requested=body.actions or actions
@@ -153,6 +165,7 @@ async def plan(body:PlanRequest):
           'model_identity':model_client.identity() if body.use_model else None,'planner_model_calls':1 if body.planner=='model' and not body.actions else 0,
           'recovery_policy':body.recovery_policy,'max_replans':body.max_replans,'execution_model_disabled':False,'execution_metadata_disabled':False,
           'policy_version':policy.VERSION,'plan_history':[],
+          'handoff':handoff,
           'plot_spec':plot_spec,
           'discovery_spec':discovery_spec.model_dump() if discovery_spec else None,
           'translation_spec':body.translation.model_dump() if body.translation else None,'translation_model_identity':model_client.identity() if passages else None,'translation_passages':passages,'translation_only':translation_only,
@@ -378,6 +391,7 @@ async def run(identity):
             def observe(values):repo.mutate(identity,lambda payload:payload['usage'].update(model=values))
             budget.observer=observe
             try:
+                if current.get('handoff'):await run_in_threadpool(literature_handoff.validate_snapshot,current['handoff'])
                 effective={**current,'use_model':current['use_model'] and not current.get('execution_model_disabled',False) and step.get('model_allowed',True)}
                 with model_client.metered(budget):result=await execute(effective,step)
                 await run_in_threadpool(validate_result,current,result)
@@ -496,6 +510,8 @@ def markdown(payload):
             for item in result.get('evidence',[]):lines += ['',f'原文候选 / {item["title"]} / PDF 第 {item["page"]} 页 / {item["parse_run_id"]} / {item["block_id"]}',item['text']]
         elif result:lines+=['',f'受控产物 ID：{result.get("id",step["artifact_id"])}；类型：{step["tool"]}。']
     lines+=['','## 计划版本与反馈','']
+    if payload.get('handoff'):
+        record=payload['handoff'];lines+=['## 全文交接来源',f"交接 {record['id']} / 原任务 {record.get('parent_task_id') or '独立发现'} / 检索快照 {record.get('search_id') or '书目记录'}",'身份依据：用户核对；书目不是全文证据。',json.dumps(record,ensure_ascii=False,indent=2)]
     for version in payload.get('plan_history',[]):
         lines += [f"- v{version['version']} / {version['reason']} / {version['detail']}",
                   '  步骤：'+' → '.join(step['id'] for step in version['steps'])]
@@ -515,6 +531,7 @@ def export(identity:str,format:Literal['markdown','json','bundle']='bundle'):
         archive.writestr('task.md',markdown(payload))
         archive.writestr('task.json',json.dumps(payload,ensure_ascii=False,indent=2))
         archive.writestr('plan-history.json',json.dumps(payload.get('plan_history',[]),ensure_ascii=False,indent=2))
+        if payload.get('handoff'):archive.writestr('handoff.json',json.dumps(payload['handoff'],ensure_ascii=False,indent=2))
         for step in payload['steps']:
             if not (result:=step.get('result')):continue
             if step['tool']=='discovery':

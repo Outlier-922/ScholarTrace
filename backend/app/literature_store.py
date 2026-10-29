@@ -14,6 +14,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS literature_searches(id TEXT PRIMARY KEY,request TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_feedback(key TEXT PRIMARY KEY,value INTEGER NOT NULL,updated_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_imports(document_id TEXT NOT NULL,key TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(document_id,key));
+        CREATE TABLE IF NOT EXISTS literature_handoffs(id TEXT PRIMARY KEY,payload TEXT NOT NULL,created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_subscriptions(id TEXT PRIMARY KEY,query TEXT UNIQUE NOT NULL,enabled INTEGER NOT NULL,payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_seen(subscription_id TEXT NOT NULL,key TEXT NOT NULL,root_key TEXT NOT NULL,PRIMARY KEY(subscription_id,key));
         CREATE TABLE IF NOT EXISTS literature_checks(id TEXT PRIMARY KEY,subscription_id TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
@@ -86,6 +87,24 @@ def imports(document_id):
     if not store.get_document(document_id): return []
     with store.connection() as conn:
         return [json.loads(row['payload']) for row in conn.execute('SELECT payload FROM literature_imports WHERE document_id=?',(document_id,))]
+
+
+def save_handoff(payload):
+    with store.connection() as conn:
+        conn.execute('INSERT OR IGNORE INTO literature_handoffs VALUES(?,?,?)',
+                     (payload['id'],json.dumps(payload,ensure_ascii=False),payload['created_at']))
+    return get_handoff(payload['id'])
+
+
+def get_handoff(identity):
+    with store.connection() as conn:
+        row=conn.execute('SELECT payload FROM literature_handoffs WHERE id=?',(identity,)).fetchone()
+        return json.loads(row['payload']) if row else None
+
+
+def list_handoffs():
+    with store.connection() as conn:
+        return [json.loads(row['payload']) for row in conn.execute('SELECT payload FROM literature_handoffs ORDER BY created_at DESC LIMIT 40')]
 
 
 def purge_document(document_id):

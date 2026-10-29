@@ -18,7 +18,7 @@ from urllib.parse import quote, unquote, urljoin, urlsplit
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
-from . import literature_store as repo, store
+from . import literature_store as repo, store, literature_handoff as handoff
 
 router=APIRouter(prefix='/api',tags=['literature'])
 ARXIV=re.compile(r'(?:\d{4}\.\d{4,5}|[a-z][a-z.-]+/\d{7})(?:v[1-9]\d*)?',re.I)
@@ -225,10 +225,31 @@ def saved_search(identity:str):
     return item
 
 
-class ImportRequest(BaseModel):
+class ImportRequest(handoff.Context):
     model_config=ConfigDict(extra='forbid')
     key:str=Field(max_length=250)
     confirm_identity:Literal[True]
+
+
+@router.get('/literature/local-candidates')
+def local_candidates(key:str,search_id:str|None=None,parent_task_id:str|None=None):
+    item=handoff.metadata(handoff.Context(key=key,search_id=search_id,parent_task_id=parent_task_id))
+    return {'items':handoff.candidates(item),'notice':'仅为本地字面匹配候选；需核对标题、作者与确切版本。'}
+
+
+@router.post('/literature/handoffs')
+def confirm_local_handoff(body:handoff.LocalRequest):return handoff.confirm_local(body)
+
+
+@router.get('/literature/handoffs')
+def list_handoffs():return {'items':[handoff.resolve(item) for item in repo.list_handoffs()]}
+
+
+@router.get('/literature/handoffs/{identity}')
+def get_handoff(identity:str):
+    item=repo.get_handoff(identity)
+    if not item:raise HTTPException(404,'全文交接记录不存在')
+    return handoff.resolve(item)
 
 
 async def download_pdf(identity):
@@ -273,8 +294,7 @@ async def _download_pdf(identity):
 
 @router.post('/literature/import')
 async def import_paper(body:ImportRequest,request:Request):
-    item=repo.get_record(body.key)
-    if not item: raise HTTPException(404,'先检索并核对元数据')
+    item=handoff.metadata(body)
     if item['provider']!='arxiv' or not item.get('pdf_url'): raise HTTPException(422,'当前只有元数据；请到出版方核对开放全文后手动导入')
     try:
         stream,url=await download_pdf(item['identifier'])
@@ -290,7 +310,8 @@ async def import_paper(body:ImportRequest,request:Request):
     provenance={'key':item['key'],'identifier':item['identifier'],'metadata_title':item['title'],'authors':item['authors'],
                 'download_url':url,'metadata_source':item['source_url'],'fetched_at':store.now(),'sha256':document['sha256'],'document_id':document['id']}
     repo.bind_import(document,item['key'],provenance)
-    return {'document':document,'provenance':provenance}
+    receipt=handoff.capture(body,item,document,'downloaded_pdf')
+    return {'document':document,'provenance':provenance,'handoff':handoff.resolve(receipt)}
 
 
 @router.get('/documents/{document_id}/provenance')

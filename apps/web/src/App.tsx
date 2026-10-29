@@ -1,3 +1,4 @@
+import type { Handoff } from './LiteratureHandoff';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, ArrowRight, BookMarked, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, FilePlus2, FileText, FolderOpen, GitBranch, Layers3, Library, ListTree, LoaderCircle, Menu, MessageSquareText, MoreHorizontal, PanelLeftClose, PencilLine, Plus, RefreshCw, Search, Send, Settings2, ShieldCheck, Sparkles, Target, Trash2, Upload, X, AlertTriangle } from 'lucide-react';
 import { postJSON, request } from './api';
@@ -45,6 +46,8 @@ export default function App() {
   const [literatureSearchId,setLiteratureSearchId]=useState<string|null>(null);
   const [graphOpen, setGraphOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
+  const [taskHandoff,setTaskHandoff]=useState<Handoff|null>(null);
+  const [literatureParentTaskId,setLiteratureParentTaskId]=useState<string|null>(null);
   const [taskOpen, setTaskOpen] = useState(false);
   const [libraryQuery, setLibraryQuery] = useState('');
   const [outlineTab, setOutlineTab] = useState<'library' | 'outline'>('library');
@@ -289,13 +292,13 @@ export default function App() {
           <button className="active" onClick={() => { setModal(null); setMobileNav(false); }}><Library size={18} /><span>文献与阅读</span><span className="nav-count">{documents.length}</span></button>
           <button onClick={() => { setGraphOpen(true); setMobileNav(false); }}><GitBranch size={18} /><span>引用图谱</span></button>
           <button onClick={() => { setStudioOpen(true); setMobileNav(false); }}><PencilLine size={18} /><span>写作与绘图</span></button>
-          <button onClick={() => { setTaskOpen(true); setMobileNav(false); }}><Sparkles size={18} /><span>研究任务</span><small>新</small></button>
+          <button onClick={() => { setTaskHandoff(null); setTaskOpen(true); setMobileNav(false); }}><Sparkles size={18} /><span>研究任务</span><small>新</small></button>
         </nav>
         <div className="sidebar-divider" />
         <div className="nav-label">证据工作流</div>
         <div className="workflow-nav"><div><span className={`workflow-step ${documents.length ? 'completed' : ''}`}>1</span><span>导入与解析</span>{documents.length > 0 && <Check size={13} />}</div><i /><div><span className={`workflow-step ${selectedDocument?.progress_pages ? 'completed' : ''}`}>2</span><span>原文与定位</span>{!!selectedDocument?.progress_pages && <Check size={13} />}</div><i /><div><span className={`workflow-step ${contextIds.length ? 'current' : ''}`}>3</span><span>检索与核验</span>{contextIds.length > 0 && <span className="tiny-dot" />}</div></div>
         <div className="sidebar-note"><ShieldCheck size={19} /><strong>让每个结论有出处</strong><p>从真实文献出发，保留版本、页码和原文位置。</p><button onClick={() => setModal('help')}>了解证据模式 <ArrowRight size={13} /></button></div>
-        <div className="sidebar-bottom"><button onClick={() => setModal('settings')}><Settings2 size={17} /><span>连接与配置</span></button><button onClick={() => setModal('help')}><CircleHelp size={17} /><span>使用指南</span></button><div className="local-user"><span>研</span><div><strong>个人研究者</strong><small>开发预览 · v{health?.version || '0.22.0'}</small></div><span className={`connection-dot ${connectionError ? 'offline' : ''}`} title={connectionError ? '后端未连接' : '本地服务已连接'} /></div></div>
+        <div className="sidebar-bottom"><button onClick={() => setModal('settings')}><Settings2 size={17} /><span>连接与配置</span></button><button onClick={() => setModal('help')}><CircleHelp size={17} /><span>使用指南</span></button><div className="local-user"><span>研</span><div><strong>个人研究者</strong><small>开发预览 · v{health?.version || '0.23.0'}</small></div><span className={`connection-dot ${connectionError ? 'offline' : ''}`} title={connectionError ? '后端未连接' : '本地服务已连接'} /></div></div>
       </aside>
 
       <main className="main-area">
@@ -356,8 +359,8 @@ export default function App() {
       </div></div>}
       {graphOpen && <Suspense fallback={<div className="modal-backdrop"><div className="modal"><LoaderCircle className="spin" />正在加载研究图谱…</div></div>}><GraphPanel modelConfigured={health?.model_configured === true} readOnly={health?.deployment?.read_only === true} documents={documents} onClose={() => setGraphOpen(false)} onSource={jumpToEvidence} /></Suspense>}
       {studioOpen && <Suspense fallback={<div className="modal-backdrop"><div className="modal"><LoaderCircle className="spin" />正在加载写作与绘图…</div></div>}><StudioPanel documents={documents} onClose={() => setStudioOpen(false)} onSource={jumpToEvidence} /></Suspense>}
-      {taskOpen && <Suspense fallback={<div className="modal-backdrop"><div className="modal"><LoaderCircle className="spin" />正在加载研究任务…</div></div>}><TaskPanel onDiscovery={searchId=>{setLiteratureQuery('');setLiteratureSearchId(searchId);setLiteratureOpen(true);}} documents={documents} onClose={() => setTaskOpen(false)} onSource={jumpToEvidence} /></Suspense>}
-      {literatureOpen && <Suspense fallback={<div className="modal-backdrop"><div className="modal"><LoaderCircle className="spin" />正在加载文献发现…</div></div>}><LiteraturePanel initialSearchId={literatureSearchId} initialQuery={literatureQuery} onClose={() => setLiteratureOpen(false)} onImported={document => { void refresh(); setSelectedId(document.id); }} /></Suspense>}
+      {taskOpen && <Suspense fallback={<div className="modal-backdrop"><div className="modal"><LoaderCircle className="spin" />正在加载研究任务…</div></div>}><TaskPanel initialHandoff={taskHandoff} onDiscovery={(searchId,parentTaskId)=>{setLiteratureQuery('');setLiteratureSearchId(searchId);setLiteratureParentTaskId(parentTaskId);setLiteratureOpen(true);}} documents={documents} onClose={() => setTaskOpen(false)} onSource={jumpToEvidence} /></Suspense>}
+      {literatureOpen && <Suspense fallback={<div className="modal-backdrop"><div className="modal"><LoaderCircle className="spin" />正在加载文献发现…</div></div>}><LiteraturePanel parentTaskId={literatureParentTaskId} onContinue={value=>{setTaskHandoff(value);setLiteratureOpen(false);setTaskOpen(true);}} initialSearchId={literatureSearchId} initialQuery={literatureQuery} onClose={() => setLiteratureOpen(false)} onImported={document => { void refresh(); setSelectedId(document.id); }} /></Suspense>}
       {comparisonOpen && <Suspense fallback={<div className="modal-backdrop"><div className="modal"><LoaderCircle className="spin" />正在加载多文对比…</div></div>}><ComparisonPanel documents={documents} initialIds={checkedIds.length >= 2 ? checkedIds : availableDocuments.slice(0, 2).map(item => item.id)} onClose={() => setComparisonOpen(false)} onSource={jumpToEvidence} /></Suspense>}
     </div>
   );
