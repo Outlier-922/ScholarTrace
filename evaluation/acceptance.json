@@ -1,5 +1,5 @@
 {
-  "application_version": "0.17.0",
+  "application_version": "0.18.0",
   "as_of": "2026-10-29",
   "scope": "按用户提供赛题逐项整理的工程交付判断；不是主办方认证、评分百分比或豁免清单。",
   "items": [
@@ -9,8 +9,8 @@
     {"id":"M1-LONG","required":true,"state":"partial","requirement":"541页长书分块、索引及资源鲁棒性","current":"原生解析已跑通；完整索引、资源与并发验收不足","proof_paths":["docs/STAGE1_TEST_REPORT.md"]},
     {"id":"M1-STRUCTURE","required":true,"state":"partial","requirement":"作者机构、层级树、图表与参考文献结构化","current":"目录、块与原生表格行列重建/手工修订可用；机构、扫描表格及复杂图表结构仍不完整","proof_paths":["docs/STAGE2_TEST_REPORT.md","docs/STAGE19_TEST_REPORT.md"]},
     {"id":"M1-FORMULA","required":true,"state":"partial","requirement":"公式LaTeX细粒度抽取","current":"原生字形/坐标转写候选、原图与手工历史可用；扫描公式只支持原图手工路径，复杂公式及识别质量未全面验收","proof_paths":["docs/STAGE18_TEST_REPORT.md"]},
-    {"id":"M2-TRACE","required":true,"state":"verified","requirement":"回答引用回到确切版本和原文位置","current":"文件/ParseRun/块及表格原生格的页码/坐标绑定，固定来源与删除失效检查","proof_paths":["docs/STAGE11_TEST_REPORT.md","docs/STAGE20_TEST_REPORT.md"]},
-    {"id":"M2-QUALITY","required":true,"state":"partial","requirement":"细粒度单文与跨文问题可核验且完整","current":"字段补检索和显式所选原生表格问答可用；手工稿仅对照，漏召回/字段缺失和完整学术语义仍未通过","proof_paths":["docs/STAGE10_TEST_REPORT.md","docs/STAGE11_TEST_REPORT.md","docs/STAGE20_TEST_REPORT.md"]},
+    {"id":"M2-TRACE","required":true,"state":"verified","requirement":"回答引用回到确切版本和原文位置","current":"文件/ParseRun/原块及原生格位置绑定，问答/比较历史的来源与字符范围失效检查","proof_paths":["docs/STAGE11_TEST_REPORT.md","docs/STAGE20_TEST_REPORT.md","docs/STAGE21_TEST_REPORT.md"]},
+    {"id":"M2-QUALITY","required":true,"state":"partial","requirement":"细粒度单文与跨文问题可核验且完整","current":"字段/原生表格问答和引文绑定多文对比可用；仍有检索缺失和语义归属问题，未通过完整学术质量验收","proof_paths":["docs/STAGE10_TEST_REPORT.md","docs/STAGE11_TEST_REPORT.md","docs/STAGE20_TEST_REPORT.md","docs/STAGE21_TEST_REPORT.md"]},
     {"id":"M3-CITATION","required":true,"state":"verified","requirement":"正文数字引用与References双向跳转","current":"数字及组合引用已有原文位置往返；作者年份扩展仍待做","proof_paths":["docs/STAGE3_TEST_REPORT.md"]},
     {"id":"M3-SELECTION","required":true,"state":"partial","requirement":"局部划词/选区翻译","current":"原PDF/结构文本选区链路已加入，单块唯一定位；复杂版式、移动端和术语质量待扩大验收","proof_paths":["docs/STAGE14_TEST_REPORT.md"]},
     {"id":"M3-PARALLEL","required":true,"state":"partial","requirement":"全文翻译、中英对比与双向联动","current":"有有界翻译任务和段落联动；长书全文质量及完整对齐未完成","proof_paths":["docs/STAGE3_TEST_REPORT.md"]},

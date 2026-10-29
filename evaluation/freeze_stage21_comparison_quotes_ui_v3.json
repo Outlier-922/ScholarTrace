@@ -1,0 +1,89 @@
+{
+  "application_version": "0.18.0",
+  "as_of": "2026-10-29",
+  "git_head": "15f3c79dc042588ef81f0a852b5062f1795738b7",
+  "scope": "Post-generation UI only: opening a saved comparison synchronizes document and dimension checkboxes to the saved result. Backend/prompts unchanged. No further paid calls.",
+  "fingerprint_format": "utf8_lf_text_v1",
+  "max_model_calls": 0,
+  "max_reserved_output_tokens": 0,
+  "files": {
+    "apps/web/package.json": "617cd0b388b396623a836185408cd6964592774eb9d13e370c5bac3380684850",
+    "apps/web/src/App.tsx": "0bbf137ed16f3380e970afe27734a98146d4b17433dba34205c5e263263d8e47",
+    "apps/web/src/ComparisonPanel.tsx": "6cd2bfcf3834d63832518d98fa78f3a2d90117d6d3ce6483d056dfc381633c0a",
+    "apps/web/src/PdfReader.tsx": "9d4088d433a14776144dc67af26a04f49e4b2f4960e32910d2f4d84a33dcfe7b",
+    "apps/web/src/TablePanel.tsx": "03772284eaa6a9645069acaa02c5cfc4f3b711bf80c1b280170af62fd8696516",
+    "apps/web/src/TableQA.tsx": "410e3d1e983fc32778259ceaa8fbeeffb00871ef3351c99ca661effe3e0e0e6e",
+    "apps/web/src/comparison-quotes.css": "12918cde852db6443f890dbfdc5ef588fb9ce152d7be7b18a30cdce543941498",
+    "apps/web/src/table-qa.css": "6859b75cf78164b56db6cefb7af11fe939dfcbaecaa802af07c2551b83e289d1",
+    "apps/web/src/types.ts": "828b90d39844d848b66a534ca0d6658a0a40eb4d729654db0c12e71ff6cc834d",
+    "backend/app/__init__.py": "810d22006b13d1a3c06c729b76cfbe31fcd954b618ae2958f3c015a481b0afbb",
+    "backend/app/answer_fields.py": "0b9c45797acde532b4ba5e35c636256a3677662cf35864506ae25aa42302078a",
+    "backend/app/claim_checks.py": "fd26531637ad81ab23d7893299bf6c21fa6fb4b648c0671e18c12b4e778ecf10",
+    "backend/app/comparison.py": "03182c4e42b739e441f2b73ab8b639d3711e6f8de5e7d35127424dab22687163",
+    "backend/app/comparison_quotes.py": "5d279f89dc4267e08db361bb6323d1663d03b8aa72dcab762a631861be7016cb",
+    "backend/app/demo_access.py": "4943b392af56944f9c69efbe1e7e7a7232bef5b0ac013e2e520355840995a024",
+    "backend/app/evidence_repairs.py": "1647918d7ce84ce7c09342ec298539de7a1f645cc8745483d95578b2f8de62eb",
+    "backend/app/formula_native.py": "6d6387a0ef610990ecd3a97d002c0bcc849a1815a865c8f088af94d2cf675c2d",
+    "backend/app/formula_store.py": "80d04a97a6ac44f4b0c6987009bc7b01a89fc1f3591c4b1e3feb7455f32871c6",
+    "backend/app/formulas.py": "99da952f880b6235de1a049ea35924e32af2f832075939bc9383404d315934aa",
+    "backend/app/graph.py": "62327d844fd86f3365091f2aefebe0fd93d8b17bd9e78cc10f442b930651fc9b",
+    "backend/app/graph_store.py": "eda8d9682f316f71e53241e8f29b4aa2d798284c4752c99f69ac6f75970a45ad",
+    "backend/app/insight_store.py": "181897369226a29bb5a51ec7838984024c12dec4e304c5b5e85d019eb1485721",
+    "backend/app/insights.py": "2888d73ab304bcd54f457d3d66c90b869e223a8740e8214c6da39eb60c880c75",
+    "backend/app/main.py": "3272aa2a3ca96fb35749ebafa553979c9003077ce5e7e9f706e80b12bd0c16d6",
+    "backend/app/model_client.py": "5dc193477ebbb9004c9ec430a22aab9afafe15e122073460121391ebcf4b5bdd",
+    "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+    "backend/app/qa.py": "e9aefe5fe538c8a0e525b63dd12229d40ec9604bd23ff067f3a70206cd167d3e",
+    "backend/app/selection_translation.py": "f7cefe5a0efabfe972e1a3dd318f684269592e1bef44f33144687f40effe07e2",
+    "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+    "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+    "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+    "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+    "backend/app/table_qa.py": "fbdc1b170c4f52777d73836ac5be4214c834c1dfba3fa66f07fd17aa23ff1514",
+    "backend/app/table_refine_native.py": "e5305444a3b58a438fa1e8678b94d57a208da599380fb9862d55b7a0c027cb89",
+    "backend/app/table_refine_store.py": "e6ae223521146d211b3e2875e896e27e4263435af8f33ba2ed43cd3a44cf921d",
+    "backend/app/table_refinement.py": "02523f6544cc2ae346b51f374b87db79b245dfd7c7ef458bfc9250de1edd0019",
+    "backend/app/workflow.py": "b75272efdfbe3e2a279a6baab8ff03007079af891315a05992fcf22cc9994b28",
+    "scripts/eval_core.py": "73dbfa8852b384833ad95b417b376a0b029051da30ec9c67c02dce3f2efbb1e0",
+    "scripts/evaluate_qa.py": "638267227979acb0f2d22fd5a152bf28e669d8fd016021908ecac39a0689bfbb",
+    "scripts/verify_comparison_quotes.py": "792214f66534a3f4e13bebc5d49bd835b67353f4c74cd4da32ae5f5a400fbf3a"
+  },
+  "sources": [
+    {
+      "id": "doc_d2f494b8a32f4b64999b6da6f74adad7",
+      "title": "DistilBERT, a distilled version of BERT: smaller,",
+      "filename": "1910.01108v4.pdf",
+      "sha256": "a70c78e2b4db85bfee7696e19829571a3b05f69c616db5c039f6f4eb33b1a0b6",
+      "parse_run_id": "parse_828fd9e7162c4192a1c9ebe64b1ac885",
+      "status": "ready",
+      "blocks_sha256": "bacf136f3f3614a971213f656240da936af3a736f3d2fdb9f6090caf7a498d86"
+    },
+    {
+      "id": "doc_e645387c78a74660b75a8c66e56df9bc",
+      "title": "Learning Transferable Visual Models From Natural Language Supervision",
+      "filename": "2103.00020v1.pdf",
+      "sha256": "6478b6e571a7d6fcd846d8ef77bfd60c285f1986abb8f475eedc43de403074f5",
+      "parse_run_id": "parse_d0e4dfdbf04c452581344e082be2f609",
+      "status": "partial",
+      "blocks_sha256": "25ce70a0b727fe49f2b8949f041df9ef8503aeed849c97e7540e9f46b158f3db"
+    }
+  ],
+  "request": {
+    "document_ids": [
+      "doc_d2f494b8a32f4b64999b6da6f74adad7",
+      "doc_e645387c78a74660b75a8c66e56df9bc"
+    ],
+    "parse_runs": {
+      "doc_d2f494b8a32f4b64999b6da6f74adad7": "parse_828fd9e7162c4192a1c9ebe64b1ac885",
+      "doc_e645387c78a74660b75a8c66e56df9bc": "parse_d0e4dfdbf04c452581344e082be2f609"
+    },
+    "dimensions": [
+      "hardware"
+    ],
+    "question": "分别核对两篇文献的预训练硬件，保留原文模型规模等条件。仅摘录所附引文中的原文短语，不能将不同条件合并；无法用一个连续引文表达则留空。"
+  },
+  "previous_freeze": "evaluation/freeze_stage21_comparison_quotes_v2.json",
+  "changed_files": [
+    "apps/web/src/ComparisonPanel.tsx"
+  ]
+}

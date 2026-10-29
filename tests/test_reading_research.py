@@ -112,13 +112,13 @@ def test_comparison_rejects_invalid_selection(client, body):
 def test_model_cells_reject_cross_paper_ids_new_numbers_and_nonverbatim_quotes():
     from backend.app.comparison import _apply_model_cells
     rows = [{"key": "hardware", "cells": [{"document_id": "a", "status": "evidence_only", "evidence": [{"id": "ev_a", "text": "Synthetic training used 8 A100 GPUs."}]}]}]
-    valid = {"dimension": "hardware", "value": "8 A100 GPUs", "support_quote": "training used 8 A100 GPUs", "evidence_ids": ["ev_a"], "conditions": "Synthetic training"}
+    valid = {"dimension": "hardware", "value": "8 A100 GPUs", "support_quote": "training used 8 A100 GPUs", "evidence_ids": ["ev_a"], "conditions": "training"}
     for change in ({"evidence_ids": ["ev_other_paper"]}, {"value": "128 A100 GPUs"}, {"support_quote": "These are fabricated words"}):
         target = copy.deepcopy(rows)
         _apply_model_cells(target, "a", {"cells": [{**valid, **change}]})
         assert target[0]["cells"][0]["status"] == "evidence_only"
     _apply_model_cells(rows, "a", {"cells": [valid]})
-    assert rows[0]["cells"][0]["status"] == "model_source_checked"
+    assert rows[0]["cells"][0]["status"] == "quote_bound_candidate"
 
 
 def test_comparison_deleted_during_model_call_never_returns_source(client, paper, sample_pdfs, monkeypatch):
