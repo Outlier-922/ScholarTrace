@@ -19,7 +19,7 @@ from scripts.eval_core import bind_sources, digest, request_body, score_response
 PRODUCT_FILES = ['backend/app/qa.py', 'backend/app/model_client.py', 'backend/app/semantic.py',
                  'backend/app/source_scope.py','backend/app/parser.py','backend/app/store.py',
                  'backend/app/comparison.py','backend/app/comparison_quotes.py','backend/app/semantic_jobs.py','backend/app/answer_fields.py',
-                 'backend/app/workflow.py','backend/app/workflow_policy.py', 'backend/app/workflow_translation.py','backend/app/demo_access.py','backend/app/main.py','backend/app/selection_translation.py',
+                 'backend/app/workflow.py','backend/app/workflow_policy.py', 'backend/app/workflow_translation.py', 'backend/app/workflow_discovery.py','backend/app/demo_access.py','backend/app/main.py','backend/app/selection_translation.py',
                  'backend/app/table_qa.py','backend/app/table_refinement.py','backend/app/table_refine_native.py','backend/app/table_refine_store.py','backend/app/formulas.py','backend/app/formula_native.py','backend/app/formula_store.py','backend/app/evidence_repairs.py','backend/app/claim_checks.py','backend/app/insights.py','backend/app/insight_store.py','backend/app/graph.py','backend/app/graph_store.py',
                  'scripts/eval_core.py', 'scripts/evaluate_qa.py']
 

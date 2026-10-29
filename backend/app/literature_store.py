@@ -38,6 +38,13 @@ def cache_get(key):
         return json.loads(row['payload']) if row else None
 
 
+def cache_snapshot(key):
+    """Read an explicitly labeled local snapshot, including an expired one."""
+    with store.connection() as conn:
+        row=conn.execute('SELECT payload,expires_at FROM literature_cache WHERE key=?',(key,)).fetchone()
+        return {'payload':json.loads(row['payload']),'expires_at':row['expires_at'],'expired':row['expires_at']<=store.now()} if row else None
+
+
 def cache_put(key,payload):
     expiry=(datetime.now(timezone.utc)+timedelta(hours=6)).isoformat()
     with store.connection() as conn:
@@ -49,6 +56,12 @@ def save_search(request,payload):
     with store.connection() as conn:
         conn.execute('INSERT INTO literature_searches VALUES(?,?,?,?)',(identity,json.dumps(request,ensure_ascii=False),json.dumps(payload,ensure_ascii=False),store.now()))
     return identity
+
+
+def get_search(identity):
+    with store.connection() as conn:
+        row=conn.execute('SELECT request,payload FROM literature_searches WHERE id=?',(identity,)).fetchone()
+        return {'request':json.loads(row['request']),'result':{**json.loads(row['payload']),'search_id':identity}} if row else None
 
 
 def feedback():

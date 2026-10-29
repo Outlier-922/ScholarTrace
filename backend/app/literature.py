@@ -10,6 +10,7 @@ import tempfile
 import time
 import uuid
 import xml.etree.ElementTree as ET
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import quote, unquote, urljoin, urlsplit
@@ -28,6 +29,11 @@ _last={'arxiv':0.,'crossref':0.}
 _blocked_until={'arxiv':0.,'crossref':0.}
 _checking=set()
 _scheduler=None
+request_guard=ContextVar('scholartrace_metadata_request_guard',default=None)
+
+
+class MetadataCacheMiss(Exception):
+    pass
 
 
 class SearchRequest(BaseModel):
@@ -80,6 +86,7 @@ async def _fetch(provider,params=None,doi=None):
         if delay>0: await asyncio.sleep(delay)
         _last[provider]=time.monotonic()
         async with httpx.AsyncClient(timeout=httpx.Timeout(25,connect=10),follow_redirects=False) as client:
+            if guard:=request_guard.get():guard()
             async with client.stream('GET',endpoint,params=params,headers=headers) as response:
                 if response.status_code==429:
                     retry=response.headers.get('retry-after','60')
@@ -136,11 +143,15 @@ def parse_crossref(body,exact=False):
     return {'items':items,'total':message.get('total-results',len(items))}
 
 
-async def search_provider(provider,query,mode,limit,*,fresh=False,latest=False):
+async def search_provider(provider,query,mode,limit,*,fresh=False,latest=False,cache_only=False):
     exact=identify(query)
     cache_key=hashlib.sha256(json.dumps(['query-v2',provider,query,mode,limit,latest],ensure_ascii=False).encode()).hexdigest()
     if not fresh and (cached:=repo.cache_get(cache_key)):
         return {**cached,'cache':'hit'}
+    if cache_only:
+        if cached:=repo.cache_snapshot(cache_key):
+            return {**cached['payload'],'cache':'stale' if cached['expired'] else 'hit','cache_expires_at':cached['expires_at']}
+        raise MetadataCacheMiss('metadata_cache_miss')
     if provider=='arxiv':
         if exact and exact[0]=='arxiv': params={'id_list':exact[1]}
         else:
@@ -204,6 +215,13 @@ async def search(request:SearchRequest):
 def record(key:str):
     item=repo.get_record(key)
     if not item: raise HTTPException(404,'书目记录不存在，请先检索')
+    return item
+
+
+@router.get('/literature/searches/{identity}')
+def saved_search(identity:str):
+    item=repo.get_search(identity)
+    if not item:raise HTTPException(404,'检索快照不存在')
     return item
 
 
