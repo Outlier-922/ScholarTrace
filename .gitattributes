@@ -8,3 +8,7 @@
 *.md text eol=lf
 *.ps1 text eol=crlf
 *.pdf binary
+
+# Preserve generated reproduction bytes and their recorded file hashes.
+output/stage26/local_first/*_reproduction/** -text -diff
+output/stage26/stage26_focused_first.txt -text -diff

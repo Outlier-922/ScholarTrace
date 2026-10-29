@@ -21,6 +21,7 @@ def snapshot(payload, reason, detail=''):
               'source_digest': hashlib.sha256(json.dumps(payload['sources'], sort_keys=True, ensure_ascii=False).encode()).hexdigest(),
               'execution_model_disabled': payload.get('execution_model_disabled', False),
               'execution_metadata_disabled':payload.get('execution_metadata_disabled',False),
+              'plot_digest': hashlib.sha256(json.dumps(payload['plot_spec'], sort_keys=True, ensure_ascii=False).encode()).hexdigest() if payload.get('plot_spec') else None,
               'steps': [{key: copy.deepcopy(step[key]) for key in ('id', 'tool', 'depends_on', 'recovery_for', 'model_allowed', 'translation_index','metadata_provider','metadata_cache_only') if key in step}
                         for step in payload['steps']]}
     history.append(record)

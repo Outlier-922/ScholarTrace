@@ -1,5 +1,5 @@
 {
-  "application_version": "0.21.0",
+  "application_version": "0.22.0",
   "as_of": "2026-10-30",
   "scope": "按用户提供赛题逐项整理的工程交付判断；不是主办方认证、评分百分比或豁免清单。",
   "items": [
@@ -20,9 +20,9 @@
     {"id":"M5-REVIEW","required":true,"state":"partial","requirement":"自动领域综述","current":"已加入草稿、模型复查、原版本补证据和独立修订；小样本有改善但仍有表述外推/理由误归，未通过学术质量验收","proof_paths":["docs/STAGE5_TEST_REPORT.md","docs/STAGE15_TEST_REPORT.md","docs/STAGE16_TEST_REPORT.md","docs/STAGE17_TEST_REPORT.md"]},
     {"id":"M5-FUTURE","required":true,"state":"partial","requirement":"结合后续进展排除已解决旧idea","current":"已加入所选候选全文的双边证据核对与确切版本日期临时分组；未确认已解决，真实样本证据不足，不是完整旧idea排除","proof_paths":["docs/STAGE15_TEST_REPORT.md"]},
     {"id":"M6-WRITING","required":true,"state":"partial","requirement":"从idea输出学术框架与真实References","current":"来源框架、注册书目和导出可用；模板式，学术生成质量不足","proof_paths":["docs/STAGE6_TEST_REPORT.md"]},
-    {"id":"M6-PLOT","required":true,"state":"verified","requirement":"CSV科学图表及架构图可复现导出","current":"六类图、统计配置、图注及重画脚本已验证；自由自然语言分析不在该通过范围","proof_paths":["docs/STAGE6_TEST_REPORT.md"]},
+    {"id":"M6-PLOT","required":true,"state":"verified","requirement":"CSV科学图表及架构图可复现导出","current":"六类图、统计配置、图注及重画脚本已验证；已接入任务内CSV哈希/明确规则、预算恢复和复现包；自由自然语言分析不在该通过范围","proof_paths":["docs/STAGE6_TEST_REPORT.md","docs/STAGE26_TEST_REPORT.md"]},
     {"id":"M6-ENGLISH","required":true,"state":"partial","requirement":"中文学术内容翻成英文","current":"支持英文目标任务/选区；领域译文质量尚未系统验收","proof_paths":["docs/STAGE3_TEST_REPORT.md","docs/STAGE14_TEST_REPORT.md"]},
-    {"id":"AGENT-LOOP","required":true,"state":"partial","requirement":"意图规划、工具执行与科研流程闭环","current":"八种白名单工具含明确段落翻译与条件书目发现，独立联网预算/缓存恢复/核对快照交接可用；下载后的任务衔接、全文翻译/CSV、完整意图与科研质量仍不足（STAGE25_TEST_REPORT.md）；不强制特定框架","proof_paths":["docs/STAGE7_TEST_REPORT.md","docs/STAGE15_TEST_REPORT.md","docs/STAGE23_TEST_REPORT.md","docs/STAGE24_TEST_REPORT.md","docs/STAGE25_TEST_REPORT.md"]},
+    {"id":"AGENT-LOOP","required":true,"state":"partial","requirement":"意图规划、工具执行与科研流程闭环","current":"九种白名单工具含段落翻译、条件书目发现和固定CSV规则绘图；联网预算/缓存恢复/核对交接、绘图预算恢复及复现导出可用；下载后的任务衔接、全文翻译、完整意图与科研质量仍不足（STAGE26_TEST_REPORT.md）；不强制特定框架","proof_paths":["docs/STAGE7_TEST_REPORT.md","docs/STAGE15_TEST_REPORT.md","docs/STAGE23_TEST_REPORT.md","docs/STAGE24_TEST_REPORT.md","docs/STAGE25_TEST_REPORT.md","docs/STAGE26_TEST_REPORT.md"]},
     {"id":"D-CODE","required":true,"state":"external_pending","requirement":"源码仓库可供评审访问并保留历史","current":"本地Git历史已保存；远程评审访问尚未验证","proof_paths":[]},
     {"id":"D-PDF","required":true,"state":"partial","requirement":"当前最终版本技术PDF不超过30页","current":"已有14页0.9.0草稿，需同步最终功能、测试和部署","proof_paths":["docs/STAGE12_TEST_REPORT.md"]},
     {"id":"D-VIDEO","required":true,"state":"missing","requirement":"5-8分钟、1080p及以上、普通话MP4演示","current":"只有脚本，无正式成片","proof_paths":[]},
