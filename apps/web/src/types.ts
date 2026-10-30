@@ -82,7 +82,17 @@ export interface TableDraft extends Evidence {
   table_draft:{source_id:string;revision_id:string;row:number;changes:{column:number;label:string;before:string|null;after:string|null;bbox:number[]}[];header_changes:{column:number;before:string;after:string}[];note:string;sent_to_model:false};
 }
 
+export interface ClaimValidation {
+  version?:string; semantic_verified?:boolean; truncated?:number;
+  decisions?:{index:number;status:string;reason:string;unknown_numbers?:{literal:string;span:number[]}[]}[];
+}
 export interface AnswerResult {
+  run_id?:string;
+  question?:string;
+  validation_replay?:{source_run_id:string;actual_model_calls:number;source_checked:boolean};
+  model_proposal?:Record<string,unknown>;
+  claim_validation?:ClaimValidation;
+  field_validation?:ClaimValidation;
   mode: 'evidence_only' | 'llm';
   answer: string;
   claims: { text: string; evidence_ids: string[]; status: string }[];

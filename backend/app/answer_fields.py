@@ -80,33 +80,42 @@ def formula_fragment(text):
     return text.count('{')!=text.count('}')
 
 
-def interpret(payload,question,evidence,validate):
+def interpret(payload,question,evidence,validate,*,validate_audit=None):
     """Compile only allowlisted document/field rows; legacy callers still work."""
     keys=requested(question)
     if not keys or 'field_answers' not in payload:return None
     incoming=payload['field_answers']
     if not isinstance(incoming,list):raise ValueError('invalid_field_answers')
     by_id={item['id']:item for item in evidence};documents={item['document_id'] for item in evidence}
-    groups={};rejected=0
-    for item in incoming[:20]:
+    groups={};rejected=0;decisions=[]
+    for index,item in enumerate(incoming[:20]):
+        decision={'index':index,'status':'rejected','reason':'invalid_document_or_field'};decisions.append(decision)
         if (not isinstance(item,dict) or not isinstance(item.get('document_id'),str) or not isinstance(item.get('field'),str)
                 or item['document_id'] not in documents or item['field'] not in keys):
             rejected+=1;continue
-        key=(item['document_id'],item['field']);groups.setdefault(key,[]).append(item)
+        decision.update(document_id=item['document_id'],field=item['field'])
+        key=(item['document_id'],item['field']);groups.setdefault(key,[]).append((item,decision))
     claims=[];coverage=[];missing=[]
     for document in dict.fromkeys(item['document_id'] for item in evidence):
         first=next(item for item in evidence if item['document_id']==document)
         title=first['title']+(' · '+first['version_label'] if first.get('version_label') else '')
         for field in keys:
             rows=groups.get((document,field),[]);accepted=[];states=set();invalid=False
-            for item in rows:
+            for item,decision in rows:
                 states.add(item.get('status') if isinstance(item.get('status'),str) else 'invalid')
-                if item.get('status')=='missing':continue
+                if item.get('status')=='missing':
+                    decision.update(status='missing_candidate',reason='provider_missing');continue
                 ids=item.get('evidence_ids');text=item.get('text')
                 if (item.get('status')!='answered' or not isinstance(ids,list) or not ids
                         or any(not isinstance(identity,str) or identity not in by_id or by_id[identity]['document_id']!=document for identity in ids)):
-                    invalid=True;rejected+=1;continue
-                result=validate({'claims':[{'text':text,'evidence_ids':ids}]},evidence)
+                    decision['reason']='invalid_status_or_document_evidence';invalid=True;rejected+=1;continue
+                if validate_audit:
+                    result,details=validate_audit({'claims':[{'text':text,'evidence_ids':ids}]},evidence)
+                    check=details['decisions'][0]
+                    decision.update({k:v for k,v in check.items() if k!='index'})
+                else:
+                    result=validate({'claims':[{'text':text,'evidence_ids':ids}]},evidence)
+                    decision.update(status='accepted' if result else 'rejected',reason='literal_checks_passed' if result else 'source_or_structure_check')
                 if not result:invalid=True;rejected+=1;continue
                 claim={**result[0],'document_id':document,'field':field}
                 if claim not in accepted:accepted.append(claim)
@@ -118,4 +127,5 @@ def interpret(payload,question,evidence,validate):
                 detail={'missing_in_evidence':'给定候选证据不足','not_assessed':'本次模型未完成该字段','needs_review':'输出冲突或未通过来源/结构检查'}[status]
                 missing.append(title+' · '+FIELDS[field][0]+'：'+detail+'。')
     return {'claims':claims,'missing_information':missing,'answer_coverage':coverage,
-            'field_validation':{'mode':'scoped_fields','rejected_rows':rejected,'semantic_verified':False}}
+            'field_validation':{'mode':'scoped_fields','version':'qa-numeric-literals-v3','rejected_rows':rejected,'semantic_verified':False,
+                                'proposal_count':len(incoming),'truncated':max(0,len(incoming)-20),'decisions':decisions}}

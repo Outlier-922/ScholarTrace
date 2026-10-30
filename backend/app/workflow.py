@@ -291,6 +291,8 @@ async def retrieve(payload,supplement=False):
         result['claims']=qa._validate_claims(proposed,evidence);result['mode']='llm'
         result['answer_coverage']=proposed.get('answer_coverage',[])
         result['missing_information']=proposed.get('missing_information',[])
+        for key in ('model_proposal','claim_validation','field_validation'):
+            if key in proposed:result[key]=proposed[key]
         result['answer']=qa.format_answer(result['claims'],evidence) or '没有陈述通过来源与数字检查，保留空缺。'
     return result
 

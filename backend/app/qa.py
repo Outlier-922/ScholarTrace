@@ -346,43 +346,93 @@ def _retrieve_question(question,documents,limit,diagnostics=None):
     return selected
 
 
-def _validate_claims(payload: dict[str, Any], evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def numeric_literals(text):
+    # Han characters and model labels must not hide digits. Keep grouped numbers
+    # and scientific notation atomic: 536 is not evidence for 65,536, nor 4 for 1e-4.
+    return [(m.group().casefold(),list(m.span())) for m in re.finditer(r'\d+(?:,\d{3})*(?:\.\d+)?(?:e[-+]?\d+)?',text,re.I)]
+
+
+def reported_ratio_witnesses(text,ids,sources):
+    """Permit only the structural numerator in 'reduced to 1/N (factor N)'.
+
+    The same explicit reduction phrase must occur in the attached original and
+    candidate. No inferred layer counts, percent conversion or general math.
+    This checks representation equivalence, not the claim's subject/conditions.
+    """
+    factor=r'\breduced\s+by\s+a\s+factor\s+of\s+(\d+)(?!\d|,\d|\.\d)\b'
+    fractions=[m for pattern in [r'(?:减少|缩减|降低|降|减).{0,16}(?:为|至)(?:原来(?:的)?|原先(?:的)?|原值(?:的)?)?\s*(?P<num>1)\s*/\s*(?P<den>\d+)',
+                                  r'\breduced\s+to\s+(?P<num>1)\s*/\s*(?P<den>\d+)'] for m in re.finditer(pattern,text,re.I)]
+    quoted_factors={m.group(1) for m in re.finditer(factor,text,re.I)};witnesses=[]
+    for fraction in fractions:
+        denominator=fraction.group('den')
+        if denominator not in quoted_factors or not 2<=int(denominator)<=1_000_000:continue
+        for identity in ids:
+            original=sources[identity]['text']
+            for match in re.finditer(factor,original,re.I):
+                if match.group(1)!=denominator:continue
+                clause=re.split(r'[.!?;]',original[max(0,match.start()-80):match.start()])[-1]
+                if re.search(r'\b(?:not|never|without)\b',clause,re.I):continue
+                witnesses.append({'kind':'reported_reduction_unit_fraction','numerator_span':list(fraction.span('num')),'denominator':denominator,
+                                  'evidence_id':identity,'source_quote':match.group(),'source_quote_range':list(match.span()),'semantic_verified':False})
+                break
+            if any(w['numerator_span']==list(fraction.span('num')) for w in witnesses):break
+    return witnesses
+
+
+def _validate_claims(payload: dict[str, Any], evidence: list[dict[str, Any]], diagnostics=None) -> list[dict[str, Any]]:
     sources = {item["id"]: item for item in evidence}
     verified: list[dict[str, Any]] = []
     claims = payload.get("claims", [])
+    decisions=[]
+    if diagnostics is not None:
+        diagnostics.update(version='qa-numeric-literals-v3',decisions=decisions,semantic_verified=False,
+                           proposal_count=len(claims) if isinstance(claims,list) else 0,
+                           truncated=max(0,len(claims)-20) if isinstance(claims,list) else 0)
     if not isinstance(claims, list):
         return []
-    for claim in claims[:20]:
+    for index,claim in enumerate(claims[:20]):
+        decision={'index':index,'status':'rejected','reason':'invalid_claim'};decisions.append(decision)
         if not isinstance(claim, dict):
             continue
         text = claim.get("text")
         ids = claim.get("evidence_ids")
         if not isinstance(text, str) or not text.strip() or len(text) > 2000:
+            decision['reason']='invalid_claim_text'
             continue
-        if answer_fields.formula_fragment(text):continue
+        if answer_fields.formula_fragment(text):decision['reason']='formula_fragment';continue
         if not isinstance(ids, list) or not ids or any(not isinstance(i, str) or i not in sources for i in ids):
+            decision['reason']='invalid_evidence_ids'
             continue
+        decision['evidence_ids']=list(dict.fromkeys(ids))
         supporting_text = " ".join(model_source_text(sources[i]) for i in ids)
         # Reject novel numeric literals; semantic support still needs later NLI
         # and human evaluation.  The UI must not call these fully verified facts.
-        numbers = re.findall(r"(?<![\w])\d+(?:\.\d+)?(?:e[-+]?\d+)?", text, re.I)
-        original_numbers = set(re.findall(r"(?<![\w])\d+(?:\.\d+)?(?:e[-+]?\d+)?", supporting_text, re.I))
-        if any(number not in original_numbers for number in numbers):
+        original_numbers={number for number,_ in numeric_literals(supporting_text)}
+        unknown=[{'literal':text[slice(*span)],'span':span} for number,span in numeric_literals(text) if number not in original_numbers]
+        witnesses=reported_ratio_witnesses(text,ids,sources) if unknown else []
+        if witnesses:
+            unknown=[item for item in unknown if not any(item['span']==w['numerator_span'] and item['literal']=='1' for w in witnesses)]
+            decision['numeric_transforms']=witnesses
+        if unknown:
+            decision.update(reason='novel_numeric_literal',unknown_numbers=unknown)
             continue
         table_items=[sources[i] for i in ids if sources[i].get('source_kind')=='table_cell']
         if table_items:
             # Compile the actual row/column/value, never relabel a model-invented
             # narrative as a source fact. Mixed prose/table claims must be split.
-            if len(table_items)!=1 or len(ids)!=1 or table_items[0]['table_cell']['value'] not in text:continue
+            if len(table_items)!=1 or len(ids)!=1 or table_items[0]['table_cell']['value'] not in text:
+                decision['reason']='invalid_table_claim';continue
             for item in table_items:
                 compiled={'text':item['text'],'evidence_ids':[item['id']],'status':'table_candidate',
                           'table_cell':item['table_cell'],'semantic_verified':False}
                 if compiled not in verified:verified.append(compiled)
+            decision.update(status='accepted',reason='compiled_table_candidate')
             continue
         value={"text": text.strip(), "evidence_ids": list(dict.fromkeys(ids)), "status": "source_checked"}
         if isinstance(claim.get('field'),str) and claim['field'] in answer_fields.FIELDS and claim.get('document_id') and all(sources[identity].get('document_id')==claim['document_id'] for identity in ids):
             value.update(field=claim['field'],document_id=claim['document_id'])
         verified.append(value)
+        decision.update(status='accepted',reason='literal_checks_with_reported_ratio' if witnesses else 'literal_checks_passed')
     return verified
 
 
@@ -423,8 +473,17 @@ async def _generate(question: str, evidence: list[dict[str, Any]]) -> dict[str, 
             'missing表示给定证据不足，text留空，不能断言整篇没有报告。每个文献/字段仅一项，最多20项。')
         payload['requested_fields']=[{'key':key,'label':answer_fields.FIELDS[key][0]} for key in keys]
     result=await model_client.chat_json(system,payload,max_tokens=1600)
-    interpreted=answer_fields.interpret(result,question,evidence,_validate_claims)
-    return interpreted if interpreted is not None else {key:result[key] for key in ('claims','missing_information') if key in result}
+    return compile_proposal(result,question,evidence)
+
+
+def compile_proposal(result,question,evidence):
+    def audited(value,sources):
+        details={};claims=_validate_claims(value,sources,details);return claims,details
+    interpreted=answer_fields.interpret(result,question,evidence,_validate_claims,validate_audit=audited)
+    if interpreted is None:
+        claims,details=audited(result,evidence)
+        interpreted={'claims':claims,'claim_validation':details,'missing_information':result.get('missing_information',[])}
+    return {**interpreted,'model_proposal':result}
 
 
 def _save_run(result: dict[str, Any], question: str, document_ids: list[str]) -> None:
@@ -445,6 +504,10 @@ def _filter_deleted_sources(result: dict[str, Any], document_ids: list[str]) -> 
     draft_values=result.get('table_drafts',[])
     valid_drafts=[v for v in draft_values if v['document_id'] not in deleted and table_qa.valid_evidence(v)]
     if not deleted and not invalid_table and len(valid_drafts)==len(draft_values):return
+    # Raw candidates can contain the deleted text even when no retained claim
+    # uses it. Hide the entire proposal/row audit if its source scope changes.
+    result.pop('model_proposal',None);result.pop('claim_validation',None)
+    if isinstance(result.get('field_validation'),dict):result['field_validation'].pop('decisions',None)
     result['table_drafts']=valid_drafts
     result["evidence"] = [item for item in previous if item["document_id"] not in deleted and item['id'] not in invalid_table]
     for reference in result.get('table_context',[]):
@@ -552,6 +615,8 @@ async def ask(request: AskRequest) -> dict[str, Any]:
                 result["claims"] = claims
                 result['answer_coverage']=payload.get('answer_coverage',[])
                 result['field_validation']=payload.get('field_validation',{'mode':'legacy_claims','semantic_verified':False})
+                for key in ('model_proposal','claim_validation'):
+                    if key in payload:result[key]=payload[key]
                 result["missing_information"] = [str(item)[:500] for item in missing[:10]] if isinstance(missing, list) else []
                 result["mode"] = "llm"
                 if answer_fields.requested(question) and not result['answer_coverage']:
@@ -596,3 +661,34 @@ def get_run(run_id: str) -> dict[str, Any]:
     # not expose stale excerpts through the normal result endpoint.
     _filter_deleted_sources(record, record.get("document_ids", []))
     return record
+
+
+@router.post('/agent-runs/{run_id}/revalidate')
+def revalidate_run(run_id:str):
+    original=get_run(run_id)
+    if not isinstance(original.get('model_proposal'),dict):raise HTTPException(409,'没有保存原始模型候选，不能重建或猜测旧响应')
+    structures={}
+    for evidence in original['evidence']:
+        if evidence.get('source_kind'):raise HTTPException(409,'此本地复核入口仅支持正文块，表格请从原表格重新核对')
+        key=(evidence['document_id'],evidence['parse_run_id'])
+        if key not in structures:
+            document=store.get_internal_document(key[0])
+            if not document:raise HTTPException(409,'来源已失效')
+            try:
+                with Path(document['file_path']).open('rb') as stream:digest=hashlib.file_digest(stream,'sha256').hexdigest()
+            except OSError:raise HTTPException(409,'原始PDF不可用')
+            if digest!=document['sha256']:raise HTTPException(409,'PDF哈希变化，不能复用旧候选')
+            structure=store.get_structure(key[0],parse_run_id=key[1])
+            if not structure:raise HTTPException(409,'原解析版本不可用')
+            structures[key]={b['id']:b for b in structure['blocks']}
+        block=structures[key].get(evidence['block_id'])
+        if not block or any(block[k]!=evidence[k] for k in ('text','page','bbox')) or block.get('metadata',{})!=evidence.get('metadata',{}):
+            raise HTTPException(409,'原文块或版式快照已变化')
+    compiled=compile_proposal(original['model_proposal'],original['question'],original['evidence'])
+    result={**original,**compiled,'run_id':str(uuid.uuid4()),'validation_replay':{'source_run_id':original['run_id'],'actual_model_calls':0,'source_checked':True},
+            'warnings':[*original.get('warnings',[]),'本次只按当前规则复核保存的同一份模型候选，新增模型请求0；原记录保留。'],
+            'steps':[*original.get('steps',[]),{'label':'保存候选本地复核','status':'completed','detail':'原PDF/ParseRun/块快照核对后重新检查，没有调用模型。'}]}
+    result['answer']=format_answer(result['claims'],result['evidence']) or '没有陈述通过当前来源与数字检查，保留候选原文。'
+    result['created_at']=datetime.now(timezone.utc).isoformat()
+    _filter_deleted_sources(result,original['document_ids']);_save_run(result,original['question'],original['document_ids'])
+    return result

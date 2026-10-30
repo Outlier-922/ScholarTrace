@@ -1,0 +1,6 @@
+.claim-audit{margin:14px 0;border:1px solid var(--line,#dce2d4);border-radius:10px;padding:12px;min-width:0;max-width:100%;font-size:12px}
+.claim-audit summary{cursor:pointer;overflow-wrap:anywhere}
+.claim-audit p{line-height:1.7;color:var(--muted,#65735d);overflow-wrap:anywhere}
+.claim-audit article{border-top:1px solid var(--line,#dce2d4);padding-top:10px;margin-top:10px}
+.claim-audit pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:320px;overflow:auto;font-size:11px;line-height:1.6;max-width:100%}
+.claim-audit details{margin-top:10px}
