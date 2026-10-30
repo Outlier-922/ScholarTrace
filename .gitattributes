@@ -21,3 +21,6 @@ output/stage28/stage28_*.txt -text -diff
 
 # Preserve first-run numeric-check test/compiler transcripts verbatim.
 output/stage29/stage29_*.txt -text -diff
+
+# Preserve retrieval baseline, first failure, and final check transcripts.
+output/stage30/stage30_*.txt -text -diff

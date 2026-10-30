@@ -12,6 +12,7 @@ import math
 import os
 import re
 import uuid
+import unicodedata
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,6 +34,8 @@ STOPWORDS = set(
     "has have had their they we our than then according".split()
 )
 CONCEPTS = {
+    "最终配置": ["final", "configuration"], "配置": ["configuration"],
+    "设置": ["settings"], "策略": ["strategy"],
     "词表": ["vocabulary"], "分词": ["tokenization", "tokenizer"],
     "文本规模": ["corpus", "size"], "文本体积": ["corpus", "size"],
     "数据集": ["dataset", "data"], "月份": ["month", "downloaded"],
@@ -80,6 +83,11 @@ class AskRequest(BaseModel):
 
 
 def _tokens(text: str, *, query: bool = False) -> list[str]:
+    # Retrieval-only representations. Raw evidence/coordinates and model input
+    # remain unchanged. Keep both compound parts and joined line-wrap forms.
+    text = unicodedata.normalize('NFKC',text)
+    joined=[''.join(match.groups()) for match in re.finditer(r'\b([A-Za-z]+)[-\u00ad]\s*\n\s*([a-z]+)\b',text)]
+    if joined:text += ' ' + ' '.join(joined)
     value = text.casefold().replace("β", "beta").replace("α", "alpha")
     value = value.replace("_", " ")
     found = re.findall(r"[a-z]+\d*|\d+(?:\.\d+)?|[\u4e00-\u9fff]+", value)

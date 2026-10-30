@@ -68,10 +68,12 @@ def cue_score(key,text):
 
 
 def probe_query(question,key):
+    question=intent_text(question)
     sections=re.findall(r'(?:第\s*|\bsection\s+)(\d+(?:\.\d+)*)(?:\s*节|\b)',question,re.I)
     variants=re.findall(r'\b[A-Za-z][A-Za-z0-9/-]*\d[A-Za-z0-9/.-]*\b',question)
     phase='pre-training' if re.search(r'预训练|pre.?train',question,re.I) else 'fine-tuning' if re.search(r'微调|fine.?tun',question,re.I) else ''
-    return ' '.join([*['Section '+number for number in sections],phase,*variants[:3],FIELDS[key][2]]).strip()
+    explicit=list(dict.fromkeys(re.findall(r'(?<![A-Za-z0-9_-])[A-Za-z][A-Za-z0-9_-]{0,63}(?![A-Za-z0-9_-])',question)))[:12]
+    return ' '.join([*['Section '+number for number in sections],phase,*variants[:3],FIELDS[key][2],*explicit]).strip()
 
 
 def formula_fragment(text):
