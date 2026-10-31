@@ -7,7 +7,7 @@ import zipfile
 
 import pytest
 
-from backend.app import literature, literature_handoff as handoff, literature_store, store, workflow
+from backend.app import literature, literature_handoff as handoff, literature_store, store, workflow,studio
 from conftest import wait_for_document
 from test_literature import crossref, atom
 from test_workflow import papers, planned, start, wait
@@ -94,10 +94,35 @@ def test_snapshot_not_latest_registry_is_carried_to_child_and_export(client,pape
     task=planned(client,papers,goal='model architecture limitations',actions=['evidence','writing'],handoff_id=receipt['id'])
     assert task['handoff']['metadata']['title']==item['title'] and task['handoff']['parent_task_id']==parent['id']
     start(client,task);done=wait(client,task['id']);assert done['status']=='completed_with_gaps'
+    writing=next(step['result'] for step in done['steps'] if step['tool']=='writing')
+    reference=next(r for r in writing['references'] if r['document_id']==document['id'])
+    assert reference['metadata']==task['handoff']['metadata'] and reference['identity_basis']=='confirmed_fulltext_handoff'
+    assert writing['handoff']==task['handoff']
     assert workflow.repo.get(parent['id'])==parent_before
     with zipfile.ZipFile(io.BytesIO(client.get('/api/research-tasks/'+task['id']+'/export').content)) as archive:
         assert json.loads(archive.read('handoff.json'))==task['handoff'] and '全文交接来源' in archive.read('task.md').decode()
+        assert item['title'] in archive.read('references.bib').decode() and 'Changed latest registry record' not in archive.read('references.bib').decode()
     assert done['usage']['model']['calls']==done['usage']['metadata']['requests']==0
+
+
+@pytest.mark.parametrize('change',['metadata','document','run'])
+def test_writing_rejects_forged_or_foreign_confirmed_metadata(client,papers,change):
+    _,resolved=confirmed(client,papers[0]);receipt=copy.deepcopy(handoff.ready(resolved['id']))
+    ids=[papers[0]['id']];runs={papers[0]['id']:papers[0]['parse_run_id']}
+    if change=='metadata':receipt['metadata']['title']='FORGED'
+    elif change=='document':ids=[papers[1]['id']];runs={papers[1]['id']:papers[1]['parse_run_id']}
+    else:runs={papers[0]['id']:papers[1]['parse_run_id']}
+    with pytest.raises(Exception) as error:studio.build_draft(studio.DraftRequest(idea='Synthetic writing plan',document_ids=ids,parse_runs=runs),handoff=receipt)
+    assert getattr(error.value,'status_code',None) in {404,409}
+
+
+def test_writing_reuses_only_same_confirmed_binding(client,papers):
+    _,resolved=confirmed(client,papers[0]);receipt=handoff.ready(resolved['id']);identity=str(uuid.uuid4())
+    body=studio.DraftRequest(idea='Synthetic writing plan',document_ids=[papers[0]['id']],parse_runs={papers[0]['id']:papers[0]['parse_run_id']})
+    draft=studio.build_draft(body,artifact_id=identity,handoff=receipt)
+    assert studio.build_draft(body,artifact_id=identity,handoff=receipt)==draft
+    with pytest.raises(Exception) as error:studio.build_draft(body,artifact_id=identity)
+    assert getattr(error.value,'status_code',None)==409
 
 
 @pytest.mark.parametrize('invalid',['omit','replace_run','unknown_receipt'])

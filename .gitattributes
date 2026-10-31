@@ -24,3 +24,7 @@ output/stage29/stage29_*.txt -text -diff
 
 # Preserve retrieval baseline, first failure, and final check transcripts.
 output/stage30/stage30_*.txt -text -diff
+
+# Preserve integrated rehearsal transcripts and generated reproduction bytes.
+output/stage31/stage31_*.txt -text -diff
+output/stage31/*/reproduction/** -text -diff

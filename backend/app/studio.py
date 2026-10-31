@@ -17,7 +17,7 @@ from typing import Literal
 from fastapi import APIRouter,File,HTTPException,Query,UploadFile
 from fastapi.responses import FileResponse,PlainTextResponse,Response
 from pydantic import BaseModel,ConfigDict,Field,model_validator
-from . import graph,literature,literature_store,plot_runtime as runtime,qa,store,studio_store as repo,source_scope
+from . import graph,literature,literature_store,literature_handoff,plot_runtime as runtime,qa,store,studio_store as repo,source_scope
 
 router=APIRouter(prefix='/api/studio',tags=['writing-and-plotting'])
 _render_lock=threading.RLock()
@@ -230,8 +230,11 @@ def reference_for_document(document,records):
     return {'document_id':document['id'],'metadata':None,'identity_basis':'local_file_only','status':'bibliography_pending','candidates':[record['key'] for record in candidates]}
 
 
-def build_draft(body,*,artifact_id=None):
-    if artifact_id and (existing:=repo.get(artifact_id)):return existing
+def build_draft(body,*,artifact_id=None,handoff=None):
+    if handoff is not None:literature_handoff.validate_snapshot(handoff)
+    if artifact_id and (existing:=repo.get(artifact_id)):
+        if existing.get('handoff')!=handoff:raise HTTPException(409,'写作产物的全文交接范围不同，不能复用')
+        return existing
     if body.graph_id:
         snapshot=graph.graph(body.graph_id);sources=snapshot['sources']
     else:
@@ -240,11 +243,19 @@ def build_draft(body,*,artifact_id=None):
         if any(document['status'] not in {'ready','partial'} for document in docs):raise HTTPException(409,'请先等待解析完成')
         docs=source_scope.pin(docs,body.parse_runs)
         sources=[{'document_id':item['document']['id'],'parse_run_id':item['document']['parse_run_id'],'title':item['document']['title'],'version_label':item['document'].get('version_label')} for item in graph.choose_sources(docs)]
+    if handoff:
+        bound=handoff['source']
+        if not any(s['document_id']==bound['id'] and s['parse_run_id']==bound['parse_run_id'] for s in sources):
+            raise HTTPException(409,'已确认书目不属于写作的确切全文/解析版本')
     records=graph.cached_records();references=[];evidence=[]
     for source in sources:
         document=store.get_document(source['document_id'])
         if not document:raise HTTPException(404,'来源已删除')
-        references.append(reference_for_document(document,records))
+        if handoff and source['document_id']==handoff['source']['id']:
+            references.append({'document_id':document['id'],'metadata':copy.deepcopy(handoff['metadata']),
+                               'identity_basis':'confirmed_fulltext_handoff','status':'confirmed_handoff_identity',
+                               'handoff_id':handoff['id'],'parse_run_id':source['parse_run_id'],'pdf_sha256':handoff['source']['sha256']})
+        else:references.append(reference_for_document(document,records))
         structure=store.get_structure(document['id'],parse_run_id=source['parse_run_id'])
         if not structure:raise HTTPException(409,'来源解析不可用')
         blocks={block['id']:block for block in structure['blocks']}
@@ -261,7 +272,7 @@ def build_draft(body,*,artifact_id=None):
               {'id':'experiments','title':'实验计划','paragraphs':[paragraph('plan','待补充：数据来源与许可、训练/测试划分、指标方向、比较基线、重复实验标识、消融与失败判据。未完成前不写准确率提升或显著性结论。')]},
               {'id':'limitations','title':'局限与可证伪条件','paragraphs':[paragraph('plan','待补充：可能失败的场景、数据偏差、外推边界与最小验证实验。结论需与取得的证据一致。')]}]
     now=store.now();payload={'id':artifact_id or str(uuid.uuid4()),'kind':'draft','created_at':now,'updated_at':now,'title':body.idea[:100],'idea':body.idea,'revision':1,
-                            'mode':'evidence_plan','sources':sources,'evidence':evidence,'references':references,'sections':sections,
+                            'mode':'evidence_plan','sources':sources,'evidence':evidence,'references':references,'sections':sections,'handoff':copy.deepcopy(handoff),
                             'warnings':['这是原文证据与待实施写作计划，不是已完成实验的论文。','书目身份与论点支持分别检查；来源ID/数字检查不能替代语义核验。']}
     if not sections[2]['paragraphs']:sections[2]['paragraphs']=[paragraph('plan','未检索到可引用正文，请补充可解析文献并核对原文。')]
     try:repo.create(payload)

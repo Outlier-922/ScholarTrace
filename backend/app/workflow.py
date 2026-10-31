@@ -327,7 +327,7 @@ async def execute(payload,step):
         outline=await run_in_threadpool(graph.outline_payload,source_graph)
         return {**outline,'mode':'evidence_only','answer':'综述原文提纲；本步未生成学术综述，模型关闭、预算或调用失败见记录。','model_failures':model_failures,'evidence':[item for section in outline['sections'] for item in section['evidence']]}
     if step['tool']=='writing':
-        return await run_in_threadpool(studio.build_draft,studio.DraftRequest(idea=payload['goal'],document_ids=ids,parse_runs=runs),artifact_id=step['artifact_id'])
+        return await run_in_threadpool(studio.build_draft,studio.DraftRequest(idea=payload['goal'],document_ids=ids,parse_runs=runs),artifact_id=step['artifact_id'],handoff=payload.get('handoff'))
     if step['tool']=='diagram':
         shown=[item for item in payload['steps'] if item['tool']!='diagram']
         names={item['id']:'N'+str(index) for index,item in enumerate(shown)}
