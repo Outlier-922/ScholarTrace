@@ -18,6 +18,7 @@ from fastapi import APIRouter,File,HTTPException,Query,UploadFile
 from fastapi.responses import FileResponse,PlainTextResponse,Response
 from pydantic import BaseModel,ConfigDict,Field,model_validator
 from . import graph,literature,literature_store,literature_handoff,plot_runtime as runtime,qa,store,studio_store as repo,source_scope
+from . import writing_generation
 
 router=APIRouter(prefix='/api/studio',tags=['writing-and-plotting'])
 _render_lock=threading.RLock()
@@ -290,6 +291,7 @@ class Paragraph(BaseModel):
     kind:Literal['quote','fact','analysis','plan']
     text:str=Field(min_length=1,max_length=12000)
     evidence_ids:list[str]=Field(default_factory=list,max_length=10)
+    support_quote:str|None=Field(default=None,max_length=1600)
 
 
 class DraftSection(BaseModel):
@@ -318,6 +320,9 @@ def validate_sections(sections,evidence):
                 paragraph['review_status']='source_excerpt'
             elif paragraph['kind']=='fact':
                 if not qa._validate_claims({'claims':[{'text':text,'evidence_ids':ids}]},evidence):raise ValueError('事实需有效来源，且不能增加来源中未报告的数字')
+                if quote:=paragraph.get('support_quote'):
+                    if len(ids)!=1 or writing_generation.normalized(quote) not in writing_generation.normalized(by_id[ids[0]]['text']):raise ValueError('引句不属于所选原文')
+                    if not qa._validate_claims({'claims':[{'text':text,'evidence_ids':ids}]},[{**by_id[ids[0]],'text':quote,'metadata':{}}]):raise ValueError('事实数字不在所附引句内')
                 paragraph['review_status']='source_and_numbers_checked_semantics_pending'
             elif paragraph['kind']=='analysis':paragraph['review_status']='user_analysis_unverified'
             else:paragraph['review_status']='planned_not_executed'
@@ -340,6 +345,22 @@ def get_draft(identity:str,revision:int|None=Query(default=None,ge=1)):return as
 @router.get('/drafts/{identity}/revisions')
 def draft_revisions(identity:str):
     asset(identity,'draft');return {'items':repo.revisions(identity)}
+
+
+@router.post('/drafts/{identity}/generate')
+async def generate_draft(identity:str,body:writing_generation.GenerateRequest):
+    return await writing_generation.generate(asset(identity,'draft'),body)
+
+
+@router.get('/drafts/{identity}/generations')
+def generation_history(identity:str):
+    asset(identity,'draft');return {'items':writing_generation.history(identity)}
+
+
+@router.post('/drafts/{identity}/generations/{attempt_id}/review')
+def review_generation(identity:str,attempt_id:str,body:writing_generation.ReviewRequest):
+    try:return writing_generation.review(asset(identity,'draft'),attempt_id,body)
+    except (ValueError,OSError):raise HTTPException(409,'原文或保存状态已变化，不能采用校订候选')
 
 
 class ReferenceBinding(BaseModel):
@@ -390,6 +411,7 @@ def writing_exports(payload):
         for paragraph in section['paragraphs']:
             citations=list(dict.fromkeys(tokens[by_id[key]['document_id']] for key in paragraph['evidence_ids']))
             lines += ['**'+labels[paragraph['kind']]+'** '+paragraph['text']+(' '+' '.join('['+token+']' for token in citations) if citations else ''),'']
+            if paragraph.get('support_quote'):lines += ['核验引句（仍需语义核对）：'+paragraph['support_quote'],'']
             if paragraph['evidence_ids']:lines += ['来源位置：'+'；'.join(f'{by_id[key]["title"]} / PDF第{by_id[key]["page"]}页 / {by_id[key]["parse_run_id"]} / {by_id[key]["block_id"]}' for key in paragraph['evidence_ids']),'']
     lines += ['## References（注册记录对应）','']+references+['','## 本地来源（书目身份待核对）','']+sources+['']+payload['warnings']
     return '\n'.join(lines),'\n\n'.join(bib)+'\n'

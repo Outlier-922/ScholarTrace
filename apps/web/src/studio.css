@@ -6,3 +6,7 @@
 
 .studio-chart-preview>img{max-height:400px;object-fit:contain}.studio-shell input[type=checkbox]{accent-color:#678852}.studio-chart-config select,.studio-chart-config input{font-size:11px}
 @media(max-width:650px){.studio-chart-preview>img{max-height:none}}
+
+.studio-generation { margin: 16px 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: #f5f7ef; }
+.studio-generation pre { max-height: 280px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.studio-support-quote { margin: 10px 0; padding: 10px 12px; border-left: 3px solid #8c9d82; background: #f2f5ee; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }

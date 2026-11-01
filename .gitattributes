@@ -28,3 +28,7 @@ output/stage30/stage30_*.txt -text -diff
 # Preserve integrated rehearsal transcripts and generated reproduction bytes.
 output/stage31/stage31_*.txt -text -diff
 output/stage31/*/reproduction/** -text -diff
+
+# Preserve writing generation and first-failure test logs verbatim.
+output/stage32/stage32_*.txt -text -diff
+output/stage32/preparation/corrected_proposal.json -text -diff

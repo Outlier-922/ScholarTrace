@@ -49,6 +49,7 @@ async def lifespan(app: FastAPI):
     formulas.repo.init_db()
     table_refinement.repo.init_db()
     if not demo_access.read_only():
+        studio.writing_generation.recover()
         translation.resume_jobs()
         document_translation.start()
         literature.start()

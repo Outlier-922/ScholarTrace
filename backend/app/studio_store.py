@@ -60,7 +60,7 @@ def list_assets(kind=None):
         return result
 
 
-def save_draft(payload,expected):
+def save_draft(payload,expected,*,commit_hook=None):
     with store.connection() as conn:
         conn.execute('BEGIN IMMEDIATE')
         row=conn.execute("SELECT payload FROM studio_assets WHERE id=? AND kind='draft' AND deleted=0",(payload['id'],)).fetchone()
@@ -71,6 +71,7 @@ def save_draft(payload,expected):
         payload['revision']=expected+1;payload['updated_at']=store.now()
         conn.execute('UPDATE studio_assets SET payload=? WHERE id=?',(json.dumps(payload,ensure_ascii=False),payload['id']))
         conn.execute('INSERT INTO studio_revisions VALUES(?,?,?,?)',(payload['id'],payload['revision'],json.dumps(payload,ensure_ascii=False),store.now()))
+        if commit_hook:commit_hook(conn,payload)
     return payload
 
 
@@ -84,5 +85,7 @@ def purge_document(document_id):
         conn.execute('BEGIN IMMEDIATE')
         for row in conn.execute("SELECT id,payload FROM studio_assets WHERE kind='draft' AND deleted=0").fetchall():
             if any(source['document_id']==document_id for source in json.loads(row['payload']).get('sources',[])):
+                if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='writing_generations'").fetchone():
+                    conn.execute('DELETE FROM writing_generations WHERE asset_id=?',(row['id'],))
                 conn.execute('DELETE FROM studio_assets WHERE id=?',(row['id'],))
                 conn.execute('DELETE FROM studio_revisions WHERE asset_id=?',(row['id'],))
