@@ -40,3 +40,8 @@ output/stage33/stage33_*.txt -text -diff
 output/stage33/**/graph.json -text -diff
 output/stage33/**/graph_response.txt -text -diff
 output/stage33/prototype*_graph.json -text -diff
+
+# Preserve header-identity graph snapshots and test transcripts.
+output/stage34/stage34_*.txt -text -diff
+output/stage34/**/graph.json -text -diff
+output/stage34/**/graph_response.txt -text -diff

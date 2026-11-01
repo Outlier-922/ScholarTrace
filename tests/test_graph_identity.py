@@ -66,3 +66,42 @@ def test_only_native_bibliography_continuation_can_recover_a_table_candidate(ext
     units=graph.bibliography_units(structure)
     assert ('Recoverable Sources' in units[0]['text'])==expected
     assert continuation['type']=='table_candidate'
+
+
+@pytest.mark.parametrize('row',['Mira Example * 1 Alan Fiction * 2 Terry Sample 3','Mira Example1 Alan Fiction2 Terry Sample3','Mira Example † Alan Fiction ‡ Terry Sample'])
+def test_affiliation_markers_separate_first_author_and_preserve_raw_span(row):
+    blocks=[block('t','Synthetic Evidence Methods','title',.1),block('a',row,'paragraph',.2,10)]
+    result=identity.pdf_identity({'title':'Synthetic Evidence Methods'},{'blocks':blocks})
+    assert result['first_author']=='Mira Example' and result['surname']=='example'
+    span=result['author_name_span'];assert blocks[1]['text'][span['start']:span['end']]==span['text']=='Mira Example'
+
+
+@pytest.mark.parametrize('extraction,valid',[('native_pdf',True),('generated_table',False),('rapidocr',False)])
+def test_tall_native_name_email_roster_is_not_discarded_or_relabelled(extraction,valid):
+    author=block('a','\n  Mira Example 1\nmira@example.test\nAlan Fiction 2\nalan@example.test','table_candidate',.2,10)
+    author['bbox'][3]=.5;author['metadata']['extraction']=extraction
+    result=identity.pdf_identity({'title':'Synthetic Evidence Methods'},{'blocks':[block('t','Synthetic Evidence Methods','title',.1),author]})
+    assert bool(result)==valid
+    if result:
+        assert result['first_author']=='Mira Example' and result['author_layout']=='name_email_roster'
+        span=result['author_name_span'];assert author['text'][span['start']:span['end']]=='Mira Example'
+        assert author['type']=='table_candidate'
+
+
+@pytest.mark.parametrize('text',['Example Research 1\ninfo@example.test\nOther Center 2\ncontact@example.test','Mira Example 1\naccuracy 0.99\nAlan Fiction 2\nscore 0.98'])
+def test_affiliation_or_measured_data_table_is_not_an_author_roster(text):
+    author=block('a',text,'table_candidate',.2,10);author['bbox'][3]=.5;author['metadata']['extraction']='native_pdf'
+    assert identity.pdf_identity({'title':'Synthetic Evidence Methods'},{'blocks':[block('t','Synthetic Evidence Methods','title',.1),author]}) is None
+
+
+def test_ocr_title_is_not_promoted_to_native_identity():
+    title=block('t','Synthetic Evidence Methods','title',.1);title['metadata']['extraction']='rapidocr'
+    assert identity.pdf_identity({'title':'Synthetic Evidence Methods'},{'blocks':[title,block('a','Mira Example','paragraph',.2,10)]}) is None
+
+
+def test_marked_first_row_is_not_skipped_for_a_later_author_group():
+    blocks=[block('t','Synthetic Evidence Methods','title',.1),
+            block('first','Mira Example * 1 Alan Fiction * 2 Terry Sample * 3 Rowan Fixture 4','paragraph',.2,10),
+            block('later','Later Person Another Writer Final Author','paragraph',.24,10)]
+    result=identity.pdf_identity({'title':'Synthetic Evidence Methods'},{'blocks':blocks})
+    assert result['first_author']=='Mira Example' and result['author_source']['block_id']=='first'

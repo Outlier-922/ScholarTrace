@@ -9,6 +9,24 @@ def norm(text):return ''.join(c for c in unicodedata.normalize('NFKD',text).case
 def anchor(block):return {k:block[k] for k in ['block_id','page','bbox','text']} if 'block_id' in block else {k:block[k] for k in ['page','bbox','text']}|{'block_id':block['id']}
 
 
+def native(block):return (block.get('metadata') or {}).get('extraction') in {None,'native','native_pdf'}
+
+
+def author_name(line):
+    if re.search(r'abstract|arxiv|university|institute|department|laborator|research|openai|google|microsoft|published|copyright|https?://|@|\b(?:school|college|faculty|centre|center|affiliation|corporation)\b|\bmeta\s+ai\b',line,re.I):return None
+    first=re.split(r',|\band\b|[;|]|[*∗†‡]|\s+\d+|(?<=[^\W\d_])\d+',line,maxsplit=1)[0].strip()
+    names=re.findall(r"[^\W\d_]+(?:['’-][^\W\d_]+)*",first)
+    if not 2<=len(names)<=6 or not all(n[0].isupper() for n in names) or all(n.isupper() for n in names):return None
+    return {'name':' '.join(names),'surname':norm(names[-1]),'raw':first}
+
+
+def author_email_roster(block):
+    if block['type']!='table_candidate' or (block.get('metadata') or {}).get('extraction')!='native_pdf':return False
+    lines=[line.strip() for line in block['text'].splitlines() if line.strip()]
+    email=lambda text:bool(re.fullmatch(r'[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}',text))
+    return len(lines)>=4 and bool(author_name(lines[0])) and email(lines[1]) and bool(author_name(lines[2])) and email(lines[3])
+
+
 def pdf_identity(document,structure):
     blocks=[b for b in structure['blocks'] if b['page']==1]
     start=next((i for i,b in enumerate(blocks) if b['type']=='title' and norm(b['text'])==norm(document['title'])),None)
@@ -20,16 +38,20 @@ def pdf_identity(document,structure):
         if not font or abs(size-font)>.15 or not 0<=block['bbox'][1]-previous['bbox'][3]<=.04 or overlap<=0:break
         titles.append(block)
     title=' '.join(b['text'] for b in titles)
+    if not all(native(b) for b in titles):return None
     if len(norm(title))<14 or len(re.findall(r'\w+',title))<2:return None
     bottom=titles[-1]['bbox'][3]
     for block in blocks[start+len(titles):]:
-        box=block['bbox'];line=block['text'].splitlines()[0] if block['text'].strip() else ''
-        if box[1]<bottom-.005 or box[1]>min(.6,bottom+.3) or box[3]-box[1]>.12:continue
-        if re.search(r'abstract|arxiv|university|institute|department|laborator|research|openai|google|microsoft|published|copyright|https?://|@',line,re.I):continue
-        first=re.split(r',|\band\b|[;|]',line)[0]
-        names=re.findall(r"[^\W\d_]+(?:['’-][^\W\d_]+)*",first)
-        if not 2<=len(names)<=6 or not all(n[0].isupper() for n in names) or all(n.isupper() for n in names):continue
-        return {'title':title,'first_author':' '.join(names),'surname':norm(names[-1]),'title_sources':[anchor(b) for b in titles],'author_source':anchor(block),'status':'pdf_literal_identity_candidate'}
+        box=block['bbox'];line=re.search(r'\S[^\r\n]*',block['text'])
+        if not line or not native(block) or box[1]<bottom-.005 or box[1]>min(.6,bottom+.3):continue
+        roster=author_email_roster(block)
+        if box[3]-box[1]>.12 and not roster:continue
+        name=author_name(line.group())
+        if not name:continue
+        start=line.start();end=start+len(name['raw'])
+        return {'title':title,'first_author':name['name'],'surname':name['surname'],'title_sources':[anchor(b) for b in titles],
+                'author_source':anchor(block),'author_name_span':{'start':start,'end':end,'text':block['text'][start:end]},
+                'author_layout':'name_email_roster' if roster else 'name_row','status':'pdf_literal_identity_candidate'}
     return None
 
 
