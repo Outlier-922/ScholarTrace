@@ -14,7 +14,7 @@ from fastapi import APIRouter,HTTPException,Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel,ConfigDict,Field
 from starlette.concurrency import run_in_threadpool
-from . import graph_store as repo,literature,literature_store,qa,reading,store,source_scope
+from . import graph_store as repo,literature,literature_store,qa,reading,store,source_scope,graph_identity
 
 router=APIRouter(prefix='/api',tags=['citation-graph'])
 ARXIV_SCAN=re.compile(r'\b(?:\d{4}\.\d{4,5}|[a-z][a-z.-]+/\d{7})(?:v\d+)?\b',re.I)
@@ -70,7 +70,12 @@ def bibliography_units(structure):
     for reference in structure['references']:
         block=blocks.get(reference['block_id'])
         if not block or reference['block_id'] not in reference_blocks or reference['block_id'] not in bounded:continue
-        if block['type'] not in {'paragraph','heading','reference','reference_entry'}:continue
+        recovered=(block['type']=='table_candidate' and (block.get('metadata') or {}).get('extraction')=='native_pdf'
+                   and current is not None and current.get('marker') and not reference.get('marker')
+                   and re.match(r'^(?:[A-Z]\.\s*){1,3}[A-Z][a-zA-ZÀ-Ž-]+',reference['text'].strip())
+                   and re.search(r'\b(?:19|20)\d{2}\b',reference['text'])
+                   and re.search(r'https?://|\bdoi\b|\barxiv\b|\bIn\b',reference['text']))
+        if block['type'] not in {'paragraph','heading','reference','reference_entry'} and not recovered:continue
         text=reference['text'].strip();marker=reference.get('marker')
         # An unnumbered author line is a candidate boundary, not an identity assertion.
         author_start=bool(re.match(r'^[A-ZÀ-Ž][^\d]{2,100}(?:,|\band\b)',text) and not re.match(r'^(?:In |Proceedings|Advances|International|Conference|Journal|URL )',text))
@@ -83,7 +88,8 @@ def bibliography_units(structure):
         if not any(source['block_id']==block['id'] for source in current['sources']):
             metadata=block.get('metadata') or {}
             current['sources'].append({'block_id':block['id'],'page':block['page'],'bbox':block['bbox'],'text':block['text'],
-                                       'extraction':metadata.get('extraction','native'),'confidence':metadata.get('confidence')})
+                                       'extraction':metadata.get('extraction','native'),'confidence':metadata.get('confidence'),
+                                       'bibliography_recovery':'native_reference_continuation' if recovered else None})
     return items
 
 
@@ -136,6 +142,7 @@ def collect_sources(chosen):
         source={'node_id':group['key'],'document_id':document['id'],'parse_run_id':run,'title':document['title'],'version_label':document.get('version_label'),'versions':group['versions'],
                 'has_ocr':any((block.get('metadata') or {}).get('extraction')=='rapidocr' for block in structure['blocks'])}
         sources.append(source)
+        source['identity_witness']=graph_identity.pdf_identity(document,structure)
         by_block={block['id']:block for block in structure['blocks']}
         for unit in bibliography_units(structure):
             links=list({link['id']:link for identity in unit['reference_ids'] for link in backlinks.get(identity,[])}.values())
@@ -194,13 +201,26 @@ def assemble(sources,units,index,topic,max_nodes):
             metadata=index[key];node.update(year=metadata.get('year'),authors=metadata.get('authors',[]),landing_url=metadata['landing_url'],registry_source=metadata.get('source_url'))
     edges={};unresolved=[];truncated=0
     for unit in units:
-        if not unit['identifiers']:
-            unresolved.append({'id':unit['id'],'source':unit['source'],'text':unit['text'],'sources':unit['sources'],'reason':'没有可唯一解析的 DOI/arXiv 标识符'});continue
+        local_matches=graph_identity.matches(unit['text'],sources)
         # Two distinct identities in one grouped entry can indicate a bad continuation merge.
         distinct=list(dict.fromkeys(key for key,_ in unit['identifiers']))
         if len(distinct)>1:
             unresolved.append({'id':unit['id'],'source':unit['source'],'text':unit['text'],'sources':unit['sources'],'reason':'同一候选片段含多个标识符，需人工拆分，暂不建边'});continue
-        key=distinct[0];raw_id=unit['identifiers'][0][1];metadata=index.get(key)
+        if len(local_matches)>1:
+            unresolved.append({'id':unit['id'],'source':unit['source'],'text':unit['text'],'sources':unit['sources'],'reason':'书目对应多个本地标题/作者候选，暂不合并身份'});continue
+        local=local_matches[0] if local_matches else None
+        raw_key=distinct[0] if distinct else None
+        if local and raw_key and raw_key in nodes and nodes[raw_key]['kind']=='local' and raw_key!=local['node_id']:
+            unresolved.append({'id':unit['id'],'source':unit['source'],'text':unit['text'],'sources':unit['sources'],'reason':'字面标识符与本地标题/作者指向不同作品，暂不建边'});continue
+        if not raw_key and not local:
+            unresolved.append({'id':unit['id'],'source':unit['source'],'text':unit['text'],'sources':unit['sources'],'reason':'没有唯一标识符，且未同时匹配本地完整标题与首位作者'});continue
+        raw_id=unit['identifiers'][0][1] if distinct else ''
+        metadata=index.get(raw_key)
+        # A known registration conflict must never be bypassed by a local title.
+        if local and metadata and identity_alignment(unit['text'],metadata)['status']=='metadata_conflict':local=None
+        local_basis=bool(local and raw_key!=local['node_id'])
+        key=local['node_id'] if local_basis else raw_key
+        if not key:raise ValueError('unresolved_local_identity')
         if key not in nodes:
             if len(nodes)>=max_nodes:
                 truncated+=1
@@ -215,23 +235,25 @@ def assemble(sources,units,index,topic,max_nodes):
         if key==source:continue
         alignment=identity_alignment(unit['text'],metadata)
         identity='edge_'+hashlib.sha256((source+'|'+key).encode()).hexdigest()[:20]
-        status='identity_conflict' if alignment['status']=='metadata_conflict' else 'identifier_resolved' if metadata or nodes[key]['kind']=='local' else 'identifier_unresolved'
+        status='identity_conflict' if alignment['status']=='metadata_conflict' else 'local_title_author_matched' if local_basis else 'identifier_resolved' if metadata or nodes[key]['kind']=='local' else 'identifier_unresolved'
         edge=edges.setdefault(identity,{'id':identity,'source':source,'target':key,'status':status,
                                       'purpose':'unknown','purpose_status':'unclassified','evidence':[]})
         if status=='identity_conflict':edge['status']='identity_conflict'
-        edge['evidence'].append({'reference_id':unit['id'],'reference_text':unit['text'],'cited_identifier':raw_id,'source_document_id':unit['source']['document_id'],
+        edge['evidence'].append({'reference_id':unit['id'],'reference_text':unit['text'],'cited_identifier':raw_id,'identity_basis':'pdf_title_and_first_author' if local_basis else 'literal_identifier',
+                                'target_identity':{'document_id':local['document_id'],'parse_run_id':local['parse_run_id'],**local['identity_witness']} if local_basis else None,
+                                'cited_version_status':'not_determined','source_document_id':unit['source']['document_id'],
                                 'parse_run_id':unit['source']['parse_run_id'],'identity_alignment':alignment,'reference_sources':unit['sources'],'body_citations':unit['backlinks']})
-    resolved=[edge for edge in edges.values() if edge['status']=='identifier_resolved']
+    resolved=[edge for edge in edges.values() if edge['status'] in {'identifier_resolved','local_title_author_matched'}]
     eligible=[node['id'] for node in nodes.values() if node['kind']=='local' or node['identity_status']=='registry_resolved']
     rank,iterations,converged=pagerank(eligible,resolved)
     for node in nodes.values():
         node.update(in_degree=sum(edge['target']==node['id'] for edge in resolved),out_degree=sum(edge['source']==node['id'] for edge in resolved),pagerank=rank.get(node['id']))
     ranking=sorted([node for node in nodes.values() if node['id'] in rank],key=lambda node:(-node['pagerank'],-node['in_degree'],node['title']))
     shared=[{'node_id':node['id'],'cited_by':[edge['source'] for edge in resolved if edge['target']==node['id']]} for node in ranking if node['in_degree']>=2]
-    return {'id':str(uuid.uuid4()),'format_version':'citation-graph-v2','created_at':store.now(),'topic':topic,'sources':sources,'nodes':list(nodes.values()),'edges':list(edges.values()),
+    return {'id':str(uuid.uuid4()),'format_version':'citation-graph-v3','created_at':store.now(),'topic':topic,'sources':sources,'nodes':list(nodes.values()),'edges':list(edges.values()),
             'unresolved_references':unresolved,'metrics':{'scope':'所选文献的书目引用子图；不是全球影响力','direction':'citing_to_cited','eligible_edges':len(resolved),
              'eligible_nodes':len(eligible),'alpha':.85,'iterations':iterations,'converged':converged,'ranking':[node['id'] for node in ranking[:10]],'shared_ancestors':shared},
-            'warnings':['边来自 PDF 参考文献中的字面标识符；注册记录核对不等于语义、引用用途或研究质量核验。',
+            'warnings':['边来自参考文献字面标识符，或唯一匹配本地完整标题和首位作者；标题/作者匹配保留原PDF证据，不确定被引版本，不等于语义、引用用途或研究质量核验。',
                         '只展开所选版本的直接书目引用。外部节点通常只有元数据，未读取其全文；PageRank 只反映此局部样本。',
                         f'未解析书目候选 {len(unresolved)} 组；因节点预算未展开 {truncated} 组。没有以主题相似度补造引用边。']+
                        (['部分来源含 OCR；字面标识符及数字需核对原图，识别分数不代表事实正确率。'] if any(source.get('has_ocr') for source in sources) else [])}
@@ -280,7 +302,7 @@ def graphs():return {'items':repo.list_graphs()}
 def graph(identity:str):
     payload=repo.get(identity)
     if not payload:raise HTTPException(404,'图谱或来源已不可用')
-    if payload.get('format_version')!='citation-graph-v2':payload['warnings'].append('此快照使用早期开发构图规则，建议重新构图后核对。')
+    if payload.get('format_version') not in {'citation-graph-v2','citation-graph-v3'}:payload['warnings'].append('此快照使用早期开发构图规则，建议重新构图后核对。')
     documents={source['document_id']:store.get_document(source['document_id']) for source in payload['sources']}
     if any(document is None for document in documents.values()):raise HTTPException(404,'图谱来源已删除')
     payload['newer_source_runs']=[source['document_id'] for source in payload['sources'] if documents[source['document_id']]['parse_run_id']!=source['parse_run_id']]

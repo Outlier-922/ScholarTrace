@@ -1,0 +1,219 @@
+{
+  "application_version": "0.25.0",
+  "client_date": "2026-11-01",
+  "created_at": "2026-11-01T04:51:20.164230+00:00",
+  "git_baseline": "188dd38",
+  "topic": "语言模型与Transformer训练、规模化和适配方法的局部引用网络",
+  "corpus_root": "C:/contest/2026_chuanzhi/科研小助手/pdf",
+  "corpus": [
+    {
+      "filename": "1607.06450v1.pdf",
+      "sha256": "c464f839fb8d59f7fde92f9b4caa67c2d1f2f196b88f93fb60502249df0aaef7",
+      "page_count": 14
+    },
+    {
+      "filename": "1706.03762v7.pdf",
+      "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+      "page_count": 15
+    },
+    {
+      "filename": "1707.06347v2.pdf",
+      "sha256": "e78feadadbdbb0b601b3c2bcc81404722cd431a489b307545f9b7bea1e8c4f5b",
+      "page_count": 12
+    },
+    {
+      "filename": "1910.02054v3.pdf",
+      "sha256": "c531734c7d9ee647fda9b4f0e1a6abd6d58ad34e862bc945451b09032be3167e",
+      "page_count": 24
+    },
+    {
+      "filename": "1910.10683v4.pdf",
+      "sha256": "ad07e47cedf437a4156419ce5d3076e08a3e59bbfd6dac7cc53df1009cdcbe7f",
+      "page_count": 67
+    },
+    {
+      "filename": "2001.08361v1.pdf",
+      "sha256": "a41bd7877fd1a6bcbba096b2619618bd2f90e02488f2365644903eb2f7c6a494",
+      "page_count": 30
+    },
+    {
+      "filename": "2002.04745v2.pdf",
+      "sha256": "e1fa0519ed8e09a676d56c983e99ead5effd7ef840ae86a186729287469bf883",
+      "page_count": 17
+    },
+    {
+      "filename": "2005.14165v4.pdf",
+      "sha256": "97fd272f1fdfc18677462d0292f5fbf26ca86b4d1b485c2dba03269b643a0e83",
+      "page_count": 75
+    },
+    {
+      "filename": "2010.11929v2.pdf",
+      "sha256": "8ce7b83971a14508ca711a27c875c9b6914c4f6767cf3150fb1ca6c07aa056d6",
+      "page_count": 22
+    },
+    {
+      "filename": "2101.03961v3.pdf",
+      "sha256": "f340f6ace31abf7d0730ef461404279f40d3c890e9cc2daeb7068b3304afdbd6",
+      "page_count": 40
+    },
+    {
+      "filename": "2103.00020v1.pdf",
+      "sha256": "6478b6e571a7d6fcd846d8ef77bfd60c285f1986abb8f475eedc43de403074f5",
+      "page_count": 48
+    },
+    {
+      "filename": "2106.09685v2.pdf",
+      "sha256": "e9a0d3128767db616085dc0f4e6e455e672e89af823e8ed1282793682787395a",
+      "page_count": 26
+    },
+    {
+      "filename": "2107.03374v2.pdf",
+      "sha256": "ebae72ea0e8a5eb2ecbccdb985aec6cc1254a7c4d29e6d4de7866db1e66c4855",
+      "page_count": 35
+    },
+    {
+      "filename": "2201.11903v6.pdf",
+      "sha256": "7d9f878c23b460e4566aa4ec9201b1abfb3b8faefb2b1356e411cb90fef72a12",
+      "page_count": 43
+    },
+    {
+      "filename": "2203.02155v1.pdf",
+      "sha256": "c1984bb50a5b90fddb895fdc3a0f72e5bc977148c9f63ef6040cbe7a3e1f0d98",
+      "page_count": 68
+    },
+    {
+      "filename": "2205.14135v2.pdf",
+      "sha256": "ca7f9fda10b90fc05dd291a3accc85e9c1a4a860b99b31928dab03ed3fcb14e4",
+      "page_count": 34
+    },
+    {
+      "filename": "2206.07682v2.pdf",
+      "sha256": "f457f08102eb381f2300e1653bf4c82a9aa5dce0eb8dba8fe744ccc2500c3755",
+      "page_count": 30
+    },
+    {
+      "filename": "333078981_693988129081760_4712707815225756708_n.pdf",
+      "sha256": "775ff8d09b6e5b06314135d87c194ce3535a821eeaee4be9051b331162c5fefd",
+      "page_count": 27
+    },
+    {
+      "filename": "2305.14314v1.pdf",
+      "sha256": "33a4e757c19d6ea8d3cca8958fce8fe405e290272e135c99ee66065c775d5bd1",
+      "page_count": 26
+    },
+    {
+      "filename": "2305.18290v3.pdf",
+      "sha256": "92cb3a2b71362acda98a789b03d88688fd33cf5fcf13f81d2b1de30ee7d3b67a",
+      "page_count": 27
+    }
+  ],
+  "scope": "20 unique official vector-text papers selected before ingestion; book, duplicate versions, scan and duplicate Emergent file excluded. Bibliography graph only, no new model or metadata requests. Preserve partial parsing and missing links.",
+  "max_model_calls": 0,
+  "max_metadata_requests": 0,
+  "files": {
+    "backend/app/answer_fields.py": "5783177b373aa6be60fd445fff101c613d2b417a38ead38ea288b8285ccf2a24",
+    "backend/app/claim_checks.py": "fd26531637ad81ab23d7893299bf6c21fa6fb4b648c0671e18c12b4e778ecf10",
+    "backend/app/comparison.py": "a67867e14713588a0588fa249d36acc6b3fc7e38075c0079bc631eab3d84e3f3",
+    "backend/app/comparison_quotes.py": "5d279f89dc4267e08db361bb6323d1663d03b8aa72dcab762a631861be7016cb",
+    "backend/app/demo_access.py": "4943b392af56944f9c69efbe1e7e7a7232bef5b0ac013e2e520355840995a024",
+    "backend/app/document_translation.py": "d8782d6491a382c30a025d0f26a8653cfcc82ff9601cc6b085eb350699937127",
+    "backend/app/document_translation_store.py": "8755db4d9110ff3c52096ceb910a6c3c63d8d934d544342b0c5baa418e2832c2",
+    "backend/app/evidence_repairs.py": "1647918d7ce84ce7c09342ec298539de7a1f645cc8745483d95578b2f8de62eb",
+    "backend/app/formulas.py": "99da952f880b6235de1a049ea35924e32af2f832075939bc9383404d315934aa",
+    "backend/app/formula_native.py": "6d6387a0ef610990ecd3a97d002c0bcc849a1815a865c8f088af94d2cf675c2d",
+    "backend/app/formula_store.py": "80d04a97a6ac44f4b0c6987009bc7b01a89fc1f3591c4b1e3feb7455f32871c6",
+    "backend/app/graph.py": "62327d844fd86f3365091f2aefebe0fd93d8b17bd9e78cc10f442b930651fc9b",
+    "backend/app/graph_store.py": "eda8d9682f316f71e53241e8f29b4aa2d798284c4752c99f69ac6f75970a45ad",
+    "backend/app/insights.py": "2888d73ab304bcd54f457d3d66c90b869e223a8740e8214c6da39eb60c880c75",
+    "backend/app/insight_store.py": "181897369226a29bb5a51ec7838984024c12dec4e304c5b5e85d019eb1485721",
+    "backend/app/literature.py": "a5da4d31724b6492964040b2c36e93c746a739d93d4029573c9bcc9e5ccb2868",
+    "backend/app/literature_handoff.py": "3f889d0050fb3adcae85b901d015ab617a29d1ad89f8ad7f9216c6c90308bc71",
+    "backend/app/literature_store.py": "a91918b19a8728149d17f8c55ae870ba3978207f4b8431b677dad60aa0acd263",
+    "backend/app/main.py": "eb0ca7b356d20b8a3b7ba67be19d5efc0108f42e28a241f7ca4bf7d1464546e3",
+    "backend/app/model_client.py": "5dc193477ebbb9004c9ec430a22aab9afafe15e122073460121391ebcf4b5bdd",
+    "backend/app/model_status.py": "a43def902ca67e9bbeaf6a6131732fb2fdf8b610ed75bb365dfc5dd56ffa792e",
+    "backend/app/ocr.py": "6ac8b0bbceff51eeebd81057e78593ae132462612562377fcd6b29f752bf3515",
+    "backend/app/parser.py": "b040a2945384c9c60308c61807ee0e41c277398abe64b75b08b2a24097a951d7",
+    "backend/app/plot_runtime.py": "9915829e79f87d7a1aaa358b67468078d3f587fe3b0a3755e3ebaf59921d6a97",
+    "backend/app/qa.py": "b62142e5fa2cfb1f28dd8d1011bda5a0a0806a62a725805c0c94ee0dd5b6061c",
+    "backend/app/reading.py": "09d0dc69f453f853f4ccfe51b62b305c5a3a6a545a256d618510dc7d72eb389a",
+    "backend/app/research_store.py": "cbcba70c0d48dd6b9eb54ff22434e535cab18ccf66225e79eb4decd09ab7c207",
+    "backend/app/selection_translation.py": "f7cefe5a0efabfe972e1a3dd318f684269592e1bef44f33144687f40effe07e2",
+    "backend/app/semantic.py": "7a5eff42cf98d2ec211e7e3bf85acdd395d156514e38f0bea3c1e9c84f5ad933",
+    "backend/app/semantic_jobs.py": "02ced4b0acdb1ad4c23e4d87f3686eb84585b747cb93c731b60bbd596eafaff8",
+    "backend/app/source_scope.py": "2a2ee13e43e9db2d457fb1701e73e716568eec5d6d444ed86e5a9af7aa9f2343",
+    "backend/app/store.py": "1a444b3cb5667a0734f84361e97f625c014b2c94dcdbf7733add7d5cd1a9db9b",
+    "backend/app/studio.py": "7733b782b6d3734bedf11a6a784fab64b6d4ccd4a04134c3f280a77e6b449be8",
+    "backend/app/studio_store.py": "87e32bb3ed82e1d31b8077a336bcac841ea0b3862c953304b93bfcbc253332b6",
+    "backend/app/tables.py": "8fca271cb2f92d017d1890b555a8000c975d012ce0da31918b69e785784eda4c",
+    "backend/app/table_qa.py": "fbdc1b170c4f52777d73836ac5be4214c834c1dfba3fa66f07fd17aa23ff1514",
+    "backend/app/table_refinement.py": "02523f6544cc2ae346b51f374b87db79b245dfd7c7ef458bfc9250de1edd0019",
+    "backend/app/table_refine_native.py": "e5305444a3b58a438fa1e8678b94d57a208da599380fb9862d55b7a0c027cb89",
+    "backend/app/table_refine_store.py": "e6ae223521146d211b3e2875e896e27e4263435af8f33ba2ed43cd3a44cf921d",
+    "backend/app/translation.py": "94e85eda1b152c8a46eb2a24c0d14d8793bb73d080cad0ac6b686bcff83507d0",
+    "backend/app/workflow.py": "25bac46e8a6f0cc46378ad69df7d4c1800241be1744cfabc9afc4d92b965bceb",
+    "backend/app/workflow_discovery.py": "32c79ce76ff9c7c36e9a9234f112ece4247346d726f17b0459a5e9772bdc4593",
+    "backend/app/workflow_plot.py": "3351b52aba0238d0cc941a3b7801404c4fe76b45e118ea9c1672cdc6c54448f3",
+    "backend/app/workflow_policy.py": "ba793c3f0267ba23c4945c0d1705d1df7dd4ffb5dd948d8306b792d672510e84",
+    "backend/app/workflow_store.py": "958bd171ccba891f81a904cee2b373be2441e48d896f6f6247958aa187af34fd",
+    "backend/app/workflow_translation.py": "111793d69e1ed390cf398a38b2fd3abcd34af45960ee700475fc820a3c7a2bd0",
+    "backend/app/writing_generation.py": "d079e62e0a05264e35bfdc448ed5df976f6b65425643d41678098504a7441896",
+    "backend/app/__init__.py": "b378ebb633ecdbdf81decff9d673125feb9ca447d87edecf5502eba4e2096016",
+    "apps/web/src/AnswerCoverage.tsx": "a245dd6e25a0cb564abb6e7be0ba3c711924b4e4cf14e623f567b0e6184bee94",
+    "apps/web/src/App.tsx": "df675434e27977897d8cd518dba19b85a9f781dc64f1f4d3b006b0521740b76e",
+    "apps/web/src/BlockContent.tsx": "b07735755b4a48be66c96801a34e7151af7edd64fd40d5f8c2c6c10b39cb87eb",
+    "apps/web/src/ChartControls.tsx": "dec2326ef0e02ed050fa18e339840d8480431bc4fad3098b009e597ff1361723",
+    "apps/web/src/ClaimAudit.tsx": "bdce6e3eaa35b0db167c5fccc9e4729d45aa8fa6c98a88b63e930dee0cc54f53",
+    "apps/web/src/ClaimCheckPanel.tsx": "e730f14adf94ae02a02ada46edd970b79ab6f4533e9a0c1dd4d2a4dbce75a5dd",
+    "apps/web/src/ComparisonPanel.tsx": "6cd2bfcf3834d63832518d98fa78f3a2d90117d6d3ce6483d056dfc381633c0a",
+    "apps/web/src/EvidenceRepairPanel.tsx": "302f085118835cb8d5ceff0c8badf365ce26583df91cb50daf27e19c05d279c2",
+    "apps/web/src/FormulaPanel.tsx": "ccc3c7e6bf9ce6bc7fc08f2bcc616bd6489aef5ca0a11bc9d7f56989441387a6",
+    "apps/web/src/GraphPanel.tsx": "da234b4839b842397032b349f134b6f6c1aba8170c81975321906dc1a234a250",
+    "apps/web/src/InsightPanel.tsx": "01b74d0d2e36a50b8844846928d636636ef0822bfdd80da75c21c47e53a7dfdb",
+    "apps/web/src/LiteratureHandoff.tsx": "665bd4cb25e0449b2e60879c5d08718493976f268f5ba3a87d689e54eb7fcc26",
+    "apps/web/src/LiteraturePanel.tsx": "ab6327af8494a455a5dceb6957186d52540c6969bd5779ac1364e5496fa73b16",
+    "apps/web/src/main.tsx": "2e0f48f84686511e5dd1df130cbc1d69952f17a58ba6ae38915c0670908e80b6",
+    "apps/web/src/PdfReader.tsx": "9d4088d433a14776144dc67af26a04f49e4b2f4960e32910d2f4d84a33dcfe7b",
+    "apps/web/src/SelectionTranslation.tsx": "b7bda82d339255f67ed0b4a157d32a31a918f8a2568f73c1ed8f75afaa098de2",
+    "apps/web/src/SemanticIndexPanel.tsx": "0cfc1c9dbfc453d0b17affbdf2265c8dbaa96b4597b1f0e97c2f08023d39a28a",
+    "apps/web/src/StudioPanel.tsx": "e2e1d38db0720fe001f66651a7d4de178073cb4d7da080b59ebcadb87371c451",
+    "apps/web/src/TablePanel.tsx": "03772284eaa6a9645069acaa02c5cfc4f3b711bf80c1b280170af62fd8696516",
+    "apps/web/src/TableQA.tsx": "410e3d1e983fc32778259ceaa8fbeeffb00871ef3351c99ca661effe3e0e0e6e",
+    "apps/web/src/TaskDiscovery.tsx": "7a068a5202748128bf4131b46edcedf3cf2704f9f4bdeb6d672c12cd75c2907b",
+    "apps/web/src/TaskDocumentTranslation.tsx": "4064d62b7adb96c36cc015d8ead6107b5be3de702ae78df30640f632c9c6e393",
+    "apps/web/src/TaskPanel.tsx": "e13aca07ac826243772d8783f1b822ffcf2b6efb6c5ec69800857bf236b9a6e8",
+    "apps/web/src/TaskPlot.tsx": "f0d6fd415c825de8a25d910540ad4b9af8770465f16787b80783560b10f7456c",
+    "apps/web/src/TaskTranslation.tsx": "cbda1a5099de6ed650d8a59b0302616249d43937e505c3e981ed8c795064aae8",
+    "apps/web/src/TranslationPane.tsx": "c1705e6c113d094e079f0e50f46b14d60d51300b12e4d91cf2cb6de362f86bc4",
+    "apps/web/src/api.ts": "59396c877bec60cbf366b2ab21a8b54fe2a51a7519e8a1c2c7cae81bb5b615fc",
+    "apps/web/src/types.ts": "ea72bc807435574ba3276063723ff4c6ad47bba45d06529c6796032a19e81c4d",
+    "apps/web/src/vite-env.d.ts": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
+    "apps/web/src/answer-coverage.css": "9ad0afce952b8a3aef8c8b755a78b0db8a45ead39f90de82588434c12c82c51f",
+    "apps/web/src/claim-audit.css": "17d65666e9ed2c3ab98ecea033ca646347fbe7c09957c5bc9743971f6de95655",
+    "apps/web/src/comparison-quotes.css": "12918cde852db6443f890dbfdc5ef588fb9ce152d7be7b18a30cdce543941498",
+    "apps/web/src/document-translation.css": "44dc6befad54623dce01a43c513fcfc7be85800328c8c41dc031c1233fe6449e",
+    "apps/web/src/formulas.css": "566f57af48d95e81c1813c566cbb75cc8cc3eb8199f25f0a862dd99aa485c163",
+    "apps/web/src/graph.css": "ce89199f60583446e6877d65b5f41598d2fee6e3b1d8470adc4b2b647b60940b",
+    "apps/web/src/insights.css": "66a147550da38f7408a97e1ab4bb2f8ecc12e690a86a44f580aed7ea4f963141",
+    "apps/web/src/literature-handoff.css": "add3bf3f79cca635feec5887ad3bdc8b5a7433229afef2f0dea71d8d8b4cf21e",
+    "apps/web/src/literature.css": "19f80b13315db8e99114d1c18074851778372f44dc5f2899afa3ab6273b5cf66",
+    "apps/web/src/pdf-text-layer.css": "f73b3c80a13967ee27a987a1b6d9342052af11fd8e1c19288236034f01e44eb9",
+    "apps/web/src/selection-translation.css": "583d7a66413fc7045a52f6fab34728f4003739f9f7c418f43ab96d4eaf8b6aea",
+    "apps/web/src/semantic-index.css": "31cd7eefc69908ffcd94fbb4891b55c21368fdbc61dcaa894dd91fee55003395",
+    "apps/web/src/studio.css": "fdb7a5c0b3a36997948b47fd86657ae935e1b0691eca1196d6b5a62fcf352525",
+    "apps/web/src/styles.css": "cd1ea3502b8649730c2c9c3f22222f51f4b0ba3306e9610b6abaa4c84e16fc11",
+    "apps/web/src/table-qa.css": "6859b75cf78164b56db6cefb7af11fe939dfcbaecaa802af07c2551b83e289d1",
+    "apps/web/src/tables.css": "e96d2678d782c3b8420096b2f24a3425480c8479e063d6c7f28c857cd2740e2c",
+    "apps/web/src/tasks-discovery.css": "f3e3667f8eebc56317224df727601014c4bbf7c6243c1a92d13ed9487955dac1",
+    "apps/web/src/tasks-feedback.css": "05b7627c64dabef73823ecae4b3d2df287bc6d85571cb643cae9c5fa45f42686",
+    "apps/web/src/tasks-plot.css": "0cd8d3b9f1e7e6620d6883c1946a86020984582aefaa427483d2052739d0a274",
+    "apps/web/src/tasks-translation.css": "2dbd415e54df91ae02f0ec2ee2f593de5bab9b75c40055f29d96e8a4c2eee710",
+    "apps/web/src/tasks.css": "9da66a9139f47d58c3f65b029289304441a91064d77cc7b00911b253a6a94b8e",
+    "apps/web/package.json": "a4da5bbca4b4dd44c540bdd9c2438a447da100b1095e03373f0c76c93e69c764",
+    "apps/web/pnpm-lock.yaml": "266621f18518b8ba0e59eaf8f01fe43ad010db0210b03002e108b8e35de2d367",
+    "requirements.txt": "bc897d3461f7da28f641d2821d469532668104a727449cae5891c4db6d1ec7f1",
+    "requirements.lock.txt": "d71b70c753ddddf080c0da10dc40e598de2e80b80a41ac077a566113e93690d4",
+    "scripts/evaluate_graph_batch.py": "d3a639ac058a180ef931c05844b0fec0fa52eb7b7ef5d2e2f95427f71963da57",
+    "tests/test_graph.py": "7c356931fc3a01b966117e5b5009c27fe7b9e5c99215f66a326bf6031abc74ff"
+  }
+}

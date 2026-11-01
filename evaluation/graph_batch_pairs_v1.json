@@ -1,0 +1,105 @@
+{
+  "client_date": "2026-11-01",
+  "scope": "Nine observed development bibliography pairs, not exhaustive or independent quality labels",
+  "pairs": [
+    {
+      "id": "G01",
+      "source_filename": "2106.09685v2.pdf",
+      "target_filename": "2005.14165v4.pdf",
+      "source_document_id": "doc_f5963d4b392a49b186e1e698f7c458f5",
+      "target_document_id": "doc_0257601a9f914c86bdc3b6eb3c510851",
+      "pdf_page": 13,
+      "literal": "2005.14165",
+      "basis": "identifier",
+      "annotation": "development_assistant_read_original_bibliography_before_first_graph"
+    },
+    {
+      "id": "G02",
+      "source_filename": "2305.14314v1.pdf",
+      "target_filename": "2106.09685v2.pdf",
+      "source_document_id": "doc_6ead55aedfe94796b8dc4d363504e9f6",
+      "target_document_id": "doc_f5963d4b392a49b186e1e698f7c458f5",
+      "pdf_page": 18,
+      "literal": "2106.09685",
+      "basis": "identifier",
+      "annotation": "development_assistant_read_original_bibliography_before_first_graph"
+    },
+    {
+      "id": "G03",
+      "source_filename": "2305.14314v1.pdf",
+      "target_filename": "333078981_693988129081760_4712707815225756708_n.pdf",
+      "source_document_id": "doc_6ead55aedfe94796b8dc4d363504e9f6",
+      "target_document_id": "doc_6c0da8e35c7340f9a951dfb7cff5ba04",
+      "pdf_page": 20,
+      "literal": "2302.13971",
+      "basis": "identifier",
+      "annotation": "development_assistant_read_original_bibliography_before_first_graph"
+    },
+    {
+      "id": "G04",
+      "source_filename": "2002.04745v2.pdf",
+      "target_filename": "1607.06450v1.pdf",
+      "source_document_id": "doc_83a7ab951bf843b4abaca64e8a851fe9",
+      "target_document_id": "doc_353a6ef2b9ba483a805b7002a121738f",
+      "pdf_page": 9,
+      "literal": "1607.06450",
+      "basis": "identifier",
+      "annotation": "development_assistant_read_original_bibliography_before_first_graph"
+    },
+    {
+      "id": "G05",
+      "source_filename": "2305.18290v3.pdf",
+      "target_filename": "1707.06347v2.pdf",
+      "source_document_id": "doc_2344d4644d0442dd8e845daaad30f30b",
+      "target_document_id": "doc_568c66b0f057477bad76f8df67b7cfa0",
+      "pdf_page": 14,
+      "literal": "Proximal policy optimization algorithms",
+      "basis": "title_author",
+      "annotation": "development_assistant_read_original_bibliography_before_first_graph"
+    },
+    {
+      "id": "G06",
+      "source_filename": "2305.18290v3.pdf",
+      "target_filename": "2203.02155v1.pdf",
+      "source_document_id": "doc_2344d4644d0442dd8e845daaad30f30b",
+      "target_document_id": "doc_dc0451b270ca412f9eb813df03520f45",
+      "pdf_page": 13,
+      "literal": "Training language models to follow instructions with human feedback",
+      "basis": "title_author",
+      "annotation": "development_assistant_read_original_bibliography_before_first_graph"
+    },
+    {
+      "id": "G07",
+      "source_filename": "2205.14135v2.pdf",
+      "target_filename": "1706.03762v7.pdf",
+      "source_document_id": "doc_67098ccb45a9476d8d0030386c9300ac",
+      "target_document_id": "doc_a1482495af8e4aae8fef36a33fe1919c",
+      "pdf_page": 15,
+      "literal": "Attention is all you need",
+      "basis": "title_author",
+      "annotation": "development_assistant_read_original_bibliography_before_first_graph"
+    },
+    {
+      "id": "G08",
+      "source_filename": "2010.11929v2.pdf",
+      "target_filename": "1706.03762v7.pdf",
+      "source_document_id": "doc_8cb380afca164255a3035d1db860078e",
+      "target_document_id": "doc_a1482495af8e4aae8fef36a33fe1919c",
+      "pdf_page": 12,
+      "literal": "Attention is all you need",
+      "basis": "title_author",
+      "annotation": "development_assistant_read_original_bibliography_before_first_graph"
+    },
+    {
+      "id": "G09",
+      "source_filename": "2101.03961v3.pdf",
+      "target_filename": "1910.10683v4.pdf",
+      "source_document_id": "doc_454df5743b4a42f58f43033cbb92ad19",
+      "target_document_id": "doc_5acc4ed0dab74aeb914ecc21af0ee4c4",
+      "pdf_page": 38,
+      "literal": "1910.10683",
+      "basis": "identifier",
+      "annotation": "development_assistant_read_original_bibliography_before_first_graph"
+    }
+  ]
+}
