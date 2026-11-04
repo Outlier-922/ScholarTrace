@@ -20,7 +20,10 @@ router=APIRouter(prefix='/api',tags=['citation-graph'])
 ARXIV_SCAN=re.compile(r'\b(?:\d{4}\.\d{4,5}|[a-z][a-z.-]+/\d{7})(?:v\d+)?\b',re.I)
 DOI_SCAN=re.compile(r'\b10\.\d{4,9}/[^\s<>"{}]+',re.I)
 PURPOSES={'unknown','method','data','comparison','background'}
-AUTHOR_KEY = re.compile(r'(?m)^[ \t]*\[[A-Z][A-Za-z+]{0,11}\d{2}[a-z]?\](?=\s|$)')
+AUTHOR_KEY_TEXT = r'[A-Z][A-Za-z+]{0,11}\d{2}[a-z]?'
+AUTHOR_KEY = re.compile(rf'(?m)^[ \t]*(?P<key>\[{AUTHOR_KEY_TEXT}\])(?=\s|$)')
+AUTHOR_CITATION = re.compile(rf'\[\s*{AUTHOR_KEY_TEXT}(?:\s*[,;]\s*{AUTHOR_KEY_TEXT})*\s*\]')
+REFERENCE_HEADING = re.compile(r'\s*(?:\d+\.?\s*)?(?:references|bibliography|参考文献)\s*', re.I)
 LETTERED_SECTION = re.compile(r'^[A-Z](?:\.\d+)*[.)]?[ \t]*\r?\n[ \t]*[A-Z]\w{2}')
 
 
@@ -62,7 +65,7 @@ def bibliography_units(structure):
     bounded=set();inside=False
     for block in structure['blocks']:
         text=re.sub(r'\s+',' ',block['text']).strip()
-        if block['type']=='heading' and re.fullmatch(r'(?:\d+\.?\s*)?(?:references|bibliography|参考文献)',text,re.I):
+        if block['type']=='heading' and REFERENCE_HEADING.fullmatch(text):
             inside=True;continue
         # Misclassified year-leading bibliography lines stay inside; appendix/visualization do not.
         if inside and block['type']=='heading' and (
@@ -102,6 +105,8 @@ def bibliography_units(structure):
             ):
                 suffix = f'_key_{left}' if author_key else ''
                 current = {'id': 'bib_'+reference['id']+suffix, 'marker': marker, 'text': '', 'reference_ids': [], 'sources': []}
+                if author_key:
+                    current['author_key'] = author_key.group('key')
                 items.append(current)
             labelled = labelled or bool(marker or author_key)
             current['text'] += ('\n' if current['text'] else '') + fragment
@@ -116,6 +121,37 @@ def bibliography_units(structure):
                     anchor['reference_span'] = {'start': start, 'end': start + len(fragment)}
                 current['sources'].append(anchor)
     return items
+
+
+def author_key_backlinks(structure, units, parse_run_id):
+    """Link literal author keys from native prose before the bibliography."""
+    targets = defaultdict(list)
+    for unit in units:
+        if key := unit.get('author_key'):
+            targets[key].append(unit['id'])
+    unique_targets = {key: ids[0] for key, ids in targets.items() if len(ids) == 1}
+    if not unique_targets:
+        return {}
+
+    bibliography = {item['block_id'] for item in structure['references']}
+    links = defaultdict(list)
+    for block in structure['blocks']:
+        if block['id'] in bibliography or (
+            block['type'] == 'heading' and REFERENCE_HEADING.fullmatch(block['text'])
+        ):
+            break
+        if block['type'] not in {'paragraph', 'figure_caption', 'table_caption'} or not graph_identity.native(block):
+            continue
+        if qa._is_reference(block):
+            continue
+        for match in AUTHOR_CITATION.finditer(block['text']):
+            keys = (f'[{key.strip()}]' for key in re.split(r'[,;]', match.group()[1:-1]))
+            matched = {key: unique_targets[key] for key in keys if key in unique_targets}
+            if matched:
+                link = reading.citation_anchor(block, match, parse_run_id, list(matched.values()))
+                for key, unit_id in matched.items():
+                    links[unit_id].append({**link, 'citation_kind': 'author_key', 'matched_key': key})
+    return links
 
 
 def cached_records():
@@ -169,8 +205,11 @@ def collect_sources(chosen):
         sources.append(source)
         source['identity_witness']=graph_identity.pdf_identity(document,structure)
         by_block={block['id']:block for block in structure['blocks']}
-        for unit in bibliography_units(structure):
+        bibliography = bibliography_units(structure)
+        author_links = author_key_backlinks(structure, bibliography, run)
+        for unit in bibliography:
             links=list({link['id']:link for identity in unit['reference_ids'] for link in backlinks.get(identity,[])}.values())
+            links.extend(author_links.get(unit['id'], []))
             for link in links:
                 metadata=by_block[link['block_id']].get('metadata') or {}
                 link.update(extraction=metadata.get('extraction','native'),confidence=metadata.get('confidence'))

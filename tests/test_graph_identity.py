@@ -163,3 +163,31 @@ def test_registered_target_is_admitted_before_pending_target_under_node_limit():
     assert [edge['target'] for edge in result['edges']] == ['arxiv:2699.22222']
     assert result['metrics']['eligible_edges'] == 1
     assert result['unresolved_references'][0]['text'] == pending['text']
+
+
+def test_author_key_backlinks_require_unique_native_pre_bibliography_evidence():
+    marker = '[EF+19, TS20a; XY20b, ZZ20]'
+    prose = block('p', f'We use the optimizer {marker}.', 'paragraph', .1)
+    ocr = block('ocr', 'An OCR mention [EF+19].', 'paragraph', .2)
+    ocr['metadata']['extraction'] = 'rapidocr'
+    heading = block('h', '7 References', 'heading', .3)
+    entries = block('b', '[EF+19] First reference.\n[TS20a] Second reference.\n'
+                    '[TS20a] Conflicting reference.\n[XY20b] Fourth reference.', 'paragraph', .4)
+    appendix = block('a', 'A later occurrence [EF+19].', 'paragraph', .6)
+    structure = {
+        'blocks': [prose, ocr, heading, entries, appendix],
+        'references': [{'id': 'ref', 'block_id': 'b', 'text': entries['text']}],
+    }
+    units = graph.bibliography_units(structure)
+    first, second, third, fourth = units
+    assert second['author_key'] == third['author_key'] == '[TS20a]'
+    result = graph.author_key_backlinks(structure, units, 'pinned-run')
+    assert set(result) == {first['id'], fourth['id']}
+    link, = result[first['id']]
+    assert link['block_id'] == 'p' and link['parse_run_id'] == 'pinned-run'
+    assert link['marker_text'] == marker and link['citation_kind'] == 'author_key'
+    assert link['matched_key'] == '[EF+19]'
+    assert prose['text'][link['offset']:].startswith(link['marker_text'])
+    assert link['context'] == prose['text']
+    assert link['reference_ids'] == [first['id'], fourth['id']]
+    assert result[fourth['id']][0]['matched_key'] == '[XY20b]'

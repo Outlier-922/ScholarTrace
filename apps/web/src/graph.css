@@ -4,3 +4,7 @@
 .timeline-axis line{stroke:#cbd7bf;stroke-width:1}.timeline-axis text{fill:#91a481;font-size:11px}
 
 .graph-build-row>select{max-width:240px}
+
+.graph-citation-contexts { margin-top: 8px; }
+.graph-citation-contexts summary { cursor: pointer; }
+.graph-citation-contexts p { white-space: pre-wrap; overflow-wrap: anywhere; }

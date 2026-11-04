@@ -25,6 +25,20 @@ def expand_marker(value: str) -> list[str]:
     return list(dict.fromkeys(result))[:40]
 
 
+def citation_anchor(block, match, parse_run_id, reference_ids):
+    return {
+        "id": f"cite_{block['id']}_{match.start()}",
+        "marker_text": match.group(),
+        "page": block["page"],
+        "block_id": block["id"],
+        "bbox": block["bbox"],
+        "offset": match.start(),
+        "context": block["text"][max(0, match.start() - 100):match.end() + 100],
+        "parse_run_id": parse_run_id,
+        "reference_ids": reference_ids,
+    }
+
+
 def citation_map(document_id: str, parse_run_id: str | None = None):
     structure = store.get_structure(document_id, parse_run_id=parse_run_id)
     if structure is None:
@@ -49,10 +63,7 @@ def citation_map(document_id: str, parse_run_id: str | None = None):
             targets = [by_marker[number][0] for number in numbers if len(by_marker.get(number, [])) == 1]
             if not targets:
                 continue
-            identity = f"cite_{block['id']}_{match.start()}"
-            source = {"id": identity, "marker_text": match.group(), "page": block["page"], "block_id": block["id"],
-                      "bbox": block["bbox"], "offset": match.start(), "context": block["text"][max(0, match.start() - 100):match.end() + 100],
-                      "parse_run_id": structure["parse_run_id"], "reference_ids": [item["id"] for item in targets]}
+            source = citation_anchor(block, match, structure["parse_run_id"], [item["id"] for item in targets])
             links.append(source)
             for target in targets:
                 target["backlinks"].append(source)
