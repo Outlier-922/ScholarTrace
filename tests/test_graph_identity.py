@@ -105,3 +105,61 @@ def test_marked_first_row_is_not_skipped_for_a_later_author_group():
             block('later','Later Person Another Writer Final Author','paragraph',.24,10)]
     result=identity.pdf_identity({'title':'Synthetic Evidence Methods'},{'blocks':blocks})
     assert result['first_author']=='Mira Example' and result['author_source']['block_id']=='first'
+
+
+def test_native_author_keys_split_one_block_with_distinct_original_spans():
+    raw = ('  [EF+19] Mira Example and Alan Fiction. First study. arXiv:2699.11111.\n'
+           '[TS20a]\nTerry Sample. Second study. arXiv:2699.22222.')
+    head = block('h', 'References', 'heading', .1)
+    entries = block('r', raw, 'table_candidate', .2)
+    entries['metadata']['extraction'] = 'native_pdf'
+    section = block('s', 'A\nHyperparameters', 'heading', .5)
+    appendix = block('a', '[XY20] Unrelated appendix text. arXiv:2699.33333.', 'paragraph', .6)
+    structure = {
+        'blocks': [head, entries, section, appendix],
+        'references': [
+            {'id': item['id'], 'block_id': item['id'], 'text': item['text']}
+            for item in (entries, appendix)
+        ],
+    }
+    first, second = graph.bibliography_units(structure)
+    assert first['id'] != second['id']
+    assert graph.identifiers(first['text']) == [('arxiv:2699.11111', '2699.11111')]
+    assert graph.identifiers(second['text']) == [('arxiv:2699.22222', '2699.22222')]
+    for entry in (first, second):
+        anchor, = entry['sources']
+        span = anchor['reference_span']
+        assert anchor['text'] == raw
+        assert raw[span['start']:span['end']] == entry['text']
+
+
+def test_native_author_key_keeps_its_following_unmarked_author_fragment():
+    head = block('h', 'References', 'heading', .1)
+    first = block('r', '[EF19] Mira Example. An earlier study. 2019.', 'paragraph', .2)
+    second = block('s', '[TST20]', 'paragraph', .3)
+    continuation = block('c', 'Terry Sample, Alan Tester, and Mira Example. Another study. 2020.', 'paragraph', .4)
+    structure = {
+        'blocks': [head, first, second, continuation],
+        'references': [
+            {'id': item['id'], 'block_id': item['id'], 'text': item['text']}
+            for item in (first, second, continuation)
+        ],
+    }
+    earlier, later = graph.bibliography_units(structure)
+    assert earlier['text'] == first['text']
+    assert later['text'] == f"{second['text']}\n{continuation['text']}"
+
+
+def test_registered_target_is_admitted_before_pending_target_under_node_limit():
+    pending = unit('Early pending reference. arXiv:2699.11111.', [('arxiv:2699.11111', '2699.11111')])
+    known = unit('Mira Example. Known reference. arXiv:2699.22222.', [('arxiv:2699.22222', '2699.22222')])
+    index = {
+        'arxiv:2699.22222': {
+            'title': 'Known reference', 'authors': ['Mira Example'],
+            'identifier': '2699.22222', 'landing_url': 'https://example.test/reference',
+        },
+    }
+    result = graph.assemble(sources(), [pending, known], index, 'fictional', max_nodes=3)
+    assert [edge['target'] for edge in result['edges']] == ['arxiv:2699.22222']
+    assert result['metrics']['eligible_edges'] == 1
+    assert result['unresolved_references'][0]['text'] == pending['text']

@@ -20,6 +20,8 @@ router=APIRouter(prefix='/api',tags=['citation-graph'])
 ARXIV_SCAN=re.compile(r'\b(?:\d{4}\.\d{4,5}|[a-z][a-z.-]+/\d{7})(?:v\d+)?\b',re.I)
 DOI_SCAN=re.compile(r'\b10\.\d{4,9}/[^\s<>"{}]+',re.I)
 PURPOSES={'unknown','method','data','comparison','background'}
+AUTHOR_KEY = re.compile(r'(?m)^[ \t]*\[[A-Z][A-Za-z+]{0,11}\d{2}[a-z]?\](?=\s|$)')
+LETTERED_SECTION = re.compile(r'^[A-Z](?:\.\d+)*[.)]?[ \t]*\r?\n[ \t]*[A-Z]\w{2}')
 
 
 def norm(value):
@@ -57,39 +59,62 @@ def choose_sources(documents,selected_versions=None):
 def bibliography_units(structure):
     """Join continuation fragments, retaining every source block; never alter the PDF."""
     blocks={block['id']:block for block in structure['blocks']}
-    reference_blocks={item['block_id'] for item in structure['references']}
     bounded=set();inside=False
     for block in structure['blocks']:
         text=re.sub(r'\s+',' ',block['text']).strip()
         if block['type']=='heading' and re.fullmatch(r'(?:\d+\.?\s*)?(?:references|bibliography|参考文献)',text,re.I):
             inside=True;continue
         # Misclassified year-leading bibliography lines stay inside; appendix/visualization do not.
-        if inside and block['type']=='heading' and re.match(r'(?i:appendix|附录|attention visualizations|acknowledg)|[A-Z](?:\.\d+)?\s+(?:Additional|Details|Experiments)',text):inside=False
+        if inside and block['type']=='heading' and (
+            re.match(r'(?i:appendix|附录|attention visualizations|acknowledg)|[A-Z](?:\.\d+)?\s+(?:Additional|Details|Experiments)',text)
+            or LETTERED_SECTION.match(block['text'].strip())
+        ):
+            inside=False
         if inside:bounded.add(block['id'])
-    items=[];current=None;numbered=False
+    items=[];current=None;labelled=False
     for reference in structure['references']:
         block=blocks.get(reference['block_id'])
-        if not block or reference['block_id'] not in reference_blocks or reference['block_id'] not in bounded:continue
+        if not block or reference['block_id'] not in bounded:continue
         recovered=(block['type']=='table_candidate' and (block.get('metadata') or {}).get('extraction')=='native_pdf'
                    and current is not None and current.get('marker') and not reference.get('marker')
                    and re.match(r'^(?:[A-Z]\.\s*){1,3}[A-Z][a-zA-ZÀ-Ž-]+',reference['text'].strip())
                    and re.search(r'\b(?:19|20)\d{2}\b',reference['text'])
                    and re.search(r'https?://|\bdoi\b|\barxiv\b|\bIn\b',reference['text']))
-        if block['type'] not in {'paragraph','heading','reference','reference_entry'} and not recovered:continue
-        text=reference['text'].strip();marker=reference.get('marker')
-        # An unnumbered author line is a candidate boundary, not an identity assertion.
-        author_start=bool(re.match(r'^[A-ZÀ-Ž][^\d]{2,100}(?:,|\band\b)',text) and not re.match(r'^(?:In |Proceedings|Advances|International|Conference|Journal|URL )',text))
-        start=bool(marker) or current is None or (not numbered and author_start and re.search(r'\b(?:19|20)\d{2}\b',current['text']))
-        if start:
-            current={'id':'bib_'+reference['id'],'marker':marker,'text':'','reference_ids':[],'sources':[]};items.append(current)
-        numbered=numbered or bool(marker)
-        current['text']+=('\n' if current['text'] else '')+text
-        current['reference_ids'].append(reference['id'])
-        if not any(source['block_id']==block['id'] for source in current['sources']):
-            metadata=block.get('metadata') or {}
-            current['sources'].append({'block_id':block['id'],'page':block['page'],'bbox':block['bbox'],'text':block['text'],
-                                       'extraction':metadata.get('extraction','native'),'confidence':metadata.get('confidence'),
-                                       'bibliography_recovery':'native_reference_continuation' if recovered else None})
+        metadata = block.get('metadata') or {}
+        raw = block['text']
+        text = reference['text'].strip()
+        raw_start = raw.find(text)
+        keys = list(AUTHOR_KEY.finditer(text)) if graph_identity.native(block) and raw_start >= 0 else []
+        keyed_table = bool(keys) and block['type'] == 'table_candidate' and metadata.get('extraction') == 'native_pdf'
+        if block['type'] not in {'paragraph','heading','reference','reference_entry'} and not (recovered or keyed_table):
+            continue
+        boundaries = [0, *(key.start() for key in keys if key.start()), len(text)]
+        for left, right in zip(boundaries, boundaries[1:]):
+            fragment = text[left:right].strip()
+            if not fragment:
+                continue
+            author_key = AUTHOR_KEY.match(text, left) if keys else None
+            marker = reference.get('marker') if left == 0 else None
+            author_start = bool(re.match(r'^[A-ZÀ-Ž][^\d]{2,100}(?:,|\band\b)', fragment)
+                                and not re.match(r'^(?:In |Proceedings|Advances|International|Conference|Journal|URL )', fragment))
+            if marker or author_key or current is None or (
+                not labelled and author_start and re.search(r'\b(?:19|20)\d{2}\b', current['text'])
+            ):
+                suffix = f'_key_{left}' if author_key else ''
+                current = {'id': 'bib_'+reference['id']+suffix, 'marker': marker, 'text': '', 'reference_ids': [], 'sources': []}
+                items.append(current)
+            labelled = labelled or bool(marker or author_key)
+            current['text'] += ('\n' if current['text'] else '') + fragment
+            if not author_key:
+                current['reference_ids'].append(reference['id'])
+            if not any(source['block_id'] == block['id'] for source in current['sources']):
+                anchor = {'block_id': block['id'], 'page': block['page'], 'bbox': block['bbox'], 'text': raw,
+                          'extraction': metadata.get('extraction','native'), 'confidence': metadata.get('confidence'),
+                          'bibliography_recovery': 'native_reference_continuation' if recovered else None}
+                if keys:
+                    start = raw.index(fragment, raw_start + left)
+                    anchor['reference_span'] = {'start': start, 'end': start + len(fragment)}
+                current['sources'].append(anchor)
     return items
 
 
@@ -200,7 +225,11 @@ def assemble(sources,units,index,topic,max_nodes):
         if key in index:
             metadata=index[key];node.update(year=metadata.get('year'),authors=metadata.get('authors',[]),landing_url=metadata['landing_url'],registry_source=metadata.get('source_url'))
     edges={};unresolved=[];truncated=0
-    for unit in units:
+    # Give registered targets the first choice of external node slots.
+    def has_registered_target(unit):
+        return any(key in index for key, _ in unit['identifiers'])
+
+    for unit in sorted(units, key=lambda unit: not has_registered_target(unit)):
         local_matches=graph_identity.matches(unit['text'],sources)
         # Two distinct identities in one grouped entry can indicate a bad continuation merge.
         distinct=list(dict.fromkeys(key for key,_ in unit['identifiers']))
