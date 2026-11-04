@@ -95,6 +95,38 @@ def test_invalid_model_rows_leave_coverage_gaps(client, papers, monkeypatch):
     assert all(row['status'] == 'not_covered' for row in payload['coverage'])
 
 
+def test_review_uses_attached_quote_for_numbers_and_excludes_paper_wide_omissions(client, papers, monkeypatch):
+    docs, graph_result, _ = papers
+
+    async def fake(system, data, **kwargs):
+        source = next(item for item in data['evidence'] if '8 fictional samples' in item['text'])
+        supported = claim([source], text='作者在 8 个样本上测试语音注意力。')
+        short_quote = claim([source], text=supported['text'])
+        short_quote['quotes'][0]['quote'] = 'We tested speech attention'
+        omission = claim([source], text='作者报告了结果，但原文未进一步讨论其他数据。')
+        return {'sections': [{'section': 'limitations', 'claims': [short_quote, omission, supported]}]}
+
+    monkeypatch.setattr(model_client, 'chat_json', fake)
+    result = client.post(f"/api/graphs/{graph_result['id']}/reviews", json={'document_ids': [docs[1]['id']]})
+    assert result.status_code == 200
+    draft = result.json()
+    assert draft['rejected_rows'] == 2
+    assert draft['review_rejections'] == {'number_outside_quotes': 1, 'paper_scope_omission': 1}
+    retained, = draft['sections'][0]['claims']
+    assert '8 fictional samples' in retained['quotes'][0]['quote']
+    assert retained['semantic_verified'] is False
+    export = client.get(f"/api/research-insights/{draft['id']}/export")
+    assert '数字未出现在所附引文中 · 1 条' in export.text
+
+
+def test_review_does_not_use_model_name_digits_as_measurements():
+    source = {'id': 'e', 'document_id': 'd', 'text': 'We used GPT-3. Memory was reduced by 3 times.'}
+    value = claim([source], text='GPT-3 的内存需求减少 3 倍。')
+    assert insights.checked_claim(value, [source], review_rules=True)['text'] == value['text']
+    value['quotes'][0]['quote'] = 'We used GPT-3.'
+    assert insights.checked_claim(value, [source], review_rules=True) is None
+
+
 @pytest.mark.parametrize('mutation', ['novel_number', 'fabricated_quote', 'cross_scope', 'one_paper_synthesis'])
 def test_claim_checks_reject_specific_failures(mutation):
     evidence = [{'id':'e1','document_id':'a','text':'Fictional result uses 8 examples.'}, {'id':'e2','document_id':'b','text':'Fictional counterpart uses 9 examples.'}]

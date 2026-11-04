@@ -1,3 +1,3 @@
 """ScholarTrace API: versioned documents and source-grounded research tools."""
 
-__version__ = "0.25.4"
+__version__ = "0.25.5"

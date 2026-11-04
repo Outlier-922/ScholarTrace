@@ -7,7 +7,7 @@ import ClaimCheckPanel from './ClaimCheckPanel';
 
 interface Claim { text: string; kind: string; evidence_ids: string[]; quotes: { evidence_id: string; quote: string }[]; }
 interface Assessment { document_id: string; title: string; relation: string; claim: Claim | null; bucket: string; temporal_status: string; source_date: { date: string | null }; candidate_date: { date: string | null }; notice: string; }
-interface Insight { id: string; kind: 'review' | 'future'; topic: string; created_at: string; evidence: Evidence[]; warnings: string[]; rejected_rows?: number; sections?: { title: string; claims: Claim[] }[]; coverage?: { document_id: string; title: string; status: string }[]; assessments?: Assessment[]; }
+interface Insight { id: string; kind: 'review' | 'future'; topic: string; created_at: string; evidence: Evidence[]; warnings: string[]; rejected_rows?: number; review_rejections?: { number_outside_quotes?: number; paper_scope_omission?: number }; sections?: { title: string; claims: Claim[] }[]; coverage?: { document_id: string; title: string; status: string }[]; assessments?: Assessment[]; }
 interface History { id: string; kind: 'review' | 'future'; topic: string; created_at: string; }
 interface Props { graphId: string; sources: { document_id: string; title: string }[]; documents: ResearchDocument[]; onSource: (evidence: Evidence) => void; modelConfigured: boolean; readOnly: boolean; }
 const relations: Record<string, string> = { addressed: '模型建议已有处理', partial: '模型建议部分涉及', not_addressed: '模型未找到对应处理', insufficient: '证据或输出不足' };
@@ -67,6 +67,8 @@ export default function InsightPanel({ graphId, sources, documents, onSource, mo
       <details open={!screened}><summary>原始草稿与原模型建议（保留生成记录）</summary>
       {value.kind === 'review' ? <>{value.sections?.length ? value.sections.map(section => <section key={section.title}><h4>{section.title}</h4>{section.claims.map((claim, index) => renderClaim(claim, `${section.title}-${index}`))}</section>) : <p>没有生成可保留的综述陈述，请查看证据提纲或缩小主题。</p>}<h4>论文覆盖</h4>{value.coverage?.map(source => <p key={source.document_id}>{source.title}：{source.status === 'has_candidate_claim' ? '有候选陈述，仍需核对' : '未覆盖，保留缺口'}</p>)}</> : <>{['retain_for_review', 'provisionally_addressed'].map(bucket => <details key={bucket} open={bucket === 'retain_for_review'}><summary>{bucket === 'retain_for_review' ? '保留核对的候选' : '模型建议已有处理的候选 · 可展开复核'}（{value.assessments?.filter(row => row.bucket === bucket).length || 0}）</summary>{value.assessments?.filter(row => row.bucket === bucket).map(row => <section key={row.document_id}><h4>{row.title}</h4><p>{relations[row.relation]} · {times[row.temporal_status]}</p><small>原版本日期：{row.source_date.date || '未知'}；候选版本日期：{row.candidate_date.date || '未知'}</small>{row.claim ? renderClaim(row.claim, row.document_id) : <p>没有通过来源/引文检查的核对理由。</p>}<small>{row.notice}</small></section>)}</details>)}</>}
       {value.kind === 'review' && <p className="graph-scope-note">未保留的输出条目：{value.rejected_rows || 0}。已显示陈述仍需核对语义支持。</p>}
+      {value.review_rejections?.number_outside_quotes ? <p className="graph-scope-note">有 {value.review_rejections.number_outside_quotes} 条陈述中的数字没有出现在所附引文中。</p> : null}
+      {value.review_rejections?.paper_scope_omission ? <p className="graph-scope-note">有 {value.review_rejections.paper_scope_omission} 条陈述从片段推断了整篇论文的讨论范围。</p> : null}
       {value.warnings.map(warning => <p className="graph-scope-note" key={warning}>{warning}</p>)}</details></section>}
   </div>;
 }

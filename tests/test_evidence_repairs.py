@@ -67,7 +67,7 @@ def test_revision_is_separate_recheckable_and_preserves_original(client, checked
     assert client.post('/api/research-insights/'+value['id']+'/checks',json={}).status_code==200
 
 
-@pytest.mark.parametrize('mutation',['unknown_evidence','novel_number','fake_quote','wrong_kind','duplicate','missing','unresolved','unhashable_action'])
+@pytest.mark.parametrize('mutation',['unknown_evidence','novel_number','fake_quote','wrong_kind','duplicate','missing','unresolved','unhashable_action','paper_scope_omission'])
 def test_invalid_revision_never_silently_reuses_original(client,checked,monkeypatch,mutation):
     plan=prepare(client,checked,1)
     async def fake(*args,**kwargs):
@@ -80,11 +80,14 @@ def test_invalid_revision_never_silently_reuses_original(client,checked,monkeypa
         elif mutation=='missing':value['revisions']=[]
         elif mutation=='unresolved':row['action']='unresolved'
         elif mutation=='unhashable_action':row['action']=[]
+        elif mutation=='paper_scope_omission':row['claim']['text']='原文未进一步讨论其他数据。'
         return value
     monkeypatch.setattr(model_client,'chat_json',fake)
     value=client.post(f"/api/repair-plans/{plan['id']}/revise",json={}).json()
     assert value['sections']==[] and value['repair']['items'][0]['status']=='unresolved'
     assert value['repair']['items'][0]['original']['text']==checked['claims'][0]['text']
+    if mutation=='paper_scope_omission':
+        assert value['review_rejections']=={'paper_scope_omission':1}
 
 
 def test_evidence_from_another_selected_claim_is_not_allowed(client,checked,monkeypatch):
