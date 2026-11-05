@@ -15,7 +15,8 @@ def draft(client, papers, monkeypatch):
 
 
 def supported(data):
-    return {'checks': [{'claim_id': row['claim_id'], 'status': 'supported', 'reason': 'SYNTHETIC: exact quotation supports this fixture.', 'unsupported_parts': [], 'quote_support': row['quotes']} for row in data['claims']]}
+    return {'checks': [{'claim_id': row['claim_id'], 'status': 'supported', 'reason': 'SYNTHETIC: exact quotation supports this fixture.', 'unsupported_parts': [], 'quote_support': row['quotes'],
+        'scope': {'status': 'aligned', 'claim_excerpt': row['text'], 'reason': 'SYNTHETIC: scope matches the fixture.'}} for row in data['claims']]}
 
 
 def test_only_attached_quotes_are_sent_and_original_is_immutable(client, draft, monkeypatch):
@@ -24,7 +25,10 @@ def test_only_attached_quotes_are_sent_and_original_is_immutable(client, draft, 
         calls.append(data)
         assert kwargs['max_tokens'] == 2400
         assert all(set(row) == {'claim_id','text','kind','quotes'} for row in data['claims'])
-        assert all(set(quote) == {'evidence_id','quote'} for row in data['claims'] for quote in row['quotes'])
+        assert all(set(quote) == {'evidence_id','quote','source_id'} for row in data['claims'] for quote in row['quotes'])
+        by_id = {e['id']: e['document_id'] for e in draft['evidence']}
+        pairs = [(by_id[q['evidence_id']], q['source_id']) for row in data['claims'] for q in row['quotes']]
+        assert all((left[0] == right[0]) == (left[1] == right[1]) for left in pairs for right in pairs)
         return supported(data)
     monkeypatch.setattr(model_client, 'chat_json', fake)
     response = client.post(f"/api/research-insights/{draft['id']}/checks", json={})
@@ -131,6 +135,7 @@ def test_saved_check_is_purged_when_source_deleted(client, draft, monkeypatch):
 def test_valid_non_support_verdicts_remain_withheld(status):
     claim={'claim_id':'c1','text':'SYNTHETIC model always works.', 'quotes':[{'evidence_id':'e1','quote':'SYNTHETIC model sometimes fails.'}]}
     row={'status':status,'reason':'SYNTHETIC bounded reason','unsupported_parts':['always works'],'quote_support':[{'evidence_id':'e1','quote':'sometimes fails'}]}
+    row['scope']={'status':'aligned','claim_excerpt':claim['text'],'reason':'SYNTHETIC scope.'}
     result=claim_checks.checked_row(row,claim)
     assert result['status'] == status and result['output_valid'] is True
 
@@ -156,3 +161,77 @@ def test_single_paper_claim_cannot_be_presented_as_cross_paper_comparison(client
     monkeypatch.setattr(model_client,'chat_json',fake)
     value=client.post(f"/api/graphs/{graph['id']}/reviews",json={}).json()
     assert value['sections'] == [] and value['rejected_rows'] == 1
+
+
+@pytest.mark.parametrize('scope_status,expected', [('broader', 'partial'), ('unclear', 'insufficient'), ('aligned', 'supported')])
+def test_scope_verdict_controls_support_even_when_main_verdict_says_supported(scope_status, expected):
+    claim={'claim_id':'c1','text':'SYNTHETIC method always uses loss A; the authors used loss A.',
+           'quotes':[{'evidence_id':'e1','quote':'SYNTHETIC one reported experiment uses loss A.'}]}
+    row=supported({'claims':[claim]})['checks'][0]
+    row['scope']={'status':scope_status,'claim_excerpt':'method always uses loss A','reason':'SYNTHETIC reported setting compared with a general method statement.'}
+    result=claim_checks.checked_row(row,claim)
+    assert result['status']==expected and result['output_valid'] is True
+    if scope_status=='broader': assert 'method always uses loss A' in result['unsupported_parts']
+
+
+@pytest.mark.parametrize('mutation', ['missing', 'invalid_status', 'unhashable_status', 'fabricated_excerpt', 'blank_excerpt', 'empty_reason'])
+def test_missing_or_malformed_scope_cannot_produce_support(mutation):
+    claim={'claim_id':'c1','text':'SYNTHETIC bounded statement.', 'quotes':[{'evidence_id':'e1','quote':'SYNTHETIC bounded quotation.'}]}
+    row=supported({'claims':[claim]})['checks'][0]
+    if mutation=='missing': row.pop('scope')
+    elif mutation=='invalid_status': row['scope']['status']='certain'
+    elif mutation=='unhashable_status': row['scope']['status']=[]
+    elif mutation=='fabricated_excerpt': row['scope']['claim_excerpt']='invented assertion'
+    elif mutation=='blank_excerpt': row['scope']['claim_excerpt']=' '
+    elif mutation=='empty_reason': row['scope']['reason']=' '
+    result=claim_checks.checked_row(row,claim)
+    assert result['status']=='insufficient' and result['output_valid'] is False
+
+
+def test_new_prompt_does_not_reuse_old_scope_free_check_and_old_export_survives(client,draft,monkeypatch):
+    calls=[]
+    async def fake(system,data,**kwargs): calls.append(1);return supported(data)
+    monkeypatch.setattr(model_client,'chat_json',fake)
+    monkeypatch.setattr(claim_checks,'PROMPT_VERSION','attached-quotes-v1')
+    old=client.post(f"/api/research-insights/{draft['id']}/checks",json={}).json()
+    # A persisted legacy record lacks scope. Keep it readable without rewriting it.
+    old['id']='synthetic-legacy-scope-free'
+    for row in old['checks']: row.pop('scope')
+    insights.persist(old)
+    assert client.get('/api/insight-checks/'+old['id']+'/export').status_code==200
+    monkeypatch.setattr(claim_checks,'PROMPT_VERSION','attached-quotes-scope-v2')
+    new=client.post(f"/api/research-insights/{draft['id']}/checks",json={}).json()
+    assert new['id']!=old['id'] and len(calls)==2
+    assert '范围对应（模型建议）' in client.get('/api/insight-checks/'+new['id']+'/export').text
+    assert client.get('/api/research-insights/'+old['id']).json()==old
+
+
+@pytest.mark.parametrize('text,quote,expected', [
+    ('SYNTHETIC method uses loss A.', 'Our model uses loss A.', 'insufficient'),
+    ('SYNTHETIC authors report their model uses loss A.', 'Our model uses loss A.', 'insufficient'),
+    ('SYNTHETIC method uses loss A.', 'We perform finetuning with loss A.', 'insufficient'),
+    ('SYNTHETIC results are conditional.', 'Our\nexperiments use a restricted setting.', 'insufficient'),
+    ('SYNTHETIC result.', '我们的模型在该设置中使用损失函数。', 'insufficient'),
+    ('SYNTHETIC method uses loss A.', 'Our method defines the loss A objective.', 'supported'),
+    ('SYNTHETIC method uses loss A.', 'The method uses loss A.', 'supported'),
+])
+def test_literal_setting_cautions_withhold_even_scoped_claims_without_claiming_semantic_error(text,quote,expected):
+    claim={'claim_id':'c1','text':text,'quotes':[{'evidence_id':'e1','quote':quote}]}
+    row=supported({'claims':[claim]})['checks'][0]
+    result=claim_checks.checked_row(row,claim)
+    assert result['status']==expected and result['output_valid'] is True
+    assert result['scope']['status']=='aligned'  # Retain the actual model suggestion.
+    if expected=='insufficient':
+        assert result['scope_cautions'][0]['cue'] in quote
+        assert result['unsupported_parts']==[]  # This guard does not invent an unsupported clause.
+    else: assert result['scope_cautions']==[]
+
+
+def test_changed_local_validation_does_not_reuse_previous_check(client,draft,monkeypatch):
+    calls=[]
+    async def fake(system,data,**kwargs): calls.append(1);return supported(data)
+    monkeypatch.setattr(model_client,'chat_json',fake)
+    first=client.post(f"/api/research-insights/{draft['id']}/checks",json={}).json()
+    monkeypatch.setattr(claim_checks,'VALIDATION_VERSION','synthetic-next-validation')
+    second=client.post(f"/api/research-insights/{draft['id']}/checks",json={}).json()
+    assert first['id']!=second['id'] and len(calls)==2

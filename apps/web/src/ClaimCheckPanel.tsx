@@ -4,10 +4,11 @@ import type { Evidence } from './types';
 import EvidenceRepairPanel from './EvidenceRepairPanel';
 
 interface Claim { claim_id: string; text: string; kind: string; section: string; quotes: { evidence_id: string; quote: string }[]; }
-interface Check { claim_id: string; status: string; reason: string; unsupported_parts: string[]; output_valid: boolean; }
+interface Check { claim_id: string; status: string; reason: string; unsupported_parts: string[]; output_valid: boolean; scope_cautions?: { evidence_id: string; cue: string }[]; scope?: { status: string; claim_excerpt: string; reason: string } | null; }
 interface Result { id: string; created_at: string; prompt_version: string; claims: Claim[]; checks: Check[]; evidence: Evidence[]; warnings: string[]; counts: Record<string, number>; }
 interface Props { insightId: string; readOnly: boolean; modelConfigured: boolean; onSource: (evidence: Evidence) => void; onScreened: (active: boolean) => void; onOpenRevision: (id: string) => void; }
 const labels: Record<string, string> = { supported: '模型建议引文支持', partial: '仅部分支持', contradicted: '与引文矛盾', insufficient: '证据或核验输出不足' };
+const scopeLabels: Record<string, string> = { aligned: '范围对应（模型建议）', broader: '陈述范围超出引文', unclear: '范围对应尚不明确' };
 
 export default function ClaimCheckPanel({ insightId, readOnly, modelConfigured, onSource, onScreened, onOpenRevision }: Props) {
   const [value, setValue] = useState<Result | null>(null);
@@ -35,7 +36,7 @@ export default function ClaimCheckPanel({ insightId, readOnly, modelConfigured, 
   }
   function render(claim: Claim) {
     const row = value!.checks.find(item => item.claim_id === claim.claim_id)!;
-    return <article className={`insight-claim support-${row.status}`} key={claim.claim_id}><small>{claim.kind === 'synthesis' ? '跨文陈述' : '单文陈述'} · {labels[row.status]}</small><p>{claim.text}</p><p className="support-reason">核验理由：{row.reason}</p>{row.unsupported_parts.length > 0 && <div>缺乏支持的原句片段：{row.unsupported_parts.map((part, index) => <blockquote key={index}><mark>{part}</mark></blockquote>)}</div>}<details><summary>核对所附短引文与原文</summary>{claim.quotes.map(quote => { const source = value!.evidence.find(item => item.id === quote.evidence_id); return <div key={quote.evidence_id}><blockquote>{quote.quote}</blockquote>{source && <button onClick={() => onSource(source)}>{source.title} · PDF第{source.page}页</button>}</div>; })}</details></article>;
+    return <article className={`insight-claim support-${row.status}`} key={claim.claim_id}><small>{claim.kind === 'synthesis' ? '跨文陈述' : '单文陈述'} · {labels[row.status]}</small><p>{claim.text}</p><p className="support-reason">核验理由：{row.reason}</p>{row.scope && <div className="support-reason"><strong>{scopeLabels[row.scope.status]}</strong><p>{row.scope.reason}</p><blockquote>范围对照：{row.scope.claim_excerpt}</blockquote></div>}{!!row.scope_cautions?.length && <p className="graph-scope-note">所附引文含作者模型或实验设置限定，保留待核对。范围词：{row.scope_cautions.map(item => item.cue).join("；")}。请检查原句各分句的适用范围；这不等于已判定原句错误。</p>}{row.unsupported_parts.length > 0 && <div>缺乏支持的原句片段：{row.unsupported_parts.map((part, index) => <blockquote key={index}><mark>{part}</mark></blockquote>)}</div>}<details><summary>核对所附短引文与原文</summary>{claim.quotes.map(quote => { const source = value!.evidence.find(item => item.id === quote.evidence_id); return <div key={quote.evidence_id}><blockquote>{quote.quote}</blockquote>{source && <button onClick={() => onSource(source)}>{source.title} · PDF第{source.page}页</button>}</div>; })}</details></article>;
   }
   return <section className="claim-check-panel" aria-label="陈述与所附引文核验"><h4>陈述是否被所附引文支持</h4><p>逐条检查实际引用范围。核验可能使用同一模型，仍会出错；不代表人工确认或全文结论。</p><button disabled={busy || readOnly || !modelConfigured} onClick={() => void check()}>{busy ? '正在读取或核验…' : value ? '复用或更新引文支持核验' : '核验陈述与所附引文'}</button><small>另一次模型请求，最多8条、2400输出预留token；相同原记录、模型与核验版本复用保存结果。</small>
     {error && <p role="alert" className="research-error">核验未完成，原始草稿仍可查看。{error}</p>}

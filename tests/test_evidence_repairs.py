@@ -67,6 +67,26 @@ def test_revision_is_separate_recheckable_and_preserves_original(client, checked
     assert client.post('/api/research-insights/'+value['id']+'/checks',json={}).status_code==200
 
 
+def test_revision_receives_selected_check_feedback_and_new_prompt_skips_old_cache(client,checked,monkeypatch):
+    plan=prepare(client,checked,1);calls=[]
+    async def fake(system,data,**kwargs):
+        calls.append(data)
+        assert len(data['claims'])==1
+        row=data['claims'][0]
+        expected=checked['checks'][0]
+        assert row['check']=={key:expected[key] for key in ('status','reason','unsupported_parts','scope','scope_cautions')}
+        assert row['text']==checked['claims'][0]['text']
+        return await revision_response(system,data,**kwargs)
+    monkeypatch.setattr(model_client,'chat_json',fake)
+    monkeypatch.setattr(repairs,'PROMPT_VERSION','narrow-with-evidence-v1')
+    first=client.post(f"/api/repair-plans/{plan['id']}/revise",json={}).json()
+    monkeypatch.setattr(repairs,'PROMPT_VERSION','narrow-with-check-feedback-v2')
+    second=client.post(f"/api/repair-plans/{plan['id']}/revise",json={}).json()
+    assert first['id']!=second['id'] and len(calls)==2
+    assert client.get('/api/research-insights/'+first['id']).json()==first
+    assert client.post(f"/api/repair-plans/{plan['id']}/revise",json={}).json()['id']==second['id'] and len(calls)==2
+
+
 @pytest.mark.parametrize('mutation',['unknown_evidence','novel_number','fake_quote','wrong_kind','duplicate','missing','unresolved','unhashable_action','paper_scope_omission'])
 def test_invalid_revision_never_silently_reuses_original(client,checked,monkeypatch,mutation):
     plan=prepare(client,checked,1)

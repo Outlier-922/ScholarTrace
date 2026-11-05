@@ -2,6 +2,7 @@
 import asyncio
 import hashlib
 import json
+import re
 import uuid
 import weakref
 from fastapi import APIRouter, HTTPException
@@ -9,8 +10,13 @@ from fastapi.responses import PlainTextResponse
 from . import insight_store as repo, insights, model_client, store
 
 router = APIRouter(prefix='/api', tags=['claim-support-checks'])
-PROMPT_VERSION = 'attached-quotes-v1'
+PROMPT_VERSION = 'attached-quotes-scope-v2'
+VALIDATION_VERSION = 'literal-scope-cautions-v1'
 STATUSES = {'supported', 'partial', 'contradicted', 'insufficient'}
+SCOPE_LABELS = {'aligned': '范围对应（模型建议）', 'broader': '陈述范围超出引文', 'unclear': '范围对应尚不明确'}
+# These literal cues identify a reported setting, not a semantic contradiction.
+SETTING_CUE = re.compile(r'\bour\s+(?:models?|experiments?|experimental\s+(?:setup|settings?))\b|\bwe\s+(?:perform|trained|train|fine-?tune|finetune|evaluated|evaluate)\b|(?:我们的|本实验的)(?:模型|实验|设置)', re.I)
+SCOPE_CAUTION = '所附引文含作者模型或实验设置的限定词；即使模型建议支持，也保留待核对，须确认原句各分句的适用范围。'
 _locks = weakref.WeakValueDictionary()
 LABELS = {'supported': '模型建议引文支持', 'partial': '仅部分支持', 'contradicted': '与引文矛盾', 'insufficient': '证据或核验输出不足'}
 SYSTEM = (
@@ -21,10 +27,17 @@ SYSTEM = (
     '不能判断用insufficient。未提及不是否定证据，“原文没有讨论/已彻底解决/全球首个”通常不能由局部引文证明。'
     '不改写陈述、不补证据。reason解释依据及边界，unsupported_parts逐字摘取陈述中缺乏支持的连续片段。'
     'quote_support逐字摘取输入quotes中实际用到的内容；supported须涉及全部所附引文，跨文不能漏看一篇。'
+    'source_id相同表示同一篇论文，多条引文不等于多篇论文。另填scope单独检查量词、主体、阶段和适用条件：'
+    '引文的our models、our experiments、in this setting等只证明该论文中的模型或实验设置，'
+    '不能直接推出整个方法必然如此。每个实质分句分别检查；后半句“作者指出”不自动限定前半句的一般断言。'
+    'scope.status为aligned（范围对应）、broader（陈述泛化）、unclear（引文不足以确定范围）。'
+    'scope.claim_excerpt逐字摘取需对照范围的原句片段，reason说明陈述范围与引文范围。'
+    'broader必须列出unsupported_parts且不能supported；unclear用insufficient。范围对应不代表事实完整支持。'
     '返回JSON:{"checks":[{"claim_id":"给定ID","status":"supported|partial|contradicted|insufficient",'
     '"reason":"中文理由","unsupported_parts":["陈述原文片段"],'
-    '"quote_support":[{"evidence_id":"给定ID","quote":"输入引文中的连续子串"}]}]}。'
-    '每陈述恰好一项，reason最多300字，不能输出置信概率。'
+    '"quote_support":[{"evidence_id":"给定ID","quote":"输入引文中的连续子串"}],'
+    '"scope":{"status":"aligned|broader|unclear","claim_excerpt":"原句连续片段","reason":"范围依据与边界"}}]}。'
+    '每陈述恰好一项，总理由和范围理由各最多150字，不能输出置信概率。'
 )
 
 
@@ -46,7 +59,8 @@ def claims(value):
 
 
 def checked_row(row, claim):
-    fallback = {'claim_id': claim['claim_id'], 'status': 'insufficient', 'reason': '核验输出缺失、重复或未通过结构/引文检查。', 'unsupported_parts': [], 'quote_support': [], 'output_valid': False}
+    cautions = [{'evidence_id': q['evidence_id'], 'cue': match.group(0)} for q in claim['quotes'] if (match := SETTING_CUE.search(q['quote']))]
+    fallback = {'claim_id': claim['claim_id'], 'status': 'insufficient', 'reason': '核验输出缺失、重复或未通过结构/引文/范围检查。', 'unsupported_parts': [], 'quote_support': [], 'scope': None, 'scope_cautions': cautions, 'output_valid': False}
     if not isinstance(row, dict) or not isinstance(row.get('status'), str) or row['status'] not in STATUSES:
         return fallback
     reason, parts, support = row.get('reason'), row.get('unsupported_parts'), row.get('quote_support')
@@ -73,7 +87,23 @@ def checked_row(row, claim):
         status = 'partial'
     if status in {'partial', 'contradicted'} and not parts:
         return fallback
-    return {'claim_id': claim['claim_id'], 'status': status, 'reason': reason.strip(), 'unsupported_parts': parts, 'quote_support': support, 'output_valid': True}
+    scope = row.get('scope')
+    if not isinstance(scope, dict) or not isinstance(scope.get('status'), str) or scope['status'] not in SCOPE_LABELS:
+        return fallback
+    fragment, scope_reason = scope.get('claim_excerpt'), scope.get('reason')
+    if not isinstance(fragment, str) or not 1 <= len(fragment.strip()) <= 800 or fragment not in claim['text']:
+        return fallback
+    if not isinstance(scope_reason, str) or not 1 <= len(scope_reason.strip()) <= 400:
+        return fallback
+    if scope['status'] == 'broader':
+        parts = list(dict.fromkeys([*parts, fragment]))
+        if status == 'supported': status = 'partial'
+    elif scope['status'] == 'unclear':
+        status = 'insufficient'
+    if cautions and status == 'supported':
+        status = 'insufficient'
+    return {'claim_id': claim['claim_id'], 'status': status, 'reason': reason.strip(), 'unsupported_parts': parts, 'quote_support': support,
+            'scope': {'status': scope['status'], 'claim_excerpt': fragment, 'reason': scope_reason.strip()}, 'scope_cautions': cautions, 'output_valid': True}
 
 
 def available(value):
@@ -102,9 +132,12 @@ async def execute(identity):
     incoming = claims(value)
     if not incoming: raise HTTPException(422, '当前记录没有可核验的陈述；请先完善原证据和草稿。')
     if len(incoming) > 8: raise HTTPException(422, '一次最多核验8条陈述，请缩小原草稿范围。')
-    cached = next((item for item in available(value) if item['prompt_version'] == PROMPT_VERSION and item['model_identity'] == model_client.identity()), None)
+    cached = next((item for item in available(value) if item['prompt_version'] == PROMPT_VERSION and item.get('validation_version') == VALIDATION_VERSION and item['model_identity'] == model_client.identity()), None)
     if cached: return cached
-    proposed = await insights.generate(SYSTEM, {'claims': [{'claim_id': row['claim_id'], 'text': row['text'], 'kind': row['kind'], 'quotes': [{'evidence_id': q['evidence_id'], 'quote': q['quote']} for q in row['quotes']]} for row in incoming]}, 2400)
+    by_id = {item['id']: item['document_id'] for item in value['evidence']}
+    source_ids = {source['document_id']: f'source{index + 1}' for index, source in enumerate(value['sources'])}
+    proposed = await insights.generate(SYSTEM, {'claims': [{'claim_id': row['claim_id'], 'text': row['text'], 'kind': row['kind'],
+        'quotes': [{'evidence_id': q['evidence_id'], 'quote': q['quote'], 'source_id': source_ids[by_id[q['evidence_id']]]} for q in row['quotes']]} for row in incoming]}, 2400)
     rows = proposed.get('checks', [])
     if not isinstance(rows, list): rows = []
     results = []
@@ -115,7 +148,7 @@ async def execute(identity):
     if digest(current) != digest(value): raise HTTPException(409, '核验期间原记录发生变化，结果未保存。')
     return insights.persist({'id': str(uuid.uuid4()), 'graph_id': value['graph_id'], 'kind': 'check', 'created_at': store.now(),
         'topic': value['topic'], 'parent_insight_id': identity, 'parent_digest': digest(value), 'prompt_version': PROMPT_VERSION,
-        'model_identity': model_client.identity(), 'sources': value['sources'], 'evidence': value['evidence'],
+        'validation_version': VALIDATION_VERSION, 'model_identity': model_client.identity(), 'sources': value['sources'], 'evidence': value['evidence'],
         'claims': incoming, 'checks': results, 'semantic_verified': False,
         'counts': {name: sum(row['status'] == name for row in results) for name in sorted(STATUSES)},
         'warnings': ['这是模型对所附短引文的二次判断，不是独立事实认证；同一模型可能重复原错误。', '未建议完整支持的原陈述保留在待修订区；筛选不补证据、不自动改写、不确认创新或问题已解决。']})
@@ -141,6 +174,10 @@ def export(identity: str):
             if (check['status'] == 'supported') != accepted: continue
             lines += [f"### {claim['claim_id']} · {claim['section']}", claim['text'], '', LABELS[check['status']] + '：' + check['reason']]
             lines += ['缺乏支持的片段：' + part for part in check['unsupported_parts']]
+            if scope := check.get('scope'):
+                lines += [SCOPE_LABELS[scope['status']] + '：' + scope['reason'], '范围对照原句：' + scope['claim_excerpt']]
+            if check.get('scope_cautions'):
+                lines += [SCOPE_CAUTION, '原引文范围词：' + '；'.join(f"{item['evidence_id']} / {item['cue']}" for item in check['scope_cautions'])]
             for quote in claim['quotes']:
                 evidence = next(item for item in value['evidence'] if item['id'] == quote['evidence_id'])
                 lines += ['> ' + quote['quote'].replace('\n', '\n> '), f"来源：{evidence['title']} / PDF第{evidence['page']}页 / ParseRun: {evidence['parse_run_id']} / Block: {evidence['block_id']} / bbox: {evidence['bbox']}", '']

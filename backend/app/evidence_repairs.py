@@ -15,7 +15,7 @@ from . import claim_checks, insight_store as repo, insights, model_client, qa, s
 
 router = APIRouter(prefix='/api', tags=['evidence-repairs'])
 RETRIEVAL_VERSION = 'pinned-local-context-v2'
-PROMPT_VERSION = 'narrow-with-evidence-v1'
+PROMPT_VERSION = 'narrow-with-check-feedback-v2'
 VALIDATION_VERSION = 'continuous-quotes-and-line-breaks-v3'
 REVIEW_VALIDATION_VERSION = 'continuous-quotes-review-scope-and-line-breaks-v4'
 _locks = weakref.WeakValueDictionary()
@@ -25,6 +25,10 @@ SYSTEM = (
     '可以补齐确有原文的条件，不能增加新的研究主题、排名、因果或实验事实。不能从未提及推出全文没有讨论。'
     '正文中被分页截断的前后块是分别引用的证据，不能将它们拼成虚假的连续逐字引文。'
     '每个修订后的实质分句均须被所附短引文支持。必要时删去原句中无法支持的分句；完全不足则unresolved。'
+    '每条的check是先前模型核验意见，只是待复核的问题线索，不是新增事实证据。'
+    '逐一处理其中缺乏支持的片段和scope范围问题，以evidence原文为准。'
+    'our models、our experiments等报告的是作者设置；应把该限定直接写在对应分句，'
+    '不能仍以一般方法断言开头、仅在后半句加“作者指出”，也不能只在reason里声称已缩小范围。'
     '每个claim恰好一项，不宣称已经人工确认。输出JSON:{"revisions":[{"claim_id":"给定ID",'
     '"action":"revise或unresolved","reason":"修订或不足理由",'
     '"claim":{"kind":"与原类型相同","text":"修订稿，最多800字",'
@@ -210,7 +214,9 @@ async def execute(identity, reuse_revision_id=None):
     for kind in ('review', 'future'):
         for row in history_rows(plan['check_id'], kind):
             if row.get('repair', {}).get('plan_id') == identity and row['model_identity'] == identity_model and row['repair']['prompt_version'] == PROMPT_VERSION and row['repair'].get('validation_version') == validation_version and (not reuse or claim_checks.digest(row['model_proposal']) == claim_checks.digest(reuse['model_proposal'])): return row
-    proposed = copy.deepcopy(reuse['model_proposal']) if reuse else await insights.generate(SYSTEM, {'claims': [{'claim_id': s['claim_id'], 'text': s['original']['text'], 'kind': s['original']['kind'], 'evidence_ids': s['evidence_ids']} for s in plan['scopes']], 'evidence': insights.prompt_sources(plan['evidence'])}, 2400)
+    check = claim_checks.require(plan['check_id'])
+    feedback = {row['claim_id']: {key: copy.deepcopy(row[key]) for key in ('status', 'reason', 'unsupported_parts', 'scope', 'scope_cautions') if key in row} for row in check['checks']}
+    proposed = copy.deepcopy(reuse['model_proposal']) if reuse else await insights.generate(SYSTEM, {'claims': [{'claim_id': s['claim_id'], 'text': s['original']['text'], 'kind': s['original']['kind'], 'evidence_ids': s['evidence_ids'], 'check': feedback[s['claim_id']]} for s in plan['scopes']], 'evidence': insights.prompt_sources(plan['evidence'])}, 2400)
     rows = proposed.get('revisions', [])
     if not isinstance(rows, list): rows = []
     revised = []; accepted = {}; by_id = {e['id']: e for e in plan['evidence']}
