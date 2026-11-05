@@ -15,6 +15,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS literature_feedback(key TEXT PRIMARY KEY,value INTEGER NOT NULL,updated_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_imports(document_id TEXT NOT NULL,key TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(document_id,key));
         CREATE TABLE IF NOT EXISTS literature_handoffs(id TEXT PRIMARY KEY,payload TEXT NOT NULL,created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS literature_batches(id TEXT PRIMARY KEY,revision INTEGER NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_subscriptions(id TEXT PRIMARY KEY,query TEXT UNIQUE NOT NULL,enabled INTEGER NOT NULL,payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_seen(subscription_id TEXT NOT NULL,key TEXT NOT NULL,root_key TEXT NOT NULL,PRIMARY KEY(subscription_id,key));
         CREATE TABLE IF NOT EXISTS literature_checks(id TEXT PRIMARY KEY,subscription_id TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
@@ -105,6 +106,34 @@ def get_handoff(identity):
 def list_handoffs():
     with store.connection() as conn:
         return [json.loads(row['payload']) for row in conn.execute('SELECT payload FROM literature_handoffs ORDER BY created_at DESC LIMIT 40')]
+
+
+def batch_get(identity):
+    with store.connection() as conn:
+        row=conn.execute('SELECT payload FROM literature_batches WHERE id=?',(identity,)).fetchone()
+        return json.loads(row['payload']) if row else None
+
+
+def batch_list():
+    with store.connection() as conn:
+        return [json.loads(row['payload']) for row in conn.execute('SELECT payload FROM literature_batches ORDER BY created_at DESC LIMIT 20')]
+
+
+def batch_insert(value):
+    with store.connection() as conn:
+        conn.execute('INSERT INTO literature_batches VALUES(?,?,?,?)',(value['id'],value['revision'],json.dumps(value,ensure_ascii=False),value['created_at']))
+
+
+def batch_replace(value,expected_revision):
+    with store.connection() as conn:
+        return conn.execute('UPDATE literature_batches SET revision=?,payload=? WHERE id=? AND revision=?',
+            (value['revision'],json.dumps(value,ensure_ascii=False),value['id'],expected_revision)).rowcount==1
+
+
+def matching_handoffs(key,search_id,parent_task_id):
+    with store.connection() as conn:
+        rows=conn.execute("SELECT payload FROM literature_handoffs WHERE json_extract(payload,'$.key')=? AND json_extract(payload,'$.search_id') IS ? AND json_extract(payload,'$.parent_task_id') IS ? ORDER BY created_at DESC LIMIT 20",(key,search_id,parent_task_id)).fetchall()
+        return [json.loads(row['payload']) for row in rows]
 
 
 def purge_document(document_id):

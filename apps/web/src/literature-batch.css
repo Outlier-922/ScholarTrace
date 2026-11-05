@@ -1,0 +1,13 @@
+.literature-batch { padding: 20px 24px; min-width: 0; }
+.literature-batch > p { color: #65736f; font-size: 13px; line-height: 1.7; }
+.literature-batch button { margin: 6px 8px 6px 0; padding: 8px 12px; border: 1px solid #cddbd4; border-radius: 7px; background: #f5faf7; color: #275b43; cursor: pointer; }
+.literature-batch button:disabled { opacity: .5; cursor: default; }
+.batch-history, .batch-item label { display: grid; gap: 8px; margin: 14px 0; font-size: 13px; }
+.literature-batch select { box-sizing: border-box; width: 100%; min-width: 0; padding: 8px; border: 1px solid #d4dfd8; border-radius: 6px; background: white; }
+.batch-item { margin: 14px 0; padding: 16px; border: 1px solid #dce5df; border-radius: 10px; overflow-wrap: anywhere; }
+.batch-item h4 { margin: 0 0 8px; line-height: 1.5; }
+.batch-item p, .batch-item small { font-size: 12px; line-height: 1.6; }
+.batch-confirm { display: flex; align-items: flex-start; gap: 8px; line-height: 1.6; font-size: 13px; }
+.batch-actions { display: flex; flex-wrap: wrap; }
+.batch-local-source { margin-top: 12px; padding: 12px; background: #f5f8f2; border-radius: 6px; font-size: 12px; }
+@media (max-width: 600px) { .literature-batch { padding: 14px; } .batch-item { padding: 12px; } }

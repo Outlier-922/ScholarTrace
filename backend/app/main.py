@@ -153,7 +153,7 @@ def health() -> dict[str, Any]:
                              "intent_workflow": True, "model_diagnostics": True,
                              "multi_user_auth": False, "comparison_matrix": True,
                              "citation_navigation": True, "translation": True, "selection_translation": True,
-                             "literature_search": True, "arxiv_import": True, "topic_tracking": True},
+                             "literature_search": True, "arxiv_import": True, "batch_literature_import": True, "topic_tracking": True},
             "ocr_status": {key: value for key, value in ocr_status.items() if key != "model_dir"},
             "embedding_status": embedding_status}
 
@@ -433,6 +433,8 @@ from . import formulas
 app.include_router(formulas.router)
 from . import table_refinement
 app.include_router(table_refinement.router)
+from . import literature_batches
+app.include_router(literature_batches.router)
 
 # Serve only the explicit production build, never the repository or data root.
 if os.getenv('SCHOLARTRACE_SERVE_WEB', 'false').lower() == 'true':
