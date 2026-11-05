@@ -282,6 +282,32 @@ def test_quote_normalization_does_not_fuzzy_match_or_change_numbers():
     assert insights.anchor_quote('bert encoder', 'BERT encoder') is None
 
 
+@pytest.mark.parametrize('quoted', [
+    'We pass gradi-ents through a low-rank quantized model.',
+    'We pass gradients through a low-rank quantized model.',
+    'We pass gradi-ents through a low-rank quant-ized model.',
+])
+def test_retained_and_joined_line_break_hyphens_map_to_original(quoted):
+    raw = 'We pass gradi-\nents through a low-rank quant-\nized model.'
+    result = insights.anchor_quote(quoted, raw)
+    assert result and raw[result['start']:result['end']] == raw == result['quote']
+
+
+@pytest.mark.parametrize('quoted,raw', [
+    ('Use lowrank gradi-ents.', 'Use low-rank gradi-\nents.'),
+    ('Use low-rank grad-ients.', 'Use low-rank gradi-\nents.'),
+    ('Use 8-bit gradi-ents.', 'Use 4-bit gradi-\nents.'),
+    ('Use low-rank gradi-ents.', 'Use low-rank gradients.'),
+])
+def test_line_break_fallback_keeps_fixed_hyphens_spelling_and_numbers(quoted, raw):
+    assert insights.anchor_quote(quoted, raw) is None
+
+
+def test_retained_line_break_hyphen_rejects_ambiguous_positions():
+    raw = 'We pass gradi-\nents. We pass gradi-\nents.'
+    assert insights.anchor_quote('We pass gradi-ents.', raw) is None
+
+
 def test_review_evidence_reserves_an_abstract_slot(monkeypatch):
     abstract = {'id':'abstract','text':'SYNTHETIC abstract ' * 8,'block_type':'paragraph','section_path':['Abstract']}
     topic = {'id':'topic','text':'SYNTHETIC method'}

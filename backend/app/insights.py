@@ -47,21 +47,51 @@ def prompt_sources(evidence):
     return [{'id': item['id'], 'document_id': item['document_id'], 'title': item['title'], 'page': item['page'], 'text': excerpt(item)} for item in evidence]
 
 
-def normalized_quote(text):
+def normalized_quote(text, *, keep_line_breaks=False):
     # Preserve a reversible map. Only PDF line-end hyphenation, compatibility
     # glyphs and whitespace change; spelling, case and punctuation do not.
     removed = set()
+    breaks = {}
     for match in re.finditer(r'(?<=[A-Za-z])-\s*\n\s*(?=[A-Za-z])', text):
         removed.update(range(match.start(), match.end()))
+        breaks[match.start()] = match.end()
     value, spans = '', []
     for index, char in enumerate(text):
-        if index in removed: continue
+        if index in removed:
+            if keep_line_breaks and index in breaks:
+                value += '\x00'
+                spans.append((index, breaks[index]))
+            continue
         for letter in unicodedata.normalize('NFKC', char):
             letter = ' ' if letter.isspace() else letter
             if letter == ' ' and value.endswith(' '):
                 spans[-1] = (spans[-1][0], index + 1); continue
             value += letter; spans.append((index, index + 1))
     return value, spans
+
+
+def line_break_quote(needle, text):
+    """A retained hyphen must coincide with a real PDF line break."""
+    if '\x00' in text or '\x00' in needle:
+        return None
+    normalized, spans = normalized_quote(text, keep_line_breaks=True)
+    if '\x00' not in normalized:
+        return None
+    pieces = []
+    for index, char in enumerate(needle):
+        if (char == '-' and 0 < index < len(needle) - 1
+                and re.fullmatch(r'[A-Za-z]', needle[index - 1])
+                and re.fullmatch(r'[A-Za-z]', needle[index + 1])):
+            pieces.append(r'(?:-|\x00)')
+        else:
+            pieces.append(re.escape(char))
+    pattern = r'\x00?'.join(pieces)
+    matches = re.finditer(f'(?=({pattern}))', normalized)
+    first = next(matches, None)
+    if first is None or next(matches, None) is not None:
+        return None
+    left, right = first.span(1)
+    return spans[left][0], spans[right - 1][1]
 
 
 def anchor_quote(quote, text):
@@ -72,7 +102,17 @@ def anchor_quote(quote, text):
     normalized, spans = normalized_quote(text)
     needle = normalized_quote(quote)[0].strip()
     start = normalized.find(needle)
-    if len(needle) < 4 or start < 0 or normalized.find(needle, start + 1) >= 0: return None
+    if len(needle) < 4:
+        return None
+    if start < 0:
+        bounds = line_break_quote(needle, text)
+        if bounds is None:
+            return None
+        left, right = bounds
+        return {'quote': text[left:right], 'model_quote': quote, 'match': 'pdf_line_break_hyphen',
+                'start': left, 'end': right}
+    if normalized.find(needle, start + 1) >= 0:
+        return None
     left, right = spans[start][0], spans[start + len(needle) - 1][1]
     return {'quote': text[left:right], 'model_quote': quote, 'match': 'normalized_pdf_text', 'start': left, 'end': right}
 
