@@ -413,6 +413,10 @@ def writing_exports(payload):
             lines += ['**'+labels[paragraph['kind']]+'** '+paragraph['text']+(' '+' '.join('['+token+']' for token in citations) if citations else ''),'']
             if paragraph.get('support_quote'):lines += ['核验引句（仍需语义核对）：'+paragraph['support_quote'],'']
             if paragraph['evidence_ids']:lines += ['来源位置：'+'；'.join(f'{by_id[key]["title"]} / PDF第{by_id[key]["page"]}页 / {by_id[key]["parse_run_id"]} / {by_id[key]["block_id"]}' for key in paragraph['evidence_ids']),'']
+    if screening:=payload.get('handoff',{}).get('screening') if payload.get('handoff') else None:
+        decision=screening['decision'];anchor=decision['anchor']
+        lines += ['## 采用依据（源论文的引用用途，非候选论文事实证据）',screening['goal'],decision['purpose']+'：'+decision['reason'],
+                  '> '+anchor['quote'].replace('\n','\n> '),f"源论文：{screening['citing_source']['document_id']} / ParseRun: {screening['citing_source']['parse_run_id']} / PDF第{anchor['page']}页 / Block: {anchor['block_id']}"]
     lines += ['## References（注册记录对应）','']+references+['','## 本地来源（书目身份待核对）','']+sources+['']+payload['warnings']
     return '\n'.join(lines),'\n\n'.join(bib)+'\n'
 

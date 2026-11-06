@@ -33,6 +33,9 @@ def metadata(context):
         if not saved:raise HTTPException(404,'检索快照不存在')
         item=next((item for item in saved['result']['items'] if item['key']==context.key),None)
         if not item:raise HTTPException(422,'书目不属于此快照的已采用候选')
+        if saved['result'].get('screening'):
+            from .reference_screening import handoff_summary
+            handoff_summary(context.search_id,context.key)
     else:item=repo.get_record(context.key)
     if not item:raise HTTPException(404,'请先检索并核对书目')
     if context.parent_task_id:
@@ -57,12 +60,16 @@ def candidates(item):
 
 
 def capture(context,item,document,origin):
+    from .reference_screening import handoff_summary
+    screening=handoff_summary(context.search_id,context.key) if context.search_id else None
     key=[context.key,context.search_id,context.parent_task_id,document['id'],document['sha256'],document['parse_run_id']]
     key.append(hashlib.sha256(json.dumps(item,sort_keys=True,ensure_ascii=False).encode()).hexdigest())
+    if screening:key.append(screening['snapshot_sha256'])
     payload={'id':str(uuid.uuid5(uuid.NAMESPACE_URL,json.dumps(key))), 'created_at':store.now(),
              'key':context.key,'search_id':context.search_id,'parent_task_id':context.parent_task_id,
              'metadata':item,'source':{name:document[name] for name in ('id','title','filename','sha256','parse_run_id')},
              'origin':origin,'identity_basis':'user_confirmed','semantic_verified':False}
+    if screening:payload['screening']=screening
     return repo.save_handoff(payload)
 
 
@@ -70,6 +77,13 @@ def resolve(receipt):
     source=receipt['source'];document=store.get_document(source['id'])
     result={**receipt,'document':document,'can_plan':False,'status':'source_unavailable','notice':'全文来源已删除或不可用。'}
     if not document:return result
+    if receipt.get('screening'):
+        from .reference_screening import handoff_summary
+        try:
+            screening=handoff_summary(receipt['search_id'],receipt['key'])
+            if screening!=receipt['screening']:raise HTTPException(409,'筛选记录发生变化')
+        except HTTPException:
+            return {**result,'status':'screening_unavailable','notice':'采用依据或源论文引用位置不可用，不能继续此筛选交接；请重新核对。'}
     if document['sha256']!=source['sha256']:
         return {**result,'status':'source_changed','notice':'文件身份已变化，需重新核对。'}
     internal=store.get_internal_document(document['id'])

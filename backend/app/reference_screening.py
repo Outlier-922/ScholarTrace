@@ -56,6 +56,26 @@ def context(identity):
 @router.get('/{identity}/screening-context')
 def detail(identity:str):return context(identity)[1]
 
+def handoff_summary(identity,key):
+    saved=repo.get_search(identity)
+    if not saved or not saved['result'].get('screening'):return None
+    saved,ctx=context(identity);value=saved['result'];screening=value['screening']
+    decision=next((d for d in screening['decisions'] if d['key']==key),None)
+    if not decision or decision['decision']!='include' or decision['identity']!='confirmed' or key not in {i['key'] for i in value['items']}:
+        raise HTTPException(409,'筛选采用范围与全文交接不一致')
+    row=next((r for r in ctx['rows'] if r['unit']['id']==decision['unit_id'] and key in r['candidate_keys']),None)
+    anchor=decision.get('anchor')
+    link=next((l for l in row['body_citations'] if anchor and l['id']==anchor['id']),None) if row else None
+    if not link or any(anchor[k]!=link[k] for k in ('block_id','page','bbox','text','offset','marker_text')):
+        raise HTTPException(409,'筛选引用位置不可用或已变化')
+    start,end=anchor['quote_start'],anchor['quote_end']
+    if link['text'][start:end]!=anchor['quote'] or not start<=link['offset'] or end<link['offset']+len(link['marker_text']):
+        raise HTTPException(409,'筛选引用原句范围不一致')
+    trace=value['reference_discovery']
+    return {'search_id':identity,'snapshot_sha256':hashlib.sha256(json.dumps(value,ensure_ascii=False,sort_keys=True).encode()).hexdigest(),
+        'goal':screening['goal'],'decision':copy.deepcopy(decision),
+        'citing_source':{k:trace[k] for k in ('document_id','parse_run_id','sha256')},'semantic_verified':False}
+
 @router.get('/{identity}/screenings')
 def history(identity:str):
     if not repo.get_search(identity):raise HTTPException(404,'检索快照不存在')
