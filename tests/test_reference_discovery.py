@@ -47,3 +47,49 @@ def test_foreign_run_and_deleted_source_rejected(client,scope,graph_papers):
     assert client.post(f"/api/documents/{doc['id']}/reference-discovery",json={'parse_run_id':graph_papers[1]['parse_run_id'],'unit_ids':[units[0]['id']]}).status_code==404
     client.delete('/api/documents/'+doc['id'])
     assert client.get(f"/api/documents/{doc['id']}/reference-discovery",params={'parse_run_id':doc['parse_run_id']}).status_code==404
+
+
+def test_network_budget_stops_after_one_request_and_keeps_local_matches(client,scope,monkeypatch):
+    doc,units=scope;calls=[]
+    async def provider(provider,query,mode,limit):
+        literature.request_guard.get()();calls.append((provider,query))
+        return {'items':literature.parse_arxiv(atom('2605.33333v2'))['items'],'cache':'miss'}
+    monkeypatch.setattr(literature,'search_provider',provider)
+    value=client.post(f"/api/documents/{doc['id']}/reference-discovery",json={'parse_run_id':doc['parse_run_id'],'unit_ids':[u['id'] for u in units],'network':'allow','max_requests':1}).json()
+    assert len(calls)==1 and value['reference_discovery']['network_requests']==1
+    assert len(value['items'])==2 and value['reference_discovery']['rows'][2]['lookup']['status']=='budget_exhausted'
+    assert repo.get_search(value['reference_discovery']['local_snapshot_id'])['result']['reference_discovery']['network_requests']==0
+
+
+def test_timeout_saved_once_without_fabricated_candidates(client,scope,monkeypatch):
+    import httpx
+    doc,units=scope;calls=[]
+    async def provider(*args,**kwargs):
+        literature.request_guard.get()();calls.append(1);raise httpx.ReadTimeout('SYNTHETIC timeout')
+    monkeypatch.setattr(literature,'search_provider',provider)
+    value=client.post(f"/api/documents/{doc['id']}/reference-discovery",json={'parse_run_id':doc['parse_run_id'],'unit_ids':[units[1]['id']],'network':'allow','max_requests':1}).json()
+    assert calls==[1] and value['items']==[] and value['reference_discovery']['rows'][0]['lookup']['status']=='failed'
+    assert repo.get_search(value['search_id'])['result']==value
+
+
+@pytest.mark.parametrize('options',[{'network':'allow'},{'max_requests':1},{'network':'allow','max_requests':4},{'network':'allow','max_requests':1,'queries':{'foreign':'title'}}])
+def test_incoherent_network_permission_rejected(client,scope,options):
+    doc,units=scope
+    assert client.post(f"/api/documents/{doc['id']}/reference-discovery",json={'parse_run_id':doc['parse_run_id'],'unit_ids':[units[0]['id']],**options}).status_code==422
+
+
+def test_no_identifier_uses_explicit_query_and_cache_hit_costs_zero(client,scope,monkeypatch):
+    doc,units=scope;calls=[]
+    async def provider(provider,query,mode,limit):calls.append((provider,query));return {'items':[],'cache':'hit'}
+    monkeypatch.setattr(literature,'search_provider',provider)
+    value=client.post(f"/api/documents/{doc['id']}/reference-discovery",json={'parse_run_id':doc['parse_run_id'],'unit_ids':[units[2]['id']],'network':'allow','max_requests':1,'queries':{units[2]['id']:'SYNTHETIC chosen title'}}).json()
+    assert calls==[('crossref','SYNTHETIC chosen title')] and value['reference_discovery']['network_requests']==0
+
+
+def test_ambiguous_identifiers_require_explicit_query_without_spending_budget(client,scope,monkeypatch):
+    doc,units=scope;unit=copy.deepcopy(units[0]);unit['text']='arXiv:2605.11111v1 and arXiv:2605.99999v1'
+    monkeypatch.setattr(discovery.graph,'bibliography_units',lambda _: [unit])
+    value=client.post(f"/api/documents/{doc['id']}/reference-discovery",json={'parse_run_id':doc['parse_run_id'],'unit_ids':[unit['id']],'network':'allow','max_requests':1})
+    assert value.status_code==200,value.text
+    assert value.json()['reference_discovery']['network_requests']==0
+    assert value.json()['reference_discovery']['rows'][0]['lookup']['status']=='ambiguous_identifier'
