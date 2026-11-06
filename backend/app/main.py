@@ -435,6 +435,8 @@ from . import table_refinement
 app.include_router(table_refinement.router)
 from . import literature_batches
 app.include_router(literature_batches.router)
+from . import reference_discovery
+app.include_router(reference_discovery.router)
 
 # Serve only the explicit production build, never the repository or data root.
 if os.getenv('SCHOLARTRACE_SERVE_WEB', 'false').lower() == 'true':
