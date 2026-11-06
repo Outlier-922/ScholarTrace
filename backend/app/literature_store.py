@@ -16,6 +16,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS literature_imports(document_id TEXT NOT NULL,key TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(document_id,key));
         CREATE TABLE IF NOT EXISTS literature_handoffs(id TEXT PRIMARY KEY,payload TEXT NOT NULL,created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_batches(id TEXT PRIMARY KEY,revision INTEGER NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS literature_traversals(id TEXT PRIMARY KEY,revision INTEGER NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_subscriptions(id TEXT PRIMARY KEY,query TEXT UNIQUE NOT NULL,enabled INTEGER NOT NULL,payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_seen(subscription_id TEXT NOT NULL,key TEXT NOT NULL,root_key TEXT NOT NULL,PRIMARY KEY(subscription_id,key));
         CREATE TABLE IF NOT EXISTS literature_checks(id TEXT PRIMARY KEY,subscription_id TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);

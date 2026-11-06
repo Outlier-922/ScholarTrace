@@ -439,6 +439,8 @@ from . import reference_discovery
 app.include_router(reference_discovery.router)
 from . import reference_screening
 app.include_router(reference_screening.router)
+from . import reference_traversal
+app.include_router(reference_traversal.router)
 
 # Serve only the explicit production build, never the repository or data root.
 if os.getenv('SCHOLARTRACE_SERVE_WEB', 'false').lower() == 'true':

@@ -11,3 +11,5 @@
 .batch-actions { display: flex; flex-wrap: wrap; }
 .batch-local-source { margin-top: 12px; padding: 12px; background: #f5f8f2; border-radius: 6px; font-size: 12px; }
 @media (max-width: 600px) { .literature-batch { padding: 14px; } .batch-item { padding: 12px; } }
+
+.literature-tabs { flex-wrap: wrap; row-gap: 0; }
