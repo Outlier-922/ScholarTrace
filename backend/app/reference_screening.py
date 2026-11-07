@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter,HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel,ConfigDict,Field
-from . import graph,reading,reference_discovery,reference_identity,literature_store as repo,store
+from . import graph,reading,reference_discovery,reference_identity,reference_purpose,literature_store as repo,store
 
 router=APIRouter(prefix='/api/literature/searches',tags=['reference-screening'])
 
@@ -50,7 +50,8 @@ def context(identity):
         links={l['id']:l for rid in unit['reference_ids'] for l in backlinks.get(rid,[])}
         links.update({l['id']:l for l in authors.get(unit['id'],[])})
         rows.append({**row,'identity_clues':{key:reference_identity.clues(unit['text'],items[key]) for key in row['candidate_keys'] if key in items},
-            'body_citations':[{**l,'text':blocks[l['block_id']]['text'],'block_type':blocks[l['block_id']]['type']} for l in links.values()]})
+            'body_citations':[{**l,'text':blocks[l['block_id']]['text'],'block_type':blocks[l['block_id']]['type'],
+                'purpose_hint':reference_purpose.suggest(blocks[l['block_id']],l)} for l in links.values()]})
     return saved,{'document_id':doc['id'],'parse_run_id':trace['parse_run_id'],'rows':rows,'items':value['items'],
         'notice':'正文位置仅说明源论文在此引用，不证明候选身份正确或适合你的研究。没有解析到正文位置时保留待查。'}
 
@@ -105,11 +106,15 @@ def screen(identity:str,body:ScreenRequest):
             start=link['text'].index(d.quote);end=start+len(d.quote)
             if not start<=link['offset'] or end<link['offset']+len(link['marker_text']):
                 raise HTTPException(422,'引用片段必须覆盖本条目的实际正文引用标记')
-            anchor={**link,'quote':d.quote,'quote_start':start,'quote_end':end}
+            anchor={key:value for key,value in link.items() if key!='purpose_hint'}
+            anchor.update(quote=d.quote,quote_start=start,quote_end=end)
         elif d.quote:raise HTTPException(422,'请先选择引用位置再填写原句')
         if d.decision=='include' and (d.identity!='confirmed' or d.purpose=='unknown' or not anchor):
             raise HTTPException(422,'采用需确认候选身份、明确用途并附带覆盖引用标记的原句；证据不足请保留待查')
-        decisions.append({**d.model_dump(),'reason':d.reason.strip(),'anchor':anchor,'identity_clues':row['identity_clues'][d.key]})
+        decision={**d.model_dump(),'reason':d.reason.strip(),'anchor':anchor,'identity_clues':row['identity_clues'][d.key]}
+        if anchor and link['purpose_hint']:
+            decision['purpose_hint']=link['purpose_hint']
+        decisions.append(decision)
     result=copy.deepcopy(value);result.pop('search_id',None)
     adopted={d['key'] for d in decisions if d['decision']=='include'}
     result['items']=[i for i in result['items'] if i['key'] in adopted]
