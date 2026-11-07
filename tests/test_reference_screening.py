@@ -23,6 +23,7 @@ def test_anchored_screening_is_new_snapshot_and_original_retained(client,candida
     assert anchor['text'][anchor['quote_start']:anchor['quote_end']]==anchor['quote']
     assert client.get('/api/literature/searches/'+screened['search_id']+'/screening-export').json()['result']==screened
     assert screened['screening']['semantic_verified'] is False
+    assert screened['screening']['decisions'][0]['identity_clues']==ctx['rows'][0]['identity_clues'][screened['items'][0]['key']]
     assert client.get('/api/literature/searches/'+value['search_id']+'/screenings').json()['items'][0]['id']==screened['search_id']
     assert client.post('/api/literature/batches',json={'search_id':screened['search_id'],'keys':[screened['items'][0]['key']]}).status_code==200
 
