@@ -262,6 +262,14 @@ def document_detail(document_id: str) -> dict[str, Any]:
     return _require_document(document_id)
 
 
+@app.get('/api/documents/{document_id}/work-versions')
+def document_work_versions(document_id: str) -> dict[str, Any]:
+    versions = store.work_versions(document_id)
+    if versions is None:
+        raise HTTPException(404, '文献不存在')
+    return versions
+
+
 class DocumentPatch(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=500)
     authors: list[str] | None = None

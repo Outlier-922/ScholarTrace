@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -148,6 +149,32 @@ def get_document(document_id: str) -> dict[str, Any] | None:
     with connection() as conn:
         row = conn.execute("SELECT * FROM documents WHERE id=? AND deleted=0", (document_id,)).fetchone()
         return _document(row) if row else None
+
+
+def work_versions(document_id: str) -> dict[str, Any] | None:
+    with connection() as conn:
+        rows = conn.execute('''
+            SELECT peer.id, peer.filename, peer.status, peer.version_label,
+                   peer.arxiv_id, peer.page_count, peer.parse_run_id
+            FROM documents AS selected
+            JOIN documents AS peer ON peer.work_id = selected.work_id
+            WHERE selected.id = ? AND selected.deleted = 0 AND peer.deleted = 0
+            ORDER BY peer.created_at DESC, peer.id
+        ''', (document_id,)).fetchall()
+    if not rows:
+        return None
+
+    items = [dict(row) for row in rows]
+    selected = next(item for item in items if item['id'] == document_id)
+    comparable = []
+    for item in items:
+        label = re.fullmatch(r'v([1-9]\d{0,8})', item['version_label'] or '')
+        if (selected['arxiv_id'] and item['arxiv_id'] == selected['arxiv_id']
+                and label and item['status'] in {'ready', 'partial'}):
+            comparable.append((int(label[1]), item['id']))
+    highest = max((version for version, _ in comparable), default=None)
+    return {'items': items, 'latest_readable_version': f'v{highest}' if highest is not None else None,
+            'latest_readable_ids': [identity for version, identity in comparable if version == highest]}
 
 
 def get_internal_document(document_id: str) -> dict[str, Any] | None:
