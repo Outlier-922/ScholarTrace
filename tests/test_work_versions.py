@@ -99,3 +99,66 @@ def test_version_diff_preserves_exact_source_locations(client, tmp_path):
     assert client.get(path, params=params).status_code == 409
     assert client.delete(f"/api/documents/{right['id']}").status_code == 200
     assert client.get(path, params=params).status_code == 404
+
+
+def test_content_grouping_rejects_conflicting_identity_and_ambiguous_uploads(client, tmp_path):
+    common = (
+        'The simulated sensor measures drift through a calibrated oscillator.',
+        'Every trial uses the same chamber settings and sampling frequency.',
+        'Results report the median deviation under a fixed temperature profile.',
+        'A second sweep validates the repeatability of the synthetic signal.',
+        'The synthetic calibration procedure repeats under identical lab conditions.',
+        'A separate log records the threshold and measured instrument variance.',
+    )
+    title = 'Synthetic Calibration of a Sensor'
+
+    def upload(alias, *, heading=title, author='', marker='', lines=common):
+        path = tmp_path / f'{alias}.pdf'
+        with pymupdf.open() as pdf:
+            pdf.set_metadata({'title': heading, 'author': author, 'subject': alias})
+            page = pdf.new_page()
+            page.insert_text((72, 72), heading, fontsize=16)
+            if marker:
+                page.insert_text((72, 105), marker)
+            for index, line in enumerate(lines):
+                page.insert_text((72, 140 + 27 * index), line)
+            pdf.save(path)
+        doc = wait_for_document(client, upload_pdf(client, path)['id'])
+        assert doc['status'] == 'ready'
+        return doc
+
+    root = upload('anonymous-draft', author='Mira Sample')
+    revised = upload('opaque-revision', author='M. Sample', lines=(*common[:-1], common[-1].replace('threshold', 'limit')))
+    assert revised['duplicate_of'] == root['id']
+    assert revised['duplicate_kind'] == 'content_overlap'
+    assert revised['arxiv_id'] is None
+    path = f"/api/documents/{root['id']}/work-versions"
+    assert client.get(path).json()['latest_readable_version'] is None
+
+    different_title = upload('near-title', heading=f'{title} II', author='Mira Sample')
+    different_author = upload('same-title-other-author', author='Hana Fiction')
+    assert len({item['work_id'] for item in (root, different_title, different_author)}) == 3
+
+    identified = upload('identified-revision', author='Mira Sample', marker='arXiv: 2611.78912v2')
+    assert identified['duplicate_of'] == root['id']
+    conflict = upload('different-identifier', author='Mira Sample', marker='arXiv: 2611.78913v1')
+    assert conflict['work_id'] not in {root['work_id'], different_author['work_id']}
+
+    same_identifier = upload('more-changes', heading='Synthetic Calibration with a New Protocol',
+                             marker='arXiv: 2611.78912v3', lines=('This manuscript records a different protocol.',))
+    assert same_identifier['duplicate_of'] == root['id']
+    assert same_identifier['duplicate_kind'] == 'same_work_version'
+    assert client.get(f"/api/documents/{identified['id']}/work-versions").json()['latest_readable_version'] == 'v3'
+
+    citation = upload('ambiguous-metadata', marker='Related studies include arXiv: 2611.78912v2.')
+    assert citation['arxiv_id'] is None
+    assert not citation['duplicate_of']
+    assert {item['id'] for item in client.get(path).json()['items']} == {
+        root['id'], revised['id'], identified['id'], same_identifier['id'],
+    }
+
+    response = client.post(f"/api/documents/{revised['id']}/reprocess", json={'ocr': False, 'tables': False})
+    assert response.status_code == 200
+    reparsed = wait_for_document(client, revised['id'])
+    assert reparsed['work_id'] == root['work_id']
+    assert reparsed['duplicate_of'] == root['id']

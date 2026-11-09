@@ -404,31 +404,28 @@ def get_structure(document_id: str, page: int | None = None, parse_run_id: str |
 
 
 def _dedup_candidates(conn: sqlite3.Connection, document_id: str) -> list[dict[str, Any]]:
-    rows = conn.execute("""SELECT id,title,work_id,arxiv_id,version_label,fingerprint_tokens,
-                           created_at,duplicate_of,status FROM documents WHERE deleted=0 ORDER BY created_at""").fetchall()
-    records = {row["id"]: dict(row) for row in rows}
-    result, roots = [], set()
-    for value in records.values():
-        if value["id"] == document_id or value["status"] not in {"ready", "partial"}:
+    rows = conn.execute("""
+        SELECT id, title, authors, work_id, arxiv_id, version_label, fingerprint_tokens
+        FROM documents
+        WHERE deleted=0 AND status IN ('ready', 'partial')
+          AND work_id <> (SELECT work_id FROM documents WHERE id=?)
+        ORDER BY duplicate_of IS NOT NULL, created_at, id
+    """, (document_id,))
+    groups: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        work_id = row["work_id"]
+        if work_id not in groups:
+            representative = dict(row)
+            representative["authors"] = json.loads(row["authors"] or "[]")
+            representative["fingerprint_tokens"] = json.loads(row["fingerprint_tokens"] or "[]")
+            representative["arxiv_versions"] = {}
+            groups[work_id] = representative
+        if not row["arxiv_id"]:
             continue
-        # Canonicalize existing links. Reprocessing a root must never make it
-        # point back to one of its own duplicate children.
-        root, visited = value, set()
-        while root.get("duplicate_of") in records and root["id"] not in visited:
-            visited.add(root["id"])
-            root = records[root["duplicate_of"]]
-        if root["id"] == document_id or root["id"] in roots:
-            continue
-        roots.add(root["id"])
-        candidate = dict(root)
-        candidate["fingerprint_tokens"] = json.loads(candidate["fingerprint_tokens"] or "[]")
-        result.append(candidate)
-    return result
-
-
-def dedup_candidates(document_id: str) -> list[dict[str, Any]]:
-    with connection() as conn:
-        return _dedup_candidates(conn, document_id)
+        versions = groups[work_id]["arxiv_versions"].setdefault(row["arxiv_id"], [])
+        if label := re.fullmatch(r"v([1-9]\d{0,8})", row["version_label"] or ""):
+            versions.append(int(label[1]))
+    return list(groups.values())
 
 
 def finalize_document(document_id: str, status: str, warnings: list[str], content_hash: str,
@@ -445,7 +442,13 @@ def finalize_document(document_id: str, status: str, warnings: list[str], conten
         document = conn.execute("SELECT * FROM documents WHERE id=? AND deleted=0", (document_id,)).fetchone()
         if not document or (parse_run_id and document["parse_run_id"] != parse_run_id):
             return False
-        duplicate = resolve_duplicate(_dedup_candidates(conn, document_id))
+        # Reprocessing may change extracted text. Keep already linked files in
+        # their work so a single member cannot move and leave a split group.
+        has_peer = conn.execute(
+            "SELECT 1 FROM documents WHERE work_id=? AND id<>? AND deleted=0 LIMIT 1",
+            (document["work_id"], document_id),
+        ).fetchone()
+        duplicate = {} if has_peer else resolve_duplicate(_dedup_candidates(conn, document_id))
         values: dict[str, Any] = {"status": status, "warnings": json.dumps(warnings, ensure_ascii=False),
                                   "content_fingerprint": content_hash,
                                   "fingerprint_tokens": json.dumps(hashes)}

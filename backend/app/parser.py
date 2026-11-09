@@ -13,10 +13,14 @@ from typing import Any
 import pymupdf as fitz
 
 from . import ocr, store
+from .graph_identity import author_name, norm
 
 logger = logging.getLogger(__name__)
 
 ARXIV = re.compile(r"\barxiv\s*:\s*(\d{4}\.\d{4,5})(v\d+)?", re.I)
+ARXIV_HEADER = re.compile(r"[ \t]*arxiv[ \t]*:[ \t]*(\d{4}\.\d{4,5})(v\d+)?"
+                          r"(?:[ \t]*\[[a-z][a-z0-9.-]*\].*)?[ \t]*", re.I)
+FINGERPRINT_LIMIT = 2048
 HEADING_WORDS = re.compile(r"^(abstract|introduction|background|related work|method(?:s|ology)?|"
                            r"experiments?|results?|discussion|conclusions?|references|bibliography|"
                            r"appendix(?:\s+[A-Z])?|acknowledg(?:e)?ments?|摘要|引言|参考文献|附录)\s*$", re.I)
@@ -206,46 +210,67 @@ def _fingerprint(text: str) -> tuple[str, list[str]]:
     tokens = re.findall(r"[a-z0-9]+|[\u4e00-\u9fff]", text.casefold())
     shingles = {" ".join(tokens[i:i + 5]) for i in range(max(0, len(tokens) - 4))}
     # Bottom-k hashes bound SQLite footprint for long books, deterministically.
-    hashes = sorted({hashlib.blake2b(shingle.encode(), digest_size=8).hexdigest() for shingle in shingles})[:2048]
+    hashes = sorted({hashlib.blake2b(shingle.encode(), digest_size=8).hexdigest() for shingle in shingles})[:FINGERPRINT_LIMIT]
     return hashlib.sha256(" ".join(tokens).encode()).hexdigest(), hashes
 
 
-def _detect_duplicate(document_id: str, title: str, arxiv_id: str | None,
-                      version: str | None, hashes: list[str],
-                      candidates: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def _metadata_surnames(authors: list[str]) -> set[str]:
+    names = [author_name(name) for entry in authors for name in re.split(r",|\s+and\s+", entry)]
+    # Metadata sometimes contains organizations, usernames or inverted names.
+    # Only use the roster as a veto when each name can be parsed.
+    if any(name is None for name in names):
+        return set()
+    return {name["surname"] for name in names if name is not None}
+
+
+def _shared_body(left: set[str], right: set[str]) -> bool:
+    # Unsampled sketches are complete. Only a full-size sketch introduces a
+    # sampling cutoff; compare both papers over the same hash range.
+    cutoff = min((max(hashes) for hashes in (left, right) if len(hashes) == FINGERPRINT_LIMIT), default=None)
+    if cutoff is not None:
+        left = {value for value in left if value <= cutoff}
+        right = {value for value in right if value <= cutoff}
+    shared = len(left & right)
+    return shared >= 8 and shared / max(len(left), len(right)) >= .78
+
+
+def _detect_duplicate(title: str, authors: list[str], arxiv_id: str | None, version: str | None,
+                      hashes: list[str], candidates: list[dict[str, Any]]) -> dict[str, Any]:
     hash_set = set(hashes)
-    best = None
-    best_score = 0.0
-    for candidate in candidates if candidates is not None else store.dedup_candidates(document_id):
-        identity_match = bool(arxiv_id and candidate["arxiv_id"] == arxiv_id)
-        title_similarity = SequenceMatcher(None, re.sub(r"\W", "", title.casefold()),
-                                            re.sub(r"\W", "", candidate["title"].casefold())).ratio()
-        other = set(candidate["fingerprint_tokens"])
-        # Compare common bottom-k region; unequal document sizes need this
-        # common threshold to keep the sketch intersection meaningful.
-        if hash_set and other:
-            threshold = min(max(hash_set), max(other))
-            a, b = {h for h in hash_set if h <= threshold}, {h for h in other if h <= threshold}
-            content_overlap = len(a & b) / max(1, len(a | b))
-        else:
-            content_overlap = 0
-        same_content = len(hash_set) >= 8 and content_overlap >= .78 and title_similarity >= .65
-        if not identity_match and not same_content:
+    title_key = norm(title)
+    surnames = _metadata_surnames(authors)
+    identified, content_matches = [], []
+    for candidate in candidates:
+        identities = candidate["arxiv_versions"]
+        if len(identities) > 1 or (arxiv_id and identities and arxiv_id not in identities):
             continue
-        score = 2 if identity_match else content_overlap
-        if score > best_score:
-            best, best_score = candidate, score
-    if not best:
+        if arxiv_id in identities:
+            identified.append(candidate)
+            continue
+        if not title_key or title_key != norm(candidate["title"]):
+            continue
+        other_surnames = _metadata_surnames(candidate["authors"])
+        if surnames and other_surnames and surnames.isdisjoint(other_surnames):
+            continue
+        if _shared_body(hash_set, set(candidate["fingerprint_tokens"])):
+            content_matches.append(candidate)
+    matches = identified or content_matches
+    if len(matches) != 1:
         return {}
-    kind = "same_work_version" if version and best["version_label"] and version != best["version_label"] else "content_overlap"
+    best = matches[0]
+    old_num = max(best["arxiv_versions"].get(arxiv_id, []), default=None)
+    incoming = re.fullmatch(r"v([1-9]\d{0,8})", version or "")
+    new_num = int(incoming[1]) if incoming else None
+    kind = "content_overlap"
     recommendation = "正文高度重合，已归为同一作品候选；两个文件均已保留。版本先后尚需核实。"
-    if version and best["version_label"]:
-        new_num = int(re.sub(r"\D", "", version) or 0)
-        old_num = int(re.sub(r"\D", "", best["version_label"]) or 0)
+    if identified:
+        recommendation = "arXiv 编号一致，已归为同一作品；两个文件均已保留。版本先后尚需核实。"
+    if new_num is not None and old_num is not None:
+        kind = "same_work_version" if new_num != old_num else "content_overlap"
         if new_num < old_num:
-            recommendation = f"库中已有较新版本 {best['version_label']}，建议继续使用该版本；本次 {version} 已保留供比较。"
+            recommendation = f"库中已有较新版本 v{old_num}，建议继续使用该版本；本次 {version} 已保留供比较。"
         elif new_num > old_num:
-            recommendation = f"本次 {version} 比库中 {best['version_label']} 更新，建议阅读新版；旧文件继续保留。"
+            recommendation = f"本次 {version} 比库中 v{old_num} 更新，建议阅读新版；旧文件继续保留。"
         else:
             recommendation = f"检测到同一作品的 {version} 文件，建议核查排版或来源差异；两个文件均保留。"
     return {"duplicate_of": best["id"], "duplicate_kind": kind,
@@ -294,9 +319,10 @@ def parse_document(document_id: str, expected_run_id: str | None = None) -> None
             author_text = (pdf.metadata or {}).get("author", "").strip()
             authors = [item.strip() for item in re.split(r";|\n", author_text) if item.strip()]
             first_page_text = "\n".join(b["text"] for b in first)
-            identity = ARXIV.search(first_page_text[:5000])
-            arxiv_id = identity.group(1) if identity else None
-            version = identity.group(2).lower() if identity and identity.group(2) else None
+            identities = {(match[1], match[2].lower() if match[2] else None)
+                          for line in first_page_text[:5000].splitlines()
+                          if (match := ARXIV_HEADER.fullmatch(" ".join(line.split())))}
+            arxiv_id, version = identities.pop() if len(identities) == 1 else (None, None)
             store.update_document(document_id, title=title, authors=authors, page_count=len(pdf),
                                   arxiv_id=arxiv_id, version_label=version)
             body_size = statistics.median([b["font_size"] for b in first]) if first_ocr else _body_font(pdf)
@@ -399,7 +425,7 @@ def parse_document(document_id: str, expected_run_id: str | None = None) -> None
                 warnings.append("PDF 元数据未提供作者；尚未自动核验作者与机构。")
             status = "partial" if scan_pages or table_errors else "ready"
             store.finalize_document(document_id, status, warnings, content_hash, hashes,
-                                    lambda candidates: _detect_duplicate(document_id, title, arxiv_id, version, hashes, candidates),
+                                    lambda candidates: _detect_duplicate(title, authors, arxiv_id, version, hashes, candidates),
                                     "解析完成；部分页面或表格需要复核" if status == "partial" else "原文解析完成",
                                     parse_run_id=run_id)
     except Exception as exc:

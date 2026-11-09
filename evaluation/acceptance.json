@@ -1,10 +1,10 @@
 {
-  "application_version": "0.35.0",
+  "application_version": "0.35.1",
   "as_of": "2026-11-07",
   "scope": "按用户提供赛题逐项整理的工程交付判断；不是主办方认证、评分百分比或豁免清单。",
   "items": [
     {"id":"M1-UPLOAD","required":true,"state":"verified","requirement":"单篇/批量PDF管理与持久化","current":"已实现并以官方/合成PDF测试","proof_paths":["docs/STAGE1_TEST_REPORT.md","docs/STAGE13_TEST_REPORT.md"]},
-    {"id":"M1-VERSION","required":true,"state":"partial","requirement":"基于内容的语义去重和版本建议","current":"阅读区支持同组切换、明确版本号建议、文本对照和两侧原文定位。官方 v1/v7 已回查 101 个对照入口。无标识符的语义归组与更多排版的对照质量待验收。","proof_paths":["docs/STAGE1_TEST_REPORT.md","docs/STAGE50_TEST_REPORT.md","docs/STAGE51_TEST_REPORT.md"]},
+    {"id":"M1-VERSION","required":true,"state":"partial","requirement":"基于内容的语义去重和版本建议","current":"阅读区支持同组切换、版本号建议和原文对照。37 份官方 PDF 的无编号回放得到两个同作文件组，其余单独归组。大幅改写、低质量 OCR 和显式保留或覆盖待验收。","proof_paths":["docs/STAGE1_TEST_REPORT.md","docs/STAGE50_TEST_REPORT.md","docs/STAGE51_TEST_REPORT.md","docs/STAGE52_TEST_REPORT.md"]},
     {"id":"M1-OCR","required":true,"state":"verified","requirement":"官方扫描件可解析和定位","current":"15页真实OCR及原图回跳已验证；质量分数不当准确率","proof_paths":["docs/STAGE2_TEST_REPORT.md"]},
     {"id":"M1-LONG","required":true,"state":"verified","requirement":"541页长书分块、索引及资源鲁棒性","current":"541页快照分块、5867片段经恢复建库、跨进程复用/按页加载/4路读取/锚点/进程工作集已实测；首次冷索引软时间目标未过，性能边界保留","proof_paths":["docs/STAGE1_TEST_REPORT.md","docs/STAGE22_TEST_REPORT.md"]},
     {"id":"M1-STRUCTURE","required":true,"state":"partial","requirement":"作者机构、层级树、图表与参考文献结构化","current":"目录、块与原生表格行列重建/手工修订可用；机构、扫描表格及复杂图表结构仍不完整","proof_paths":["docs/STAGE2_TEST_REPORT.md","docs/STAGE19_TEST_REPORT.md"]},
