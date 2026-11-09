@@ -1,4 +1,6 @@
-from backend.app import store
+import hashlib
+
+from backend.app import front_matter, store
 
 
 def test_front_matter_pins_author_institution_and_work_note_to_the_requested_parse(client):
@@ -51,6 +53,43 @@ def test_front_matter_pins_author_institution_and_work_note_to_the_requested_par
     assert client.get(route, params={'parse_run_id': run}).json() == result
     assert client.get(route, params={'parse_run_id': 'missing_run'}).status_code == 404
     assert client.delete(f"/api/documents/{doc['id']}").status_code == 200
+
+
+def test_native_marked_byline_requires_verbatim_layout_and_unique_affiliation_labels():
+    raw = 'Mira de Example * 1 2 Alex Fixture 2'
+    rows = [
+        ('title', 'Synthetic Numbered Byline', [.2, .10, .8, .13]),
+        ('paragraph', raw, [.18, .17, .82, .19]),
+        ('heading', 'Abstract', [.4, .22, .6, .24]),
+        ('paragraph', '*Equal contribution 1Example University\n2Fixture Institute. Work per-\nformed elsewhere.',
+         [.08, .78, .46, .83]),
+    ]
+    blocks = [{'id': f'block-{index}', 'type': kind, 'text': text, 'bbox': bbox,
+               'document_id': 'doc', 'parse_run_id': 'run', 'page': 1, 'metadata': {}}
+              for index, (kind, text, bbox) in enumerate(rows)]
+    layout = blocks[1]['metadata'] = {
+        'layout_format': 'superscript_braces_v1',
+        'raw_text_sha256': hashlib.sha256(raw.encode()).hexdigest(),
+        'layout_text': 'Mira de Example ^{* 1 2} Alex Fixture ^{2}',
+    }
+    document = {'id': 'doc', 'title': rows[0][1]}
+    structure = {'parse_run_id': 'run', 'blocks': blocks}
+    authors = front_matter.extract(document, structure)['authors']
+    assert [author['source']['text'] for author in authors] == ['Mira de Example', 'Alex Fixture']
+    assert [[a['source']['text'] for a in author['affiliations']] for author in authors] == [
+        ['Example University', 'Fixture Institute'], ['Fixture Institute'],
+    ]
+    for author in authors:
+        for source in [author['source'], *(a['source'] for a in author['affiliations'])]:
+            block = next(block for block in blocks if block['id'] == source['block_id'])
+            assert block['text'][source['start']:source['end']] == source['text']
+
+    blocks.append({**blocks[-1], 'id': 'conflicting-footnote', 'text': '2Other Institute'})
+    authors = front_matter.extract(document, structure)['authors']
+    assert [author['source']['text'] for author in authors] == ['Mira de Example']
+    assert [a['source']['text'] for a in authors[0]['affiliations']] == ['Example University']
+    layout['layout_text'] = layout['layout_text'].replace('Fixture', 'Forged')
+    assert front_matter.extract(document, structure)['authors'] == []
 
 
 def test_contact_block_with_an_organization_and_multiple_mailboxes_does_not_create_a_person(client):

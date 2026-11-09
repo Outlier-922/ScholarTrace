@@ -1,5 +1,6 @@
 """Read author and affiliation candidates from native first-page evidence."""
 
+import hashlib
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -16,6 +17,12 @@ INSTITUTION = re.compile(
 )
 NUMBERED_INSTITUTION = re.compile(r"(?P<marker>[1-9]\d?)\s*(?P<name>[^\W\d_][^@]{1,100})")
 WORK_NOTE = re.compile(r"(?P<marker>[†‡])\s*Work (?:was )?performed while at .+", re.I)
+SUPERSCRIPT = re.compile(r"\^\{([ *∗†‡,\d]+)\}")
+BYLINE_NAME = re.compile(rf" *(?P<name>{NAME_WORD}(?: +{NAME_WORD}){{1,5}})(?P<marks>(?: *{SUPERSCRIPT.pattern})+)")
+NAME_PARTICLE = re.compile(r"(?<= )(?:da|de|del|di|dos|la|van|von) +")
+FOOTNOTE_CUE = re.compile(r"equal contribution|correspon(?:-\s*)?dence to:", re.I)
+FOOTNOTE_NUMBER = re.compile(r"(?<!\w)([1-9]\d?)(?=[A-Z])")
+FOOTNOTE_END = re.compile(r"\s+(?:work per(?:-|formed)|correspon(?:-\s*)?dence to:)", re.I)
 
 
 @dataclass(frozen=True)
@@ -73,6 +80,55 @@ def _same_column(name: Line, contact: Block) -> bool:
     return (name.block is not contact and -.004 <= top - bottom <= .023
             and overlap >= .65 * min(right - left, other_right - other_left)
             and abs(left + right - other_left - other_right) <= .10)
+
+
+def _marked_names(block: Block) -> list[tuple[Line, list[str]]]:
+    metadata = block.get('metadata') or {}
+    layout = metadata.get('layout_text', '')
+    raw = block['text']
+    if (metadata.get('layout_format') != 'superscript_braces_v1'
+            or metadata.get('raw_text_sha256') != hashlib.sha256(raw.encode()).hexdigest()
+            or SUPERSCRIPT.sub(r'\1', layout) != raw):
+        return []
+    names = []
+    raw_offset = 0
+    for row in layout.split('\n'):
+        end = 0
+        for match in BYLINE_NAME.finditer(row):
+            name = match['name']
+            markers = re.findall(r'[1-9]\d?', match['marks'])
+            if match.start() != end or not markers or not author_name(NAME_PARTICLE.sub('', name)):
+                return []
+            start = raw_offset + match.start('name') - match.start()
+            names.append((Line(block, name, start), list(dict.fromkeys(markers))))
+            raw_offset += len(SUPERSCRIPT.sub(r'\1', match.group()))
+            end = match.end()
+        if row[end:].strip():
+            return []
+        raw_offset += len(row) - end + 1
+    return names
+
+
+def _numbered_footnotes(blocks: list[Block]) -> dict[str, list[dict[str, Any]]]:
+    footer = [block for block in blocks if .70 <= block['bbox'][1] <= .91
+              and block['bbox'][3] - block['bbox'][1] <= .16 and len(block['text']) <= 1400]
+    cues = [block for block in footer if FOOTNOTE_CUE.search(block['text'])]
+    definitions: dict[str, list[dict[str, Any]]] = {}
+    for block in footer:
+        left, top, right, _ = block['bbox']
+        if not any(abs(top - cue['bbox'][1]) <= .12
+                   and min(right, cue['bbox'][2]) - max(left, cue['bbox'][0]) >= .65 * (right - left)
+                   for cue in cues):
+            continue
+        raw = block['text']
+        labels = list(FOOTNOTE_NUMBER.finditer(raw))
+        for index, label in enumerate(labels):
+            end = labels[index + 1].start() if index + 1 < len(labels) else len(raw)
+            value = FOOTNOTE_END.split(raw[label.end():end], maxsplit=1)[0].rstrip(' \r\n,;.')
+            if not 2 <= len(value) <= 260 or '@' in value:
+                continue
+            definitions.setdefault(label[1], []).append(Line(block, value, label.end()).source())
+    return definitions
 
 
 def extract(document: dict[str, Any], structure: dict[str, Any]) -> dict[str, Any]:
@@ -142,6 +198,25 @@ def extract(document: dict[str, Any], structure: dict[str, Any]) -> dict[str, An
                 authors.setdefault((source['block_id'], source['start']), {
                     'source': source, 'affiliations': affiliations, 'work_notes': work_notes,
                     '_order': (round(row.block['bbox'][1], 2), row.block['bbox'][0], row.start),
+                })
+    # Marked bylines can be read independently of the contact layout. Require
+    # a verbatim reconstruction of the native text before trusting the marks.
+    numbered = [pair for block in header for pair in _marked_names(block)]
+    if numbered:
+        footnotes = _numbered_footnotes(blocks)
+        for line, markers in numbered:
+            linked = []
+            for marker in markers:
+                candidates = [definition.source(*match.span('name')) for definition, match in definitions
+                              if match['marker'] == marker and definition.block['bbox'][1] >= line.block['bbox'][3] - .004]
+                candidates.extend(footnotes.get(marker, []))
+                if len(candidates) == 1:
+                    linked.append({'source': candidates[0], 'method': 'numbered_marker'})
+            if linked:
+                source = line.source()
+                authors.setdefault((source['block_id'], source['start']), {
+                    'source': source, 'affiliations': linked, 'work_notes': [],
+                    '_order': (round(line.block['bbox'][1], 2), line.block['bbox'][0], line.start),
                 })
     result['authors'] = sorted(authors.values(), key=lambda item: item['_order'])
     for item in result['authors']:
