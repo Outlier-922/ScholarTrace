@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from . import __version__, ocr, semantic, store, semantic_jobs, demo_access
+from . import __version__, ocr, semantic, store, semantic_jobs, demo_access, version_diff
 from .parser import parse_document
 
 logger = logging.getLogger(__name__)
@@ -268,6 +268,12 @@ def document_work_versions(document_id: str) -> dict[str, Any]:
     if versions is None:
         raise HTTPException(404, '文献不存在')
     return versions
+
+
+@app.get('/api/documents/{document_id}/version-diff')
+def document_version_diff(document_id: str, other_id: str = Query(min_length=1, max_length=100),
+                          offset: int = Query(default=0, ge=0, le=5000)) -> dict[str, Any]:
+    return version_diff.compare(document_id, other_id, offset)
 
 
 class DocumentPatch(BaseModel):

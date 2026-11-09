@@ -61,14 +61,17 @@ export interface DocumentStructure {
   references: unknown[];
 }
 
-export interface Evidence {
-  id: string;
+export interface SourceLocation {
   document_id: string;
-  title: string;
-  version_label?: string | null;
   parse_run_id?: string;
   page: number;
   block_id: string;
+}
+
+export interface Evidence extends SourceLocation {
+  id: string;
+  title: string;
+  version_label?: string | null;
   bbox: [number, number, number, number];
   text: string;
   score: number;

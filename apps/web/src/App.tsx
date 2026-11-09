@@ -2,7 +2,7 @@ import type { Handoff } from './LiteratureHandoff';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, ArrowRight, BookMarked, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, FilePlus2, FileText, FolderOpen, GitBranch, Layers3, Library, ListTree, LoaderCircle, Menu, MessageSquareText, MoreHorizontal, PanelLeftClose, PencilLine, Plus, RefreshCw, Search, Send, Settings2, ShieldCheck, Sparkles, Target, Trash2, Upload, X, AlertTriangle } from 'lucide-react';
 import { postJSON, request } from './api';
-import type { AnswerResult, DocumentBlock, DocumentStructure, Evidence, Health, ResearchDocument, Stats, TableReference } from './types';
+import type { AnswerResult, DocumentBlock, DocumentStructure, Evidence, Health, ResearchDocument, SourceLocation, Stats, TableReference } from './types';
 import SemanticIndexPanel from './SemanticIndexPanel';
 import {TableQAContext,TableDraftCards} from './TableQA';
 import AnswerCoverage from './AnswerCoverage';
@@ -36,7 +36,7 @@ export default function App() {
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [structure, setStructure] = useState<DocumentStructure | null>(null);
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
-  const [sourceEvidence,setSourceEvidence]=useState<Evidence|null>(null);
+  const [sourceEvidence,setSourceEvidence]=useState<SourceLocation | Evidence | null>(null);
   const [tableRefs,setTableRefs]=useState<TableReference[]>([]);
   const [tableOnly,setTableOnly]=useState(true);
   const [generateAnswer,setGenerateAnswer]=useState(true);
@@ -80,7 +80,7 @@ export default function App() {
   const answerRef = useRef<HTMLDivElement>(null);
   const aliveRef = useRef(true);
   const askControllerRef = useRef<AbortController | null>(null);
-  const pendingEvidenceRef = useRef<Evidence | null>(null);
+  const pendingEvidenceRef = useRef<SourceLocation | Evidence | null>(null);
 
   const selectedDocument = documents.find((item) => item.id === selectedId) ?? null;
   const workVersions = selectedDocument?.work_id ? documents.filter(item => item.work_id === selectedDocument.work_id) : [];
@@ -146,7 +146,7 @@ export default function App() {
     setCurrentPage(target?.document_id === selectedId ? target.page : 1);
     setSelectedBlock(target?.document_id === selectedId ? target.block_id : null);
     setViewParseRun(target?.document_id === selectedId ? target.parse_run_id || null : null);
-    setSourceEvidence(target?.document_id===selectedId?{...target}:null);
+    setSourceEvidence(target?.document_id === selectedId ? { ...target } : null);
     pendingEvidenceRef.current = null;
     setStructure(null);
   }, [selectedId]);
@@ -288,13 +288,20 @@ export default function App() {
     setTableRefs([...next,reference]);setTableOnly(true);setNotice({text:'已固定表格版本。原生候选用于回答，手工稿仅供对照。',kind:'success'});
   }
 
-  function jumpToEvidence(evidence: Evidence) {
-    setSourceEvidence({...evidence});
-    if (!documents.some((item) => item.id === evidence.document_id)) { setNotice({ text: '该证据的源文献已不在当前工作区。', kind: 'error' }); return; }
-    if (selectedId !== evidence.document_id) {
-      pendingEvidenceRef.current = evidence;
-      setSelectedId(evidence.document_id);
-    } else { setViewParseRun(evidence.parse_run_id || null); setCurrentPage(evidence.page); setSelectedBlock(evidence.block_id); }
+  function jumpToEvidence(location: SourceLocation | Evidence) {
+    if (!documents.some((item) => item.id === location.document_id)) {
+      setNotice({ text: '源文献已不在当前工作区。', kind: 'error' });
+      return;
+    }
+    setSourceEvidence({ ...location });
+    if (selectedId !== location.document_id) {
+      pendingEvidenceRef.current = location;
+      setSelectedId(location.document_id);
+    } else {
+      setViewParseRun(location.parse_run_id || null);
+      setCurrentPage(location.page);
+      setSelectedBlock(location.block_id);
+    }
   }
 
   function selectBlock(block: DocumentBlock) {
@@ -322,7 +329,7 @@ export default function App() {
         <div className="nav-label">证据工作流</div>
         <div className="workflow-nav"><div><span className={`workflow-step ${documents.length ? 'completed' : ''}`}>1</span><span>导入与解析</span>{documents.length > 0 && <Check size={13} />}</div><i /><div><span className={`workflow-step ${selectedDocument?.progress_pages ? 'completed' : ''}`}>2</span><span>原文与定位</span>{!!selectedDocument?.progress_pages && <Check size={13} />}</div><i /><div><span className={`workflow-step ${contextIds.length ? 'current' : ''}`}>3</span><span>检索与核验</span>{contextIds.length > 0 && <span className="tiny-dot" />}</div></div>
         <div className="sidebar-note"><ShieldCheck size={19} /><strong>让每个结论有出处</strong><p>从真实文献出发，保留版本、页码和原文位置。</p><button onClick={() => setModal('help')}>了解证据模式 <ArrowRight size={13} /></button></div>
-        <div className="sidebar-bottom"><button onClick={() => setModal('settings')}><Settings2 size={17} /><span>连接与配置</span></button><button onClick={() => setModal('help')}><CircleHelp size={17} /><span>使用指南</span></button><div className="local-user"><span>研</span><div><strong>个人研究者</strong><small>开发预览 · v{health?.version || '0.34.0'}</small></div><span className={`connection-dot ${connectionError ? 'offline' : ''}`} title={connectionError ? '后端未连接' : '本地服务已连接'} /></div></div>
+        <div className="sidebar-bottom"><button onClick={() => setModal('settings')}><Settings2 size={17} /><span>连接与配置</span></button><button onClick={() => setModal('help')}><CircleHelp size={17} /><span>使用指南</span></button><div className="local-user"><span>研</span><div><strong>个人研究者</strong><small>开发预览 · v{health?.version || '0.35.0'}</small></div><span className={`connection-dot ${connectionError ? 'offline' : ''}`} title={connectionError ? '后端未连接' : '本地服务已连接'} /></div></div>
       </aside>
 
       <main className="main-area">
@@ -358,6 +365,7 @@ export default function App() {
             <div className="reader-panel">
               {selectedDocument ? <>
                 {workVersions.length > 1 && <WorkVersions key={selectedDocument.id} documentId={selectedDocument.id}
+                  onSource={jumpToEvidence}
                   groupRevision={JSON.stringify(workVersions.map(item => [item.id, item.status, item.version_label, item.arxiv_id, item.parse_run_id, item.page_count]))}
                   onSelect={id => {
                     pendingEvidenceRef.current = null;

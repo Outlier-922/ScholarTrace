@@ -5,7 +5,7 @@ import { getDocument, GlobalWorkerOptions, TextLayer } from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import './pdf-text-layer.css';
-import type { DocumentBlock, DocumentStructure, ResearchDocument, Evidence, TableReference } from './types';
+import type { DocumentBlock, DocumentStructure, ResearchDocument, Evidence, SourceLocation, TableReference } from './types';
 import BlockContent, { isOcrBlock } from './BlockContent';
 import TranslationPane from './TranslationPane';
 import SelectionTranslation from './SelectionTranslation';
@@ -32,7 +32,7 @@ interface Props {
   onRequestReprocess?: () => void;
   modelConfigured?: boolean;
   readOnly?: boolean;
-  sourceEvidence?:Evidence|null;
+  sourceEvidence?: SourceLocation | Evidence | null;
   onUseTable:(reference:TableReference)=>void;
   onFindReference?: (text: string) => void;
   onOpenReferenceSearch?: (id: string) => void;
@@ -54,7 +54,9 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
     if(!sourceEvidence){setTableTarget(null);return;}
     const matches=sourceEvidence.document_id===document.id&&sourceEvidence.page===page&&sourceEvidence.parse_run_id===structure?.parse_run_id&&sourceEvidence.block_id===selectedBlock;
     if(!matches){setTableTarget(null);return;}
-    if(sourceEvidence.source_kind==='table_cell'||sourceEvidence.source_kind==='table_draft')setTableTarget({bbox:sourceEvidence.bbox,label:sourceEvidence.table_cell?`问答表格第${sourceEvidence.table_cell.row+1}行第${sourceEvidence.table_cell.column+1}列`:'手工稿对应原页（未核验）'});
+    if ('source_kind' in sourceEvidence && (sourceEvidence.source_kind === 'table_cell' || sourceEvidence.source_kind === 'table_draft')) {
+      setTableTarget({bbox:sourceEvidence.bbox,label:sourceEvidence.table_cell?`问答表格第${sourceEvidence.table_cell.row+1}行第${sourceEvidence.table_cell.column+1}列`:'手工稿对应原页（未核验）'});
+    }
     else setTableTarget(null);
     setView('pdf');
   },[sourceEvidence,document.id,structure?.parse_run_id,page,selectedBlock]);

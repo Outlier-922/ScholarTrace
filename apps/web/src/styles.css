@@ -28,3 +28,16 @@ body{min-width:280px}.document-card h3{color:#526a46;font-size:12px}.document-ca
 .work-version-picker { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 5px 12px; align-items: center; font-size: 11px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .work-version-picker label { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
 .work-version-picker select { min-width: 0; max-width: min(290px, 65vw); font: inherit; }
+.version-comparison { width: min(860px, calc(100vw - 28px)); max-height: 90dvh; margin: auto; padding: 20px; color: var(--ink); background: #fffefb; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; overflow: auto; }
+.version-comparison::backdrop { background: #20382c66; }
+.version-comparison header, .version-comparison footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.version-comparison h2 { font-size: 20px; }
+.version-comparison p { margin: 8px 0; line-height: 1.65; overflow-wrap: anywhere; }
+.version-comparison-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 10px 0; }
+.version-comparison-pair > * { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 6px; overflow-wrap: anywhere; }
+.version-comparison .version-comparison-pair label { display: block; }
+.version-comparison .version-comparison-pair select { display: block; max-width: 100%; margin-top: 4px; }
+.version-comparison-pair strong { display: block; margin-top: 4px; }
+.version-comparison article { margin: 14px 0; border-top: 1px solid var(--line); padding-top: 10px; }
+.version-comparison h3, .version-comparison h4 { margin: 0; font-size: 13px; }
+@media (max-width: 560px) { .version-comparison-pair { grid-template-columns: minmax(0, 1fr); } }
