@@ -28,6 +28,11 @@ body{min-width:280px}.document-card h3{color:#526a46;font-size:12px}.document-ca
 .work-version-picker { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 5px 12px; align-items: center; font-size: 11px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .work-version-picker label { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
 .work-version-picker select { min-width: 0; max-width: min(290px, 65vw); font: inherit; }
+.work-version-default { max-width: 100%; }
+.work-version-default[open] { flex-basis: 100%; }
+.work-version-default summary { cursor: pointer; font-weight: 600; }
+.work-version-default p { margin: 6px 0; overflow-wrap: anywhere; }
+.work-version-default > div { display: flex; flex-wrap: wrap; gap: 6px; }
 .version-comparison { width: min(860px, calc(100vw - 28px)); max-height: 90dvh; margin: auto; padding: 20px; color: var(--ink); background: #fffefb; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; overflow: auto; }
 .version-comparison::backdrop { background: #20382c66; }
 .version-comparison header, .version-comparison footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }

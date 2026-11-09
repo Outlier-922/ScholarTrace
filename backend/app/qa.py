@@ -554,6 +554,10 @@ async def ask(request: AskRequest) -> dict[str, Any]:
     documents = [item for item in documents if item.get("status") in ("ready", "partial")]
     if request.table_only and not request.table_sources:raise HTTPException(422,'仅表格检索需要先选择表格来源。')
     selected_tables,pinned_runs=table_qa.resolve(request.table_sources,documents,request.parse_runs)
+    if not request.document_ids:
+        defaults = {item['work_id']: item['id'] for item in documents if item.get('is_work_default')}
+        documents = [item for item in documents
+                     if item['id'] in pinned_runs or defaults.get(item.get('work_id'), item['id']) == item['id']]
     documents = source_scope.pin(documents,pinned_runs)
     retrieval_details: dict[str, Any] = {}
     evidence=[]

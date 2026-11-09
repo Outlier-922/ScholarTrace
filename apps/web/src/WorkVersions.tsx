@@ -13,41 +13,78 @@ interface Versions {
   items: Version[];
   latest_readable_version: string | null;
   latest_readable_ids: string[];
+  preferred_document_id: string | null;
+  existing_document_id: string | null;
 }
 
-export default function WorkVersions({ documentId, groupRevision, onSelect, onSource }: {
+export default function WorkVersions({ documentId, groupRevision, onSelect, onSource, readOnly, onDefaultChanged }: {
   documentId: string;
   groupRevision: string;
   onSelect: (id: string) => void;
   onSource: (location: SourceLocation) => void;
+  readOnly: boolean;
+  onDefaultChanged: () => void;
 }) {
   const [versions, setVersions] = useState<Versions | null>(null);
   const [error, setError] = useState(false);
   const [comparing, setComparing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [choiceMessage, setChoiceMessage] = useState('');
+  const [choiceError, setChoiceError] = useState('');
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    setVersions(null);
     setError(false);
     void request<Versions>(`/documents/${documentId}/work-versions`, { signal: controller.signal })
       .then(value => { if (!controller.signal.aborted) setVersions(value); })
       .catch(() => { if (!controller.signal.aborted) setError(true); });
     return () => controller.abort();
-  }, [documentId, groupRevision]);
+  }, [documentId, groupRevision, reload]);
+
+  async function chooseDefault(action: 'keep' | 'replace') {
+    if (saving || readOnly || !versions?.existing_document_id) return;
+    setSaving(true);
+    setChoiceMessage('');
+    setChoiceError('');
+    try {
+      const next = await request<{ preferred_document_id: string }>(`/documents/${documentId}/work-default`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, expected_document_id: versions.existing_document_id }),
+      });
+      setVersions(current => current && {
+        ...current,
+        preferred_document_id: next.preferred_document_id,
+        existing_document_id: next.preferred_document_id,
+      });
+      setChoiceMessage(action === 'keep' ? '已保留现有默认版本' : '已覆盖默认版本');
+      onDefaultChanged();
+    } catch (cause) {
+      setChoiceError(cause instanceof Error ? cause.message : '保存默认版本失败');
+      setReload(current => current + 1);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (error) return <p className="work-version-picker" role="status">暂时无法读取作品版本</p>;
   if (!versions || versions.items.length < 2) return null;
   const readable = versions.items.filter(item => item.status === 'ready' || item.status === 'partial');
   const baseline = readable.find(item => item.id === documentId);
   const peers = readable.filter(item => item.id !== documentId);
+  const preferred = readable.find(item => item.id === versions.preferred_document_id);
+  const existing = readable.find(item => item.id === versions.existing_document_id);
   return <div className="work-version-picker">
+    <strong>检测到同一作品的多个文件</strong>
     <label>作品版本 <select aria-label="切换作品版本" value={documentId} onChange={event => onSelect(event.target.value)}>
       {versions.items.map(item => <option key={item.id} value={item.id}>
-        {versionName(item)} · {item.page_count} 页
+        {versionName(item)} · {item.page_count} 页{item.id === preferred?.id ? ' · 默认' : ''}
       </option>)}
     </select></label>
     <span>{versions.latest_readable_version
       ? `同 arXiv 标识的库内最新可读版本 ${versions.latest_readable_version}${versions.latest_readable_ids.length > 1 ? '（有多个文件）' : ''}`
       : '版本顺序待核对'}</span>
+    {preferred && <span>问答默认版本 · {versionName(preferred)}</span>}
     {baseline && peers.length > 0 && <>
       <button className="secondary-button" onClick={() => setComparing(true)}>对照版本文本</button>
       {comparing && <VersionComparison baseline={baseline} peers={peers}
@@ -57,6 +94,19 @@ export default function WorkVersions({ documentId, groupRevision, onSelect, onSo
           onSource(location);
         }} />}
     </>}
+    {!readOnly && baseline && peers.length > 0 && existing && <details className="work-version-default">
+      <summary>保留或覆盖版本</summary>
+      <p>现有版本 · {versionName(existing)}</p>
+      <p>当前文件 · {versionName(baseline)}</p>
+      <p>选择将用于整个文献库问答。各版本仍可单独阅读、对照和引用。</p>
+      <div>
+        <button className="secondary-button" disabled={saving} onClick={() => void chooseDefault('keep')}>保留现有默认版本</button>
+        <button className="secondary-button" disabled={saving || existing.id === documentId}
+          onClick={() => void chooseDefault('replace')}>以当前文件覆盖默认版本</button>
+      </div>
+      {choiceError && <p role="alert">{choiceError}</p>}
+      {choiceMessage && <p role="status">{choiceMessage}</p>}
+    </details>}
   </div>;
 }
 

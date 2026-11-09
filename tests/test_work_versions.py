@@ -162,3 +162,80 @@ def test_content_grouping_rejects_conflicting_identity_and_ambiguous_uploads(cli
     reparsed = wait_for_document(client, revised['id'])
     assert reparsed['work_id'] == root['work_id']
     assert reparsed['duplicate_of'] == root['id']
+
+
+def test_work_default_controls_only_implicit_library_questions(client, tmp_path, monkeypatch):
+    documents = []
+    for version in (7, 1):
+        path = tmp_path / f'version-file-{len(documents)}.pdf'
+        with pymupdf.open() as pdf:
+            page = pdf.new_page()
+            page.insert_text((72, 72), 'Synthetic Quartz Calibration', fontsize=16)
+            page.insert_text((72, 100), f'arXiv: 2611.78914v{version}')
+            page.insert_text((72, 130), f'Quartz calibration uses {version} oscillators.')
+            pdf.save(path)
+        doc = wait_for_document(client, upload_pdf(client, path)['id'])
+        assert doc['status'] == 'ready'
+        documents.append(doc)
+
+    existing, incoming = documents
+    existing_id, incoming_id = existing['id'], incoming['id']
+    peers = {existing_id, incoming_id}
+    # Other tests intentionally leave incomplete records in the shared client.
+    list_documents = store.list_documents
+    monkeypatch.setattr(store, 'list_documents', lambda: [doc for doc in list_documents() if doc['id'] in peers])
+    route = f'/api/documents/{incoming_id}'
+    view = client.get(f'{route}/work-versions').json()
+    assert view['preferred_document_id'] is None
+    assert view['existing_document_id'] == existing_id
+    assert view['latest_readable_version'] == 'v7'
+
+    def choice(action, expected):
+        return client.patch(f'{route}/work-default', json={
+            'action': action, 'expected_document_id': expected,
+        })
+
+    def ask(**selection):
+        response = client.post('/api/ask', json={
+            'question': 'What does quartz calibration use?', 'use_model': False, **selection,
+        })
+        assert response.status_code == 200, response.text
+        record = client.get(f"/api/agent-runs/{response.json()['run_id']}").json()
+        return record, set(record['document_ids']) & peers
+
+    assert ask()[1] == peers
+    assert choice('keep', existing_id).json() == {'preferred_document_id': existing_id}
+    prior, selected = ask()
+    assert selected == {existing_id}
+    anchor = next(item for item in prior['evidence'] if item['document_id'] == existing_id)
+    assert anchor['parse_run_id'] == existing['parse_run_id']
+
+    assert choice('replace', incoming_id).status_code == 409
+    assert choice('replace', existing_id).json() == {'preferred_document_id': incoming_id}
+    assert choice('replace', existing_id).json() == {'preferred_document_id': incoming_id}
+    assert choice('keep', existing_id).status_code == 409
+    assert ask()[1] == {incoming_id}
+    assert ask(document_ids=[existing_id])[1] == {existing_id}
+    assert ask(parse_runs={existing_id: existing['parse_run_id']})[1] == peers
+    assert client.get(f'/api/documents/{existing_id}/work-versions').json()['preferred_document_id'] == incoming_id
+    library = {item['id']: item['is_work_default'] for item in client.get('/api/documents').json()['items']}
+    assert library[existing_id] is False and library[incoming_id] is True
+
+    saved = client.get(f"/api/agent-runs/{prior['run_id']}").json()
+    assert anchor in saved['evidence']
+    block = client.get(f"/api/documents/{existing_id}/structure", params={
+        'page': anchor['page'], 'parse_run_id': anchor['parse_run_id'],
+    }).json()
+    assert any(item['id'] == anchor['block_id'] for item in block['blocks'])
+    for doc in documents:
+        assert hashlib.sha256(client.get(f"/api/documents/{doc['id']}/pdf").content).hexdigest() == doc['sha256']
+
+    with monkeypatch.context() as settings:
+        settings.setenv('SCHOLARTRACE_DEMO_MODE', 'true')
+        settings.setenv('SCHOLARTRACE_DEMO_ALLOW_WRITES', 'false')
+        assert choice('keep', incoming_id).status_code == 403
+
+    assert client.delete(route).status_code == 200
+    assert choice('keep', incoming_id).status_code == 404
+    assert client.get(f'/api/documents/{existing_id}/work-versions').json()['preferred_document_id'] is None
+    assert ask()[1] == {existing_id}

@@ -3,6 +3,7 @@ export type DocumentStatus = 'queued' | 'processing' | 'ready' | 'partial' | 'fa
 export interface ResearchDocument {
   id: string;
   work_id?: string;
+  is_work_default?: boolean;
   title: string;
   authors: string[];
   filename: string;

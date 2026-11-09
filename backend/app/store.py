@@ -78,6 +78,10 @@ def init_db() -> None:
             parser_name TEXT NOT NULL, parser_version TEXT NOT NULL,
             status TEXT NOT NULL, created_at TEXT NOT NULL, finished_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS work_defaults (
+            work_id TEXT PRIMARY KEY REFERENCES works(id),
+            document_id TEXT NOT NULL UNIQUE REFERENCES documents(id)
+        );
         CREATE TABLE IF NOT EXISTS pages (
             document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
             parse_run_id TEXT NOT NULL, number INTEGER NOT NULL,
@@ -141,8 +145,13 @@ def _document(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
 
 def list_documents() -> list[dict[str, Any]]:
     with connection() as conn:
-        rows = conn.execute("SELECT * FROM documents WHERE deleted=0 ORDER BY created_at DESC").fetchall()
-        return [_document(row) for row in rows]
+        rows = conn.execute("""
+            SELECT doc.*, COALESCE(def.document_id = doc.id, 0) AS is_work_default
+            FROM documents AS doc
+            LEFT JOIN work_defaults AS def ON def.work_id = doc.work_id
+            WHERE doc.deleted=0 ORDER BY doc.created_at DESC
+        """)
+        return [_document(dict(row, is_work_default=bool(row['is_work_default']))) for row in rows]
 
 
 def get_document(document_id: str) -> dict[str, Any] | None:
@@ -151,20 +160,37 @@ def get_document(document_id: str) -> dict[str, Any] | None:
         return _document(row) if row else None
 
 
-def work_versions(document_id: str) -> dict[str, Any] | None:
-    with connection() as conn:
-        rows = conn.execute('''
-            SELECT peer.id, peer.filename, peer.status, peer.version_label,
-                   peer.arxiv_id, peer.page_count, peer.parse_run_id
+def _work_version_rows(conn: sqlite3.Connection, document_id: str) -> list[sqlite3.Row]:
+    return conn.execute('''
+            SELECT peer.id, peer.filename, peer.status, peer.version_label, peer.work_id,
+                   peer.arxiv_id, peer.page_count, peer.parse_run_id,
+                   peer.duplicate_of, peer.created_at, def.document_id AS saved_default
             FROM documents AS selected
             JOIN documents AS peer ON peer.work_id = selected.work_id
+            LEFT JOIN work_defaults AS def ON def.work_id = peer.work_id
             WHERE selected.id = ? AND selected.deleted = 0 AND peer.deleted = 0
             ORDER BY peer.created_at DESC, peer.id
         ''', (document_id,)).fetchall()
+
+
+def _default_choices(rows: list[sqlite3.Row]) -> tuple[str | None, str | None]:
+    readable = [row for row in rows if row['status'] in {'ready', 'partial'}]
+    if not readable:
+        return None, None
+    saved = next((row['id'] for row in readable if row['id'] == row['saved_default']), None)
+    first = min(readable, key=lambda row: (row['duplicate_of'] is not None, row['created_at'], row['id']))
+    return saved, saved or first['id']
+
+
+def work_versions(document_id: str) -> dict[str, Any] | None:
+    with connection() as conn:
+        rows = _work_version_rows(conn, document_id)
     if not rows:
         return None
 
-    items = [dict(row) for row in rows]
+    preferred, existing = _default_choices(rows)
+    items = [{key: row[key] for key in ('id', 'filename', 'status', 'version_label',
+                                        'arxiv_id', 'page_count', 'parse_run_id')} for row in rows]
     selected = next(item for item in items if item['id'] == document_id)
     comparable = []
     for item in items:
@@ -173,8 +199,31 @@ def work_versions(document_id: str) -> dict[str, Any] | None:
                 and label and item['status'] in {'ready', 'partial'}):
             comparable.append((int(label[1]), item['id']))
     highest = max((version for version, _ in comparable), default=None)
-    return {'items': items, 'latest_readable_version': f'v{highest}' if highest is not None else None,
+    return {'items': items, 'preferred_document_id': preferred, 'existing_document_id': existing,
+            'latest_readable_version': f'v{highest}' if highest is not None else None,
             'latest_readable_ids': [identity for version, identity in comparable if version == highest]}
+
+
+def set_work_default(document_id: str, expected_id: str, replace: bool) -> str | None:
+    with connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        rows = _work_version_rows(conn, document_id)
+        if not rows:
+            return None
+        readable = {row['id'] for row in rows if row['status'] in {'ready', 'partial'}}
+        if document_id not in readable or len(readable) < 2:
+            raise ValueError('至少需要两个可读版本，且当前文件须可读')
+        preferred, existing = _default_choices(rows)
+        target = document_id if replace else expected_id
+        if target == preferred:
+            return target
+        if existing != expected_id or target not in readable:
+            raise ValueError('默认版本已变化，请刷新后核对再提交')
+        conn.execute("""
+            INSERT INTO work_defaults(work_id, document_id) VALUES (?, ?)
+            ON CONFLICT(work_id) DO UPDATE SET document_id=excluded.document_id
+        """, (rows[0]['work_id'], target))
+        return target
 
 
 def get_internal_document(document_id: str) -> dict[str, Any] | None:
@@ -457,6 +506,7 @@ def finalize_document(document_id: str, status: str, warnings: list[str], conten
         conn.execute(f"UPDATE documents SET {', '.join(f'{key}=?' for key in values)} WHERE id=? AND deleted=0",
                      (*values.values(), document_id))
         if "work_id" in values:
+            conn.execute("DELETE FROM work_defaults WHERE document_id=?", (document_id,))
             conn.execute("UPDATE versions SET work_id=? WHERE id=?", (values["work_id"], document["version_id"]))
         finished = now()
         conn.execute("UPDATE parse_runs SET status=?, finished_at=? WHERE id=?",
@@ -473,6 +523,7 @@ def delete_document(document_id: str) -> bool:
             return False
         # Keep a tombstone ID for historical source references; do not redirect them.
         conn.execute("UPDATE documents SET deleted=1, sha256=sha256 || ':' || id, status='deleted' WHERE id=?", (document_id,))
+        conn.execute("DELETE FROM work_defaults WHERE document_id=?", (document_id,))
         conn.execute("DELETE FROM reference_entries WHERE document_id=?", (document_id,))
         conn.execute("DELETE FROM outlines WHERE document_id=?", (document_id,))
         conn.execute("DELETE FROM blocks WHERE document_id=?", (document_id,))

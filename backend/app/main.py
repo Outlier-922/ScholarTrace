@@ -16,7 +16,7 @@ from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pymupdf as fitz
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
@@ -268,6 +268,25 @@ def document_work_versions(document_id: str) -> dict[str, Any]:
     if versions is None:
         raise HTTPException(404, '文献不存在')
     return versions
+
+
+class WorkDefaultChoice(BaseModel):
+    model_config = {"extra": "forbid"}
+    action: Literal['keep', 'replace']
+    expected_document_id: str = Field(min_length=1, max_length=100)
+
+
+@app.patch('/api/documents/{document_id}/work-default')
+def update_work_default(document_id: str, choice: WorkDefaultChoice) -> dict[str, str]:
+    if demo_access.read_only():
+        raise HTTPException(403, '只读演示无法修改默认版本')
+    try:
+        preferred = store.set_work_default(document_id, choice.expected_document_id, choice.action == 'replace')
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if preferred is None:
+        raise HTTPException(404, '文献不存在或已删除')
+    return {'preferred_document_id': preferred}
 
 
 @app.get('/api/documents/{document_id}/version-diff')

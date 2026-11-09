@@ -88,9 +88,14 @@ export default function App() {
   const ocrSupported = health?.capabilities.ocr_supported === true;
   const historicalRun = !!(viewParseRun && selectedDocument?.parse_run_id && viewParseRun !== selectedDocument.parse_run_id);
   const availableDocuments = documents.filter((item) => item.status === 'ready' || item.status === 'partial');
+  const workDefaults = new Map(availableDocuments.filter(item => item.is_work_default).map(item => [item.work_id, item.id]));
+  const libraryContext = !checkedIds.length && qaScope === 'library';
   const processingCount = documents.filter((item) => item.status === 'queued' || item.status === 'processing').length;
   const visibleDocuments = documents.filter((item) => `${item.title} ${item.filename} ${item.authors?.join(' ')}`.toLowerCase().includes(libraryQuery.toLowerCase()));
-  const contextIds = checkedIds.length ? checkedIds.filter((id) => availableDocuments.some((item) => item.id === id)) : qaScope === 'library' ? availableDocuments.map((item) => item.id) : selectedDocument && availableDocuments.some((item) => item.id === selectedDocument.id) ? [selectedDocument.id] : [];
+  const contextIds = checkedIds.length ? checkedIds.filter((id) => availableDocuments.some((item) => item.id === id))
+    : libraryContext ? availableDocuments.filter(item => (workDefaults.get(item.work_id) ?? item.id) === item.id
+        || tableRefs.some(ref => ref.document_id === item.id)).map(item => item.id)
+    : selectedDocument && availableDocuments.some((item) => item.id === selectedDocument.id) ? [selectedDocument.id] : [];
 
   const refresh = useCallback(async () => {
     try {
@@ -252,7 +257,7 @@ export default function App() {
     askControllerRef.current = controller;
     try {
       const refs=tableRefs.filter(r=>contextIds.includes(r.document_id));
-      const result = await postJSON<AnswerResult>('/ask', { question: currentQuestion, document_ids: contextIds, limit: 6, use_model:generateAnswer, table_sources:refs.map(r=>({source_id:r.source_id,revision_id:r.revision_id,row_indices:r.row_indices})),table_only:refs.length>0&&tableOnly }, controller.signal);
+      const result = await postJSON<AnswerResult>('/ask', { question: currentQuestion, document_ids: libraryContext ? [] : contextIds, limit: 6, use_model:generateAnswer, table_sources:refs.map(r=>({source_id:r.source_id,revision_id:r.revision_id,row_indices:r.row_indices})),table_only:refs.length>0&&tableOnly }, controller.signal);
       if (!controller.signal.aborted) { setAnswer(result); setQuestion(''); }
     } catch (cause) { if (!controller.signal.aborted) setNotice({ text: cause instanceof Error ? cause.message : '检索失败，请重试', kind: 'error' }); }
     finally { if (!controller.signal.aborted) setAsking(false); }
@@ -329,7 +334,7 @@ export default function App() {
         <div className="nav-label">证据工作流</div>
         <div className="workflow-nav"><div><span className={`workflow-step ${documents.length ? 'completed' : ''}`}>1</span><span>导入与解析</span>{documents.length > 0 && <Check size={13} />}</div><i /><div><span className={`workflow-step ${selectedDocument?.progress_pages ? 'completed' : ''}`}>2</span><span>原文与定位</span>{!!selectedDocument?.progress_pages && <Check size={13} />}</div><i /><div><span className={`workflow-step ${contextIds.length ? 'current' : ''}`}>3</span><span>检索与核验</span>{contextIds.length > 0 && <span className="tiny-dot" />}</div></div>
         <div className="sidebar-note"><ShieldCheck size={19} /><strong>让每个结论有出处</strong><p>从真实文献出发，保留版本、页码和原文位置。</p><button onClick={() => setModal('help')}>了解证据模式 <ArrowRight size={13} /></button></div>
-        <div className="sidebar-bottom"><button onClick={() => setModal('settings')}><Settings2 size={17} /><span>连接与配置</span></button><button onClick={() => setModal('help')}><CircleHelp size={17} /><span>使用指南</span></button><div className="local-user"><span>研</span><div><strong>个人研究者</strong><small>开发预览 · v{health?.version || '0.35.1'}</small></div><span className={`connection-dot ${connectionError ? 'offline' : ''}`} title={connectionError ? '后端未连接' : '本地服务已连接'} /></div></div>
+        <div className="sidebar-bottom"><button onClick={() => setModal('settings')}><Settings2 size={17} /><span>连接与配置</span></button><button onClick={() => setModal('help')}><CircleHelp size={17} /><span>使用指南</span></button><div className="local-user"><span>研</span><div><strong>个人研究者</strong><small>开发预览 · v{health?.version || '0.36.0'}</small></div><span className={`connection-dot ${connectionError ? 'offline' : ''}`} title={connectionError ? '后端未连接' : '本地服务已连接'} /></div></div>
       </aside>
 
       <main className="main-area">
@@ -370,7 +375,9 @@ export default function App() {
               {selectedDocument ? <>
                 {workVersions.length > 1 && <WorkVersions key={selectedDocument.id} documentId={selectedDocument.id}
                   onSource={jumpToEvidence}
-                  groupRevision={JSON.stringify(workVersions.map(item => [item.id, item.status, item.version_label, item.arxiv_id, item.parse_run_id, item.page_count]))}
+                  readOnly={health?.deployment?.read_only === true}
+                  onDefaultChanged={() => void refresh()}
+                  groupRevision={JSON.stringify(workVersions.map(item => [item.id, item.status, item.version_label, item.arxiv_id, item.parse_run_id, item.page_count, item.is_work_default]))}
                   onSelect={id => {
                     pendingEvidenceRef.current = null;
                     setCurrentPage(1);
