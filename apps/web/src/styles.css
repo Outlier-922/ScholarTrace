@@ -28,6 +28,14 @@ body{min-width:280px}.document-card h3{color:#526a46;font-size:12px}.document-ca
 .work-version-picker { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 5px 12px; align-items: center; font-size: 11px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .work-version-picker label { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
 .work-version-picker select { min-width: 0; max-width: min(290px, 65vw); font: inherit; }
+.front-matter { margin: 0 10px 8px; border-bottom: 1px solid var(--line); padding: 6px 4px 9px; font-size: 12px; }
+.front-matter summary { cursor: pointer; font-weight: 600; }
+.front-matter p { margin: 8px 0; color: var(--muted); }
+.front-matter ol { list-style: none; margin: 0; padding: 0; }
+.front-matter li { display: grid; gap: 4px; padding: 8px 0; border-top: 1px solid var(--line); }
+.front-matter button { text-align: left; color: var(--ink); overflow-wrap: anywhere; }
+.front-matter button:hover { text-decoration: underline; }
+.front-matter small, .front-matter .front-matter-note { font-size: 11px; color: var(--muted); }
 .work-version-default { max-width: 100%; }
 .work-version-default[open] { flex-basis: 100%; }
 .work-version-default summary { cursor: pointer; font-weight: 600; }

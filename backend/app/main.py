@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 from . import __version__, ocr, semantic, store, semantic_jobs, demo_access, version_diff
+from . import front_matter
 from .parser import parse_document
 
 logger = logging.getLogger(__name__)
@@ -346,6 +347,16 @@ def document_structure(document_id: str, page: int | None = Query(default=None, 
     if structure is None:
         raise HTTPException(404, "文献不存在或已删除")
     return structure
+
+
+@app.get('/api/documents/{document_id}/front-matter')
+def document_front_matter(document_id: str,
+                          parse_run_id: str | None = Query(default=None, max_length=100)) -> dict[str, Any]:
+    document = _require_document(document_id)
+    structure = store.get_structure(document_id, page=1, parse_run_id=parse_run_id)
+    if structure is None:
+        raise HTTPException(404, '指定的文献或解析记录不存在')
+    return front_matter.extract(document, structure)
 
 
 @app.get("/api/documents/{document_id}/parse-runs")

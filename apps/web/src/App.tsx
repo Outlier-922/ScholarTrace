@@ -8,6 +8,7 @@ import {TableQAContext,TableDraftCards} from './TableQA';
 import AnswerCoverage from './AnswerCoverage';
 import ClaimAudit from './ClaimAudit';
 import WorkVersions from './WorkVersions';
+import FrontMatter from './FrontMatter';
 
 const STATUS_LABEL: Record<string, string> = { queued: '等待处理', processing: '解析中', ready: '已就绪', partial: '部分可检索', failed: '处理失败' };
 const INITIAL_STATS: Stats = { document_count: 0, ready_count: 0, total_pages: 0, blocks_count: 0 };
@@ -334,7 +335,7 @@ export default function App() {
         <div className="nav-label">证据工作流</div>
         <div className="workflow-nav"><div><span className={`workflow-step ${documents.length ? 'completed' : ''}`}>1</span><span>导入与解析</span>{documents.length > 0 && <Check size={13} />}</div><i /><div><span className={`workflow-step ${selectedDocument?.progress_pages ? 'completed' : ''}`}>2</span><span>原文与定位</span>{!!selectedDocument?.progress_pages && <Check size={13} />}</div><i /><div><span className={`workflow-step ${contextIds.length ? 'current' : ''}`}>3</span><span>检索与核验</span>{contextIds.length > 0 && <span className="tiny-dot" />}</div></div>
         <div className="sidebar-note"><ShieldCheck size={19} /><strong>让每个结论有出处</strong><p>从真实文献出发，保留版本、页码和原文位置。</p><button onClick={() => setModal('help')}>了解证据模式 <ArrowRight size={13} /></button></div>
-        <div className="sidebar-bottom"><button onClick={() => setModal('settings')}><Settings2 size={17} /><span>连接与配置</span></button><button onClick={() => setModal('help')}><CircleHelp size={17} /><span>使用指南</span></button><div className="local-user"><span>研</span><div><strong>个人研究者</strong><small>开发预览 · v{health?.version || '0.36.0'}</small></div><span className={`connection-dot ${connectionError ? 'offline' : ''}`} title={connectionError ? '后端未连接' : '本地服务已连接'} /></div></div>
+        <div className="sidebar-bottom"><button onClick={() => setModal('settings')}><Settings2 size={17} /><span>连接与配置</span></button><button onClick={() => setModal('help')}><CircleHelp size={17} /><span>使用指南</span></button><div className="local-user"><span>研</span><div><strong>个人研究者</strong><small>开发预览 · v{health?.version || '0.37.0'}</small></div><span className={`connection-dot ${connectionError ? 'offline' : ''}`} title={connectionError ? '后端未连接' : '本地服务已连接'} /></div></div>
       </aside>
 
       <main className="main-area">
@@ -367,7 +368,9 @@ export default function App() {
                     </span></div>}
                   </div>)}
                 </div>
-              </> : <div className="outline-panel"><div className="outline-intro"><ListTree size={17} /><strong>文档结构</strong><span>{structure?.outline.length || 0} 个标题</span></div>{!selectedDocument ? <div className="panel-empty"><ListTree size={28} /><p>导入并选择一篇文献后，<br />这里会显示标题导航。</p></div> : !structure?.outline.length ? <div className="panel-empty"><ListTree size={28} /><p>{selectedDocument.status === 'processing' ? '正在识别标题结构…' : '未识别到可靠的标题层级。可通过页码和结构文本阅读。'}</p></div> : <div className="outline-list">{structure.outline.map((item) => <button key={item.id} className={selectedBlock === item.block_id ? 'active' : ''} style={{ paddingLeft: `${12 + (Math.min(item.level, 4) - 1) * 12}px` }} onClick={() => { setCurrentPage(item.page); setSelectedBlock(item.block_id); }}><span>{item.title}</span><small>{item.page}</small></button>)}</div>}</div>}
+              </> : <div className="outline-panel"><div className="outline-intro"><ListTree size={17} /><strong>文档结构</strong><span>{structure?.outline.length || 0} 个标题</span></div>{selectedDocument && <FrontMatter key={`${selectedDocument.id}:${viewParseRun ?? selectedDocument.parse_run_id}`}
+                  documentId={selectedDocument.id} parseRunId={viewParseRun ?? selectedDocument.parse_run_id}
+                  status={selectedDocument.status} onSource={jumpToEvidence} />}{!selectedDocument ? <div className="panel-empty"><ListTree size={28} /><p>导入并选择一篇文献后，<br />这里会显示标题导航。</p></div> : !structure?.outline.length ? <div className="panel-empty"><ListTree size={28} /><p>{selectedDocument.status === 'processing' ? '正在识别标题结构…' : '未识别到可靠的标题层级。可通过页码和结构文本阅读。'}</p></div> : <div className="outline-list">{structure.outline.map((item) => <button key={item.id} className={selectedBlock === item.block_id ? 'active' : ''} style={{ paddingLeft: `${12 + (Math.min(item.level, 4) - 1) * 12}px` }} onClick={() => { setCurrentPage(item.page); setSelectedBlock(item.block_id); }}><span>{item.title}</span><small>{item.page}</small></button>)}</div>}</div>}
               <div className="document-panel-footer"><ShieldCheck size={13} />原始文件在本机持久保存</div>
             </aside>
 
