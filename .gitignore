@@ -19,3 +19,4 @@ Thumbs.db
 playwright-report/
 test-results/
 tmp/
+output/video/*.mp4
