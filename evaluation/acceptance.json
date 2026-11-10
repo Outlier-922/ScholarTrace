@@ -1,6 +1,6 @@
 {
   "application_version": "0.37.1",
-  "as_of": "2026-11-07",
+  "as_of": "2026-11-10",
   "scope": "按用户提供赛题逐项整理的工程交付判断；不是主办方认证、评分百分比或豁免清单。",
   "items": [
     {"id":"M1-UPLOAD","required":true,"state":"verified","requirement":"单篇/批量PDF管理与持久化","current":"已实现并以官方/合成PDF测试","proof_paths":["docs/STAGE1_TEST_REPORT.md","docs/STAGE13_TEST_REPORT.md"]},
@@ -24,8 +24,8 @@
     {"id":"M6-ENGLISH","required":true,"state":"partial","requirement":"中文学术内容翻成英文","current":"支持英文目标任务/选区；领域译文质量尚未系统验收","proof_paths":["docs/STAGE3_TEST_REPORT.md","docs/STAGE14_TEST_REPORT.md"]},
     {"id":"AGENT-LOOP","required":true,"state":"partial","requirement":"意图规划、工具执行与科研流程闭环","current":"九种受控工具、确切全文交接、固定CSV规则及全文分批等待/恢复可用；编排与翻译额度分开；已确认书目有界批量队列与后续任务已实测（STAGE42_TEST_REPORT.md）；来源文献自动扩展、复杂意图及科研输出质量仍不足；不强制特定框架；0.24.3九工具同任务、预算恢复及导出重画已实测，已确认BERT书目可传到写作，未确认来源不自动绑定；质量状态不升级 0.30.0接通筛选依据到全文、新任务及写作导出的固定交接，源引用失效拦截；原文检索与写作计划两步实测，学术语义质量未升级。 0.31.0加入有界多层计划、跨节点共享持久预算、已确认全文父子链、循环保护和恢复；两层缓存演练完成，自动引用价值与科研语义质量仍待验收。","proof_paths":["docs/STAGE7_TEST_REPORT.md","docs/STAGE15_TEST_REPORT.md","docs/STAGE23_TEST_REPORT.md","docs/STAGE24_TEST_REPORT.md","docs/STAGE25_TEST_REPORT.md","docs/STAGE26_TEST_REPORT.md","docs/STAGE27_TEST_REPORT.md","docs/STAGE28_TEST_REPORT.md","docs/STAGE31_TEST_REPORT.md","docs/STAGE42_TEST_REPORT.md","docs/STAGE46_TEST_REPORT.md","docs/STAGE47_TEST_REPORT.md"]},
     {"id":"D-CODE","required":true,"state":"external_pending","requirement":"源码仓库可供评审访问并保留历史","current":"本地Git历史已保存；远程评审访问尚未验证","proof_paths":[]},
-    {"id":"D-PDF","required":true,"state":"partial","requirement":"当前最终版本技术PDF不超过30页","current":"已有14页0.9.0草稿，需同步最终功能、测试和部署","proof_paths":["docs/STAGE12_TEST_REPORT.md"]},
-    {"id":"D-VIDEO","required":true,"state":"missing","requirement":"5-8分钟、1080p及以上、普通话MP4演示","current":"只有脚本，无正式成片","proof_paths":[]},
+    {"id":"D-PDF","required":true,"state":"partial","requirement":"当前最终版本技术PDF不超过30页","current":"0.37.1 的 8 页审阅稿已生成并逐页检查，待与正式交付版本及部署同步","proof_paths":["docs/STAGE12_TEST_REPORT.md","docs/STAGE56_TEST_REPORT.md","output/pdf/ScholarTrace_技术说明_0.37.1_审阅稿.pdf"]},
+    {"id":"D-VIDEO","required":true,"state":"missing","requirement":"5-8分钟、1080p及以上、普通话MP4演示","current":"已更新 7 分钟录制稿，正式成片待录制","proof_paths":["docs/DEMO_SCRIPT.md"]},
     {"id":"D-ONLINE","required":true,"state":"external_pending","requirement":"评审期间可访问的公网演示及必要账号","current":"受控本机入口已实现；用户确认尚无服务器和域名，未上线","proof_paths":[]},
     {"id":"D-IDENTITY","required":true,"state":"external_pending","requirement":"按报名主体补齐README身份信息","current":"用户此前要求暂不写，保留待最终填报","proof_paths":[]},
     {"id":"Q-INDEPENDENT","required":false,"state":"missing","requirement":"独立人工语义质量复核（工程建议）","current":"不是引用主办方的独立评测硬性要求；建议完成以支撑质量陈述，当前仍0/6","proof_paths":[]},
