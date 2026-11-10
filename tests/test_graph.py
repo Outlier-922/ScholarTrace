@@ -74,6 +74,28 @@ def test_pagerank_uses_incoming_direction_deduplicates_pairs_and_handles_danglin
     assert pagerank(['A','B'],[])[0]=={'A':.5,'B':.5}
 
 
+def test_local_roles_ignore_unresolved_edges_and_external_nodes():
+    from backend.app import graph
+
+    def node(identity, rank, kind='local'):
+        return {'id': identity, 'kind': kind, 'pagerank': rank}
+
+    def edge(source, target, status='identifier_resolved'):
+        return {'id': source + '-' + target, 'source': source, 'target': target, 'status': status}
+
+    nodes = [node('core', .4), node('peripheral', .2), node('other', .1),
+             node('isolated', .1), node('external', .2, 'external')]
+    edges = [edge('peripheral', 'core'), edge('other', 'core', 'local_title_author_matched'),
+             edge('other', 'core'), edge('isolated', 'core', 'identifier_unresolved'),
+             edge('external', 'peripheral'), edge('core', 'core')]
+    roles = graph.local_roles(nodes, edges)
+    assert roles['cornerstones'] == [{'node_id': 'core', 'local_cited_by': 2}]
+    assert {item['node_id'] for item in roles['peripheral']} == {'peripheral', 'other'}
+    for item in roles['peripheral']:
+        assert item['local_cited_by'] == 0
+        assert item['links'] == [{'target_id': 'core', 'edge_id': item['node_id'] + '-core'}]
+
+
 def test_versions_collapse_to_latest_and_selection_is_explicit(monkeypatch):
     from backend.app import graph
     documents=[{'id':'v1','arxiv_id':'2605.11111','version_label':'v1','filename':'paper-v1.pdf','created_at':'2026','parse_run_id':'r1'},

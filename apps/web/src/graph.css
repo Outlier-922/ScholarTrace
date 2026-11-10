@@ -8,3 +8,12 @@
 .graph-citation-contexts { margin-top: 8px; }
 .graph-citation-contexts summary { cursor: pointer; }
 .graph-citation-contexts p { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.graph-paper-roles { margin: 12px 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; }
+.graph-paper-roles summary { cursor: pointer; font-weight: 650; }
+.graph-paper-roles p { margin: 8px 0; line-height: 1.55; }
+.graph-paper-roles > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.graph-paper-roles article { display: grid; gap: 5px; border-top: 1px solid var(--line); padding: 8px 0; }
+.graph-paper-roles button { text-align: left; overflow-wrap: anywhere; color: var(--ink); }
+.graph-paper-roles button:hover { text-decoration: underline; }
+@media (max-width: 580px) { .graph-paper-roles > div { grid-template-columns: minmax(0, 1fr); } }

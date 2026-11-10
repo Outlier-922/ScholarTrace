@@ -257,6 +257,36 @@ def pagerank(node_ids,edges,alpha=.85,tolerance=1e-10,max_iterations=200):
     return rank,max_iterations,False
 
 
+def local_roles(nodes, edges):
+    """Classify candidates using resolved links between selected full texts."""
+    local = {node['id']: node for node in nodes if node['kind'] == 'local' and node.get('pagerank') is not None}
+    incoming = {identity: set() for identity in local}
+    outgoing = {identity: {} for identity in local}
+    for edge in edges:
+        source, target = edge['source'], edge['target']
+        if (source in local and target in local and source != target
+                and edge['status'] in {'identifier_resolved', 'local_title_author_matched'}):
+            incoming[target].add(source)
+            outgoing[source][target] = edge['id']
+    cornerstone_ids = sorted(
+        (identity for identity, sources in incoming.items() if len(sources) >= 2),
+        key=lambda identity: (-local[identity]['pagerank'], -len(incoming[identity]), identity),
+    )[:5]
+    cornerstone_set = set(cornerstone_ids)
+    peripheral_ids = sorted(
+        (identity for identity, targets in outgoing.items()
+         if identity not in cornerstone_set and len(incoming[identity]) <= 1 and cornerstone_set.intersection(targets)),
+        key=lambda identity: (len(incoming[identity]), -len(cornerstone_set.intersection(outgoing[identity])), identity),
+    )[:5]
+    return {
+        'cornerstones': [{'node_id': identity, 'local_cited_by': len(incoming[identity])} for identity in cornerstone_ids],
+        'peripheral': [{'node_id': identity, 'local_cited_by': len(incoming[identity]),
+                        'links': [{'target_id': target, 'edge_id': outgoing[identity][target]}
+                                  for target in cornerstone_ids if target in outgoing[identity]]}
+                       for identity in peripheral_ids],
+    }
+
+
 def assemble(sources,units,index,topic,max_nodes):
     nodes={source['node_id']:{'id':source['node_id'],'title':source['title'],'kind':'local','identity_status':'local_source','year':None,'authors':[],
                            'document_id':source['document_id'],'parse_run_id':source['parse_run_id'],'metadata_only':False,'landing_url':None} for source in sources}
@@ -320,7 +350,8 @@ def assemble(sources,units,index,topic,max_nodes):
     shared=[{'node_id':node['id'],'cited_by':[edge['source'] for edge in resolved if edge['target']==node['id']]} for node in ranking if node['in_degree']>=2]
     return {'id':str(uuid.uuid4()),'format_version':'citation-graph-v3','created_at':store.now(),'topic':topic,'sources':sources,'nodes':list(nodes.values()),'edges':list(edges.values()),
             'unresolved_references':unresolved,'metrics':{'scope':'所选文献的书目引用子图；不是全球影响力','direction':'citing_to_cited','eligible_edges':len(resolved),
-             'eligible_nodes':len(eligible),'alpha':.85,'iterations':iterations,'converged':converged,'ranking':[node['id'] for node in ranking[:10]],'shared_ancestors':shared},
+             'eligible_nodes':len(eligible),'alpha':.85,'iterations':iterations,'converged':converged,'ranking':[node['id'] for node in ranking[:10]],'shared_ancestors':shared,
+             'local_roles':local_roles(nodes.values(), edges.values())},
             'warnings':['边来自参考文献字面标识符，或唯一匹配本地完整标题和首位作者；标题/作者匹配保留原PDF证据，不确定被引版本，不等于语义、引用用途或研究质量核验。',
                         '只展开所选版本的直接书目引用。外部节点通常只有元数据，未读取其全文；PageRank 只反映此局部样本。',
                         f'未解析书目候选 {len(unresolved)} 组；因节点预算未展开 {truncated} 组。没有以主题相似度补造引用边。']+
@@ -374,6 +405,8 @@ def graph(identity:str):
     documents={source['document_id']:store.get_document(source['document_id']) for source in payload['sources']}
     if any(document is None for document in documents.values()):raise HTTPException(404,'图谱来源已删除')
     payload['newer_source_runs']=[source['document_id'] for source in payload['sources'] if documents[source['document_id']]['parse_run_id']!=source['parse_run_id']]
+    if 'local_roles' not in payload['metrics']:
+        payload['metrics']['local_roles'] = local_roles(payload['nodes'], payload['edges'])
     return payload
 
 
@@ -386,6 +419,8 @@ def label_edge(identity:str,edge_id:str,body:PurposeRequest):
     try:payload=repo.annotate(identity,edge_id,body.purpose)
     except ValueError:raise HTTPException(409,'来源已删除')
     if not payload:raise HTTPException(404,'图谱或边不存在')
+    if 'local_roles' not in payload['metrics']:
+        payload['metrics']['local_roles'] = local_roles(payload['nodes'], payload['edges'])
     return payload
 
 
