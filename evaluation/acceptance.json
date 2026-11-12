@@ -1,5 +1,5 @@
 {
-  "application_version": "0.39.0",
+  "application_version": "0.40.0",
   "as_of": "2026-11-12",
   "scope": "按用户提供赛题逐项整理的工程交付判断；不是主办方认证、评分百分比或豁免清单。",
   "items": [
@@ -21,7 +21,7 @@
     {"id":"M5-FUTURE","required":true,"state":"partial","requirement":"结合后续进展排除已解决旧idea","current":"已加入所选候选全文的双边证据核对与确切版本日期临时分组；未确认已解决，真实样本证据不足，不是完整旧idea排除","proof_paths":["docs/STAGE15_TEST_REPORT.md"]},
     {"id":"M6-WRITING","required":true,"state":"partial","requirement":"从idea输出学术框架与真实References","current":"已支持显式一次模型起草、引句/数字检查、保存候选校订和版本；首次真实候选错绑/外推，校订后5事实/7计划仍待语义核验，书目保留真实绑定，学术质量未通过","proof_paths":["docs/STAGE6_TEST_REPORT.md","docs/STAGE31_TEST_REPORT.md","docs/STAGE32_TEST_REPORT.md"]},
     {"id":"M6-PLOT","required":true,"state":"verified","requirement":"CSV科学图表及架构图可复现导出","current":"六类图、统计配置、图注及重画脚本已验证；已接入任务内CSV哈希/明确规则、预算恢复和复现包；自由自然语言分析不在该通过范围","proof_paths":["docs/STAGE6_TEST_REPORT.md","docs/STAGE26_TEST_REPORT.md"]},
-    {"id":"M6-ENGLISH","required":true,"state":"partial","requirement":"中文学术内容翻成英文","current":"支持英文目标任务/选区；领域译文质量尚未系统验收","proof_paths":["docs/STAGE3_TEST_REPORT.md","docs/STAGE14_TEST_REPORT.md"]},
+    {"id":"M6-ENGLISH","required":true,"state":"verified","requirement":"中文学术内容翻成英文","current":"已支持粘贴中文摘要/学术段落一键英译、术语保护、原文快照、缓存和导出。3段真实模型样例逐句核对计划、否定、统计单位、公式和引用；首次冠词问题修复后复验。范围为至多4000字符摘要，不代替全文翻译质量验收。","proof_paths":["docs/STAGE3_TEST_REPORT.md","docs/STAGE14_TEST_REPORT.md","docs/STAGE60_TEST_REPORT.md"]},
     {"id":"AGENT-LOOP","required":true,"state":"partial","requirement":"意图规划、工具执行与科研流程闭环","current":"0.39.0新增模型逐轮选工具、真实结果反馈、严格参数校验和共享预算，官方Transformer真实检索→图谱→停止已实测；原校验与无生成原文语义保留。既有翻译/发现/CSV与全文交接工具继续可用。复杂科研目标、自动来源扩展和输出质量仍待验收。","proof_paths":["docs/STAGE7_TEST_REPORT.md","docs/STAGE15_TEST_REPORT.md","docs/STAGE23_TEST_REPORT.md","docs/STAGE24_TEST_REPORT.md","docs/STAGE25_TEST_REPORT.md","docs/STAGE26_TEST_REPORT.md","docs/STAGE27_TEST_REPORT.md","docs/STAGE28_TEST_REPORT.md","docs/STAGE31_TEST_REPORT.md","docs/STAGE42_TEST_REPORT.md","docs/STAGE46_TEST_REPORT.md","docs/STAGE47_TEST_REPORT.md","docs/STAGE59_TEST_REPORT.md"]},
     {"id":"D-CODE","required":true,"state":"external_pending","requirement":"源码仓库可供评审访问并保留历史","current":"本地Git历史已保存；远程评审访问尚未验证","proof_paths":[]},
     {"id":"D-PDF","required":true,"state":"partial","requirement":"当前最终版本技术PDF不超过30页","current":"0.37.1 的 8 页审阅稿已生成并逐页检查，待与正式交付版本及部署同步","proof_paths":["docs/STAGE12_TEST_REPORT.md","docs/STAGE56_TEST_REPORT.md","output/pdf/ScholarTrace_技术说明_0.37.1_审阅稿.pdf"]},

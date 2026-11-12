@@ -5,6 +5,7 @@ import type { Evidence, ResearchDocument } from './types';
 import { ChartControls, initialSpec } from './ChartControls';
 import type { Dataset, Spec } from './ChartControls';
 import './studio.css';
+import AcademicTranslation from './AcademicTranslation';
 
 type Kind = 'quote' | 'fact' | 'analysis' | 'plan';
 type Paragraph = { id: string; kind: Kind; text: string; evidence_ids: string[]; review_status?: string; support_quote?: string };
@@ -22,7 +23,7 @@ function Downloads({ artifact }: { artifact: Artifact }) {
 }
 
 export default function StudioPanel({ documents, onClose, onSource }: { documents: ResearchDocument[]; onClose: () => void; onSource: (evidence: Evidence) => void }) {
-  const [tab, setTab] = useState<'writing' | 'chart' | 'diagram'>('writing');
+  const [tab, setTab] = useState<'writing' | 'chart' | 'diagram' | 'translation'>('writing');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -83,9 +84,9 @@ export default function StudioPanel({ documents, onClose, onSource }: { document
   const chosenArtifact = tab === 'chart' ? chart : diagram;
   return <div className="studio-overlay"><section className="studio-shell" role="dialog" aria-modal="true" aria-labelledby="studio-title">
     <header className="studio-header"><div><span className="eyebrow">RESEARCH STUDIO</span><h2 id="studio-title">把证据，写成下一步。</h2><p>研究计划 · 可复现图表 · 方法草图</p></div><button className="icon-button" aria-label="关闭写作与绘图" disabled={busy} onClick={onClose}><X size={20} /></button></header>
-    <nav className="studio-tabs">{([['writing', FilePenLine, '写作框架'], ['chart', BarChart3, 'CSV 科学绘图'], ['diagram', GitBranch, '架构图']] as const).map(([value, Icon, label]) => <button key={value} disabled={busy} className={tab === value ? 'active' : ''} onClick={() => { setTab(value); setError(''); setMessage(''); }}><Icon size={16} />{label}</button>)}</nav>
+    <nav className="studio-tabs">{([['writing', FilePenLine, '写作框架'], ['chart', BarChart3, 'CSV 科学绘图'], ['diagram', GitBranch, '架构图'], ['translation', FilePenLine, '学术英译']] as const).map(([value, Icon, label]) => <button key={value} disabled={busy} className={tab === value ? 'active' : ''} onClick={() => { setTab(value); setError(''); setMessage(''); }}><Icon size={16} />{label}</button>)}</nav>
     <div className="studio-body">{error && <p className="studio-alert" role="alert">{error}</p>}{message && <p className="studio-success" role="status"><Check size={14} />{message}</p>}
-    {tab === 'writing' ? <>
+    {tab === 'translation' ? <AcademicTranslation/> : tab === 'writing' ? <>
       <div className="studio-writing-start"><div><label className="studio-field">研究想法<textarea aria-label="研究想法" value={idea} maxLength={4000} onChange={event => setIdea(event.target.value)} rows={2} placeholder="描述研究对象、问题与准备验证的方向" /></label><label className="studio-field">来源方式<select aria-label="写作来源方式" value={graphId} onChange={event => setGraphId(event.target.value)}><option value="">从下方选择本地文献</option>{graphs.map(graph => <option key={graph.id} value={graph.id}>已有图谱 · {(graph.topic || graph.title || graph.id.slice(0, 8)).slice(0, 55)} · {graph.created_at ? new Date(graph.created_at).toLocaleString('zh-CN') : ''}</option>)}</select></label></div><div className="studio-docs">{!graphId && <><small>选择来源，最多 10 篇；同作品按版本规则取一份。</small>{ready.map(document => <label key={document.id}><input type="checkbox" checked={ids.includes(document.id)} disabled={busy || (!ids.includes(document.id) && ids.length >= 10)} onChange={event => setIds(event.target.checked ? [...ids, document.id] : ids.filter(id => id !== document.id))} /><span>{document.title}<small>{document.version_label || '本地文件'} · {document.page_count} 页</small></span></label>)}</>}</div></div>
       <div className="studio-toolbar"><button className="primary-button" disabled={busy || idea.trim().length < 4 || (!graphId && !ids.length)} onClick={() => void act(async () => { const value = await postJSON<Draft>('/studio/drafts', { idea, document_ids: graphId ? [] : ids, graph_id: graphId || null }); await openDraft(value.id); setMessage('已创建证据写作框架。请补充研究设计并核对引用。'); })}>{busy ? <LoaderCircle size={15} className="spin" /> : <Plus size={15} />}创建写作框架</button><select aria-label="写作历史" value={draft?.id || ''} disabled={busy} onChange={event => { if (event.target.value) void act(() => openDraft(event.target.value)); }}><option value="">打开已有框架</option>{history.filter(item => item.kind === 'draft').map(item => <option key={item.id} value={item.id}>{item.title} · v{item.revision} · {item.created_at ? new Date(item.created_at).toLocaleTimeString('zh-CN') : ''}</option>)}</select></div>
       {draft ? <div className="studio-draft"><div className="studio-draft-top"><label className="studio-field">草稿标题<input aria-label="草稿标题" value={draft.title} disabled={historical || busy} maxLength={200} onChange={event => { setDraft({ ...draft, title: event.target.value }); setDirty(true); }} /></label><label className="studio-field">历史版本<select aria-label="草稿版本" disabled={busy} value={draft.revision} onChange={event => void act(() => openDraft(draft.id, Number(event.target.value)))}>{revisions.map(item => <option key={item.revision} value={item.revision}>v{item.revision} · {new Date(item.created_at).toLocaleString('zh-CN')}</option>)}</select></label><button className="primary-button" disabled={busy || historical || !dirty} onClick={() => void act(async () => { if (reviewAttempt) {

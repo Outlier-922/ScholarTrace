@@ -463,6 +463,8 @@ app.include_router(literature.router)
 app.include_router(document_translation.router)
 app.include_router(graph.router)
 app.include_router(studio.router)
+from . import academic_translation
+app.include_router(academic_translation.router)
 app.include_router(workflow.router)
 app.include_router(model_status.router)
 from . import selection_translation
