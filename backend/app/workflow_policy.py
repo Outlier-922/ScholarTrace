@@ -37,7 +37,7 @@ def recover_model_failure(payload, step_id, partial_result, error_code):
     if not payload.get('use_model') or payload.get('execution_model_disabled') or payload.get('recovery_policy') != 'local_fallback' or not allowed(payload):
         return False
     target = next(step for step in payload['steps'] if step['id'] == step_id)
-    if target['tool'] not in {'evidence','translation'} or target.get('recovery_for') or target.get('resolved_by'):
+    if target['tool'] not in {'evidence','hybrid_retrieval','table_qa','translation'} or target.get('recovery_for') or target.get('resolved_by'):
         return False
     recovery_id = 'local-recovery-' + step_id
     target.update(status='failed', error_code=error_code, partial_result=partial_result, resolved_by=recovery_id)

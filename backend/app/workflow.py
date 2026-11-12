@@ -14,7 +14,7 @@ from fastapi.responses import Response,PlainTextResponse
 from pydantic import BaseModel,ConfigDict,Field
 from starlette.concurrency import run_in_threadpool
 from . import comparison,graph,model_client,qa,source_scope,store,studio,insights,workflow_translation,workflow_discovery,workflow_plot,literature_handoff
-from . import workflow_store as repo,workflow_policy as policy
+from . import workflow_store as repo,workflow_policy as policy,workflow_agent
 
 router=APIRouter(prefix='/api/research-tasks',tags=['intent-workflow'])
 _workers:dict[str,asyncio.Task]={}
@@ -23,6 +23,8 @@ _closing=False
 TOOLS={
     'discovery':{'label':'查找候选文献','role':'文献发现','hint':'只查询明确条件；记录书目来源，核对入库后再作原文分析'},
     'evidence':{'label':'检索原文证据','role':'证据检索','hint':'每篇独立检索，保留页码和解析版本'},
+    'hybrid_retrieval':{'label':'混合召回原文','role':'证据检索','hint':'使用已准备的语义索引与 BM25；缺少索引时明确降级'},
+    'table_qa':{'label':'表格原文问答','role':'表格核验','hint':'仅使用固定版本的表格内容块；不推测缺失单元格'},
     'translation':{'label':'翻译指定段落','role':'阅读翻译','hint':'仅翻译计划中明确选定的原文段落，保留数字、术语与原页'},
     'comparison':{'label':'构建多文对比','role':'分析核验','hint':'逐篇逐维保留证据，不跨条件排名'},
     'graph':{'label':'构建引用网络','role':'文献关系','hint':'只用本地书目与已缓存注册记录'},
@@ -47,7 +49,7 @@ class PlanRequest(BaseModel):
     discovery:workflow_discovery.DiscoverySpec|None=None
     plot:workflow_plot.PlotSpec|None=None
     max_metadata_requests:int=Field(default=2,ge=0,le=4)
-    planner:Literal['rules','model']='rules'
+    planner:Literal['rules','model','agent']='rules'
     use_model:bool=False
     max_tool_calls:int=Field(default=8,ge=1,le=12)
     max_model_calls:int=Field(default=6,ge=0,le=12)
@@ -102,6 +104,15 @@ async def plan(body:PlanRequest):
     if len(docs)>5:raise HTTPException(422,'当前任务最多选择5个不同作品')
     actions,dimensions=infer(body.goal);mode='rules';warnings=[]
     requested=body.actions or actions
+    if body.planner=='agent' and not body.actions:
+        # A local-paper question can contain "检索论文" without authorizing
+        # external discovery. Expose sensitive tools only with explicit specs.
+        for name,spec in [('translation',body.translation),('discovery',body.discovery),('plot',body.plot)]:
+            if spec is None and name in actions:
+                actions.remove(name)
+                warnings.append(TOOLS[name]['label']+'未提供明确范围或规则，本次不向模型开放。')
+            elif spec is not None and name not in actions:actions.append(name)
+        requested=actions
     if ('translation' in requested) != (body.translation is not None):raise HTTPException(422,'翻译任务需明确选择待译段落；不需要翻译时请移除翻译选项')
     passages=workflow_translation.prepare(body.translation,docs) if body.translation else []
     translation_document=workflow_translation.prepare_document(body.translation,docs)
@@ -110,6 +121,7 @@ async def plan(body:PlanRequest):
     if ('plot' in requested)!=(body.plot is not None):raise HTTPException(422,'CSV绘图需明确选择数据快照和完整绘图规则；不需要时请移除绘图选项')
     plot_spec=workflow_plot.prepare(body.plot) if body.plot else None
     if body.use_model and not model_client.configuration()['ready']:raise HTTPException(409,'请先通过本机配置入口设置模型，或关闭执行时使用模型')
+    if body.planner=='agent' and not model_client.configuration()['ready']:raise HTTPException(409,'自主选工具需要已配置的模型；可使用规则模式保留原文。')
     if body.planner=='model' and not body.actions:
         if not model_client.configuration()['ready']:raise HTTPException(409,'模型尚未配置，可先使用规则规划')
         try:
@@ -176,6 +188,8 @@ async def plan(body:PlanRequest):
           'dimensions':dimensions,'steps':steps,'warnings':warnings,'gaps':gaps,'events':[],
           'budgets':{key:getattr(body,key) for key in ['max_tool_calls','max_model_calls','max_output_tokens','max_active_seconds','max_metadata_requests']},
           'usage':{'metadata':{'requests':0,'cache_hits':0},'tool_calls':0,'active_seconds':0.,'model':model_client.CallBudget(0,0).snapshot()},'query_expansions':0}
+    if body.planner=='agent':
+        workflow_agent.initialize(task,TOOLS,blocked_actions(body.goal),body.actions)
     policy.snapshot(task,'initial_plan')
     repo.event(task,'计划已创建',f'{len(steps)} 个步骤；仅使用选定版本，尚未执行。')
     try:repo.create(task)
@@ -276,9 +290,12 @@ async def retrieve(payload,supplement=False):
         first=next((step['result'] for step in payload['steps'] if step['tool']=='evidence' and step['status']=='completed' and step.get('result')),None) or {}
         documents=[document for document in documents if document['id'] in first.get('uncovered_documents',[])]
     use_dimension_queries=supplement or any(step['tool']=='comparison' for step in payload['steps'])
-    question=payload['goal']+(' '+ ' '.join(comparison.DIMENSIONS[key]['query'] for key in payload['dimensions']) if use_dimension_queries else '')
+    question=payload.get('agent_query',payload['goal'])+(' '+ ' '.join(comparison.DIMENSIONS[key]['query'] for key in payload['dimensions']) if use_dimension_queries else '')
     retrieval={}
-    evidence=await run_in_threadpool(qa._retrieve_question,question,documents,min(12,max(3,len(documents)*3)),retrieval)
+    if payload.get('retrieval_kind') in {'evidence','table_qa'}:
+        evidence,retrieval=await run_in_threadpool(workflow_agent.lexical_retrieve,question,documents,payload['retrieval_kind'])
+    else:
+        evidence=await run_in_threadpool(qa._retrieve_question,question,documents,min(12,max(3,len(documents)*3)),retrieval)
     result={'mode':'evidence_only','evidence':evidence,'claims':[],'question':question,'uncovered_documents':[document['id'] for document in documents if not any(item['document_id']==document['id'] for item in evidence)],
             'retrieval':retrieval,'answer':'原文候选证据，尚未形成语义核验后的回答。'}
     if payload['use_model'] and evidence:
@@ -306,7 +323,8 @@ async def execute(payload,step):
         return {**result,'recovery':{'from_step':failed['id'],'mode':'local_only','model_retried':False}}
     sources=payload['sources'];ids=[source['document_id'] for source in sources];runs={source['document_id']:source['parse_run_id'] for source in sources}
     if step['tool']=='translation':return await workflow_translation.execute(payload,step)
-    if step['tool']=='evidence':return await retrieve(payload,step['id']=='supplement')
+    if step['tool'] in {'evidence','hybrid_retrieval','table_qa'}:
+        return await retrieve({**payload,**({'retrieval_kind':step['tool'],'agent_query':step.get('arguments',{}).get('query',payload['goal'])} if payload.get('agent') else {})},step['id']=='supplement')
     if step['tool']=='comparison':
         return await comparison.execute_comparison(comparison.ComparisonRequest(document_ids=ids,parse_runs=runs,dimensions=payload['dimensions'],use_model=payload['use_model'],question=payload['goal']),step['artifact_id'])
     if step['tool']=='graph':
@@ -366,6 +384,10 @@ async def run(identity):
                 repo.mutate(identity,lambda payload:payload.update(status='paused' if payload['control']=='pause' else 'cancelled'))
                 return
             if current['status']!='running':return
+            if current.get('agent') and not any(item['status']=='waiting' for item in current['steps']):
+                await workflow_agent.advance(identity)
+                current=repo.get(identity)
+                if current['status']!='running' or current['control']:continue
             step=next((step for step in current['steps'] if step['status']=='waiting'),None)
             if not step:
                 repo.mutate(identity,lambda payload:payload.update(status='completed_with_gaps' if payload['gaps'] else 'completed'))
@@ -398,11 +420,23 @@ async def run(identity):
             try:
                 if current.get('handoff'):await run_in_threadpool(literature_handoff.validate_snapshot,current['handoff'])
                 effective={**current,'use_model':current['use_model'] and not current.get('execution_model_disabled',False) and step.get('model_allowed',True)}
-                with model_client.metered(budget):result=await execute(effective,step)
+                with model_client.metered(budget):
+                    if current.get('agent'):
+                        async with asyncio.timeout(max(.001,current['budgets']['max_active_seconds']-current['usage']['active_seconds'])):
+                            result=await execute(effective,step)
+                    else:result=await execute(effective,step)
                 await run_in_threadpool(validate_result,current,result)
             except asyncio.CancelledError:
                 raise
             except Exception as error:
+                if current.get('agent') and isinstance(error,TimeoutError):
+                    def timed_out(payload):
+                        next(item for item in payload['steps'] if item['id']==step['id'])['status']='waiting'
+                        payload['status']='budget_exhausted'
+                        payload['usage']['active_seconds']+=round(time.monotonic()-started,3)
+                        payload['usage']['model']=budget.snapshot()
+                        repo.event(payload,'达到活动时长预算','当前步骤未记为完成，已完成产物保留。')
+                    repo.mutate(identity,timed_out);return
                 if isinstance(error,workflow_translation.DocumentPending):
                     def await_document(payload):
                         next(item for item in payload['steps'] if item['id']==step['id']).update(status='waiting',result=error.result)
@@ -475,7 +509,7 @@ async def run(identity):
                     elif result.get('model_failures') and not payload.get('execution_model_disabled'):
                         payload['status']='failed';payload['gaps'].append('模型工具已降级；策略或调整次数不允许继续重排，后续步骤停止。')
                         repo.event(payload,'模型降级后停止','当前产物保留，后续工具未自动执行。')
-                if step['tool']=='evidence' and result.get('uncovered_documents') and payload['query_expansions']==0 and ('plan_history' not in payload or policy.allowed(payload)):
+                if not payload.get('agent') and step['tool']=='evidence' and result.get('uncovered_documents') and payload['query_expansions']==0 and ('plan_history' not in payload or policy.allowed(payload)):
                     position=payload['steps'].index(target)+1
                     payload['steps'].insert(position,{'id':'supplement','tool':'evidence','label':'补检索缺失文献','role':'证据检索','hint':'按所选维度拓宽关键词，相关性仍需核对','model_allowed':step.get('model_allowed',True),'depends_on':[step['id']],'status':'waiting','attempts':0,'artifact_id':str(uuid.uuid5(uuid.UUID(identity),'supplement')),'result':None})
                     for later in payload['steps'][position+1:]:
@@ -516,7 +550,7 @@ def markdown(payload):
         if step['tool']=='discovery' and result:lines+=['',workflow_discovery.markdown(result)]
         elif step['tool']=='plot' and result:lines+=['',workflow_plot.markdown(result)]
         elif step['tool']=='translation' and result:lines+=['',workflow_translation.markdown(result)]
-        elif step['tool'] in {'evidence','review'}:
+        elif step['tool'] in {'evidence','hybrid_retrieval','table_qa','review'}:
             lines+=['',result.get('answer','')]
             for item in result.get('evidence',[]):lines += ['',f'原文候选 / {item["title"]} / PDF 第 {item["page"]} 页 / {item["parse_run_id"]} / {item["block_id"]}',item['text']]
         elif result:lines+=['',f'受控产物 ID：{result.get("id",step["artifact_id"])}；类型：{step["tool"]}。']
