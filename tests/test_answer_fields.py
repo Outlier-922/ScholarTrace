@@ -32,6 +32,29 @@ def test_only_explicit_subfields_are_requested():
     assert 'gpu_memory' not in answer_fields.requested(QUESTION)
 
 
+@pytest.mark.parametrize('question,expected',[
+    ('模型有多少层，输出维度 d_model 是多少，多头注意力有多少个头？',{'layers','hidden_size','attention_heads'}),
+    ('比较模型参数量与context window',{'parameter_count','sequence_length'}),
+    ('编码器包含多少层，big模型在WMT英语到德语的BLEU是多少？',{'layers','bleu'}),
+    ('模型的hidden size和number of parameters是多少？',{'hidden_size','parameter_count'}),
+])
+def test_multi_part_questions_keep_each_requested_quantity(question,expected):
+    assert set(answer_fields.requested(question))==expected
+
+
+def test_new_fields_are_not_silently_dropped_from_missing_coverage(evidence):
+    result=interpret([row('a','layers','7 layers',['ea'])],evidence,'模型有多少层，输出维度是多少，注意力头数是多少？')
+    assert {item['field'] for item in result['answer_coverage']}=={'layers','hidden_size','attention_heads'}
+    assert any('隐藏/输出维度' in item for item in result['missing_information'])
+
+
+def test_unrelated_score_clause_does_not_dominate_layer_probe():
+    question='编码器有多少层？big模型在WMT2014上的BLEU是多少？'
+    query=answer_fields.probe_query(question,'layers')
+    assert 'BLEU' not in query and 'WMT2014' not in query and 'big' not in query
+    assert 'BLEU' in answer_fields.probe_query(question,'bleu')
+
+
 @pytest.mark.parametrize('question',[
     'GPU核心时钟频率是多少MHz？只回答论文明确报告的值，不从型号推断。',
     'What core clock frequency in MHz is reported? Do not infer from the GPU model.',

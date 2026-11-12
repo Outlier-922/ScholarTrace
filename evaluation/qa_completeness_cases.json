@@ -1,0 +1,8 @@
+{
+  "scope": "官网要求相关的开发回归问题；预期事实不发给模型，答案须按原文复核。",
+  "cases": [
+    {"id":"architecture_details","files":["1706.03762v7.pdf"],"question":"Transformer 编码器包含多少层？各子层输出维度 d_model 是多少？多头注意力有多少个头？请分别回答三项。"},
+    {"id":"parameter_context_comparison","files":["language_understanding_paper.pdf","2005.14165v4.pdf"],"question":"比较这两篇 GPT 论文报告的模型参数量与上下文长度。分别给出各篇原文中的模型规模和 context window；存在多个模型规模时说明最大模型。原文没明确报告的数值保留缺失，不用外部知识补全。"},
+    {"id":"architecture_and_bleu","files":["1706.03762v7.pdf"],"question":"Transformer 编码器包含多少层？big 模型在 WMT 2014 英语到德语任务上的 BLEU 分数是多少？两项分别回答，并保留模型和任务条件。"}
+  ]
+}

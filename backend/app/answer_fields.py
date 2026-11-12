@@ -27,6 +27,14 @@ FIELDS={
                'student architecture removed embeddings pooler components', [r'remov|architecture',r'embedding|pooler|component']),
  'layers':('层数及变化',r'层数|多少层|number of layers|how many layers',
            'model architecture number layers reduced depth', [r'\blayers?\b',r'reduced|factor|depth']),
+ 'hidden_size':('隐藏/输出维度',r'd_?model|hidden size|hidden dimension|embedding dimension|(?:隐藏|输出|嵌入).{0,8}维度',
+                'model architecture hidden size dimension dmodel embedding outputs', [r'd_?model|hidden|dimension|embedding']),
+ 'attention_heads':('注意力头数',r'注意力.{0,8}(?:头数|多少个?头)|多少个?头|number of (?:attention )?heads|how many.{0,12}heads',
+                    'multi head attention number parallel heads', [r'heads?|parallel attention']),
+ 'parameter_count':('模型参数量',r'参数量|参数规模|多少.{0,5}参数|number of parameters|parameter count|model size',
+                    'model size total parameters number million billion largest', [r'parameters?|model size',r'million|billion|\b[MB]\b']),
+ 'bleu':('BLEU及任务条件',r'(?<![A-Za-z])BLEU(?![A-Za-z])',
+         'translation results BLEU WMT English German French base big', [r'BLEU|WMT|English|German|French']),
  'architecture':('模型结构',r'架构|模型结构|architecture',
                  'model architecture encoder decoder structure', [r'architecture|encoder|decoder']),
  'vocabulary_size':('词表大小',r'词表.{0,12}(?:大小|多少|多大|规模)|vocabulary size|how many.{0,15}(?:wordpieces|subword)',
@@ -45,6 +53,21 @@ FIELDS={
               'training optimizer Adam beta learning rate weight decay schedule warmup', [r'Adam|optimizer',r'beta|β|learning rate|weight decay|schedule']),
  'formula':('所问公式',r'公式|equation|formula','equation formula objective definition', [r'=|equation|formula']),
 }
+
+# Evidence-selection hints only. These match reported quantities, not particular
+# papers or expected values, and do not establish semantic correctness.
+VALUE_PATTERNS={
+    'layers':r'\bN\s*=\s*\d+|\b\d+[- ](?:layer|layers)\b',
+    'hidden_size':r'(?:d_?model|hidden size|dimension)\s*(?:=|of|is)?\s*\d+',
+    'attention_heads':r'\bh\s*=\s*\d+|\b\d+\s+(?:attention )?heads\b',
+    'parameter_count':r'\b\d+(?:\.\d+)?\s*(?:million|billion|[MB])(?:\s+[A-Za-z-]+){0,2}\s+parameters?\b',
+    'sequence_length':r'(?:nctx|sequence length|context (?:window|length))\s*(?:=|of|is)?\s*\d+|\b\d+\s+(?:consecutive |contiguous )?tokens\b',
+    'bleu':r'BLEU\s*(?:score)?\s*(?:of|is|=)?\s*\d+',
+}
+
+
+def value_score(key,text):
+    return min(3,len(re.findall(VALUE_PATTERNS[key],text,re.I))) if key in VALUE_PATTERNS else 0
 
 
 def intent_text(question):
@@ -68,12 +91,16 @@ def cue_score(key,text):
 
 
 def probe_query(question,key):
+    clauses=re.split(r'[，,；;。!?！？\n]',question)
+    related=[intent_text(clause) for clause in clauses if re.search(FIELDS[key][1],intent_text(clause),re.I)]
+    field_scope=' '.join(related) or intent_text(question)
     question=intent_text(question)
     sections=re.findall(r'(?:第\s*|\bsection\s+)(\d+(?:\.\d+)*)(?:\s*节|\b)',question,re.I)
-    variants=re.findall(r'\b[A-Za-z][A-Za-z0-9/-]*\d[A-Za-z0-9/.-]*\b',question)
+    variants=re.findall(r'\b[A-Za-z][A-Za-z0-9/-]*\d[A-Za-z0-9/.-]*\b',field_scope)
     phase='pre-training' if re.search(r'预训练|pre.?train',question,re.I) else 'fine-tuning' if re.search(r'微调|fine.?tun',question,re.I) else ''
-    explicit=list(dict.fromkeys(re.findall(r'(?<![A-Za-z0-9_-])[A-Za-z][A-Za-z0-9_-]{0,63}(?![A-Za-z0-9_-])',question)))[:12]
-    return ' '.join([*['Section '+number for number in sections],phase,*variants[:3],FIELDS[key][2],*explicit]).strip()
+    explicit=list(dict.fromkeys(re.findall(r'(?<![A-Za-z0-9_-])[A-Za-z][A-Za-z0-9_-]{0,63}(?![A-Za-z0-9_-])',field_scope)))[:12]
+    chinese_context=' '.join(re.findall(r'[\u4e00-\u9fff]+',field_scope))[:256]
+    return ' '.join([*['Section '+number for number in sections],phase,*variants[:3],FIELDS[key][2],*explicit,chinese_context]).strip()
 
 
 def formula_fragment(text):

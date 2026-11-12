@@ -313,7 +313,8 @@ def _retrieve_question(question,documents,limit,diagnostics=None):
         for document in documents:
             if len(probes)>=12:break
             query=answer_fields.probe_query(question,field);extra={}
-            hits=_retrieve(query,[document],3,extra)
+            hits=_retrieve(query,[document],30 if field in answer_fields.VALUE_PATTERNS else 3,extra)
+            hits=sorted(hits,key=lambda item:answer_fields.value_score(field,item['text']),reverse=True)[:3]
             per_doc[document['id']]={'document_id':document['id'],**extra}
             probes.append({'document_id':document['id'],'field':field,'query':query,'used_dense':bool(extra.get('used'))})
             for hit in hits:
@@ -332,6 +333,12 @@ def _retrieve_question(question,documents,limit,diagnostics=None):
     for document in documents:
         candidates=[item for item in pool.values() if item['document_id']==document['id']]
         if candidates:add(max(candidates,key=quality))
+    # Keep a reported quantity for each asked field before filling broad context.
+    for field in keys:
+        for document in documents:
+            candidates=[item for item in pool.values() if item['document_id']==document['id']
+                        and field in item['retrieval_fields'] and answer_fields.value_score(field,item['text'])]
+            if candidates:add(max(candidates,key=lambda item:(answer_fields.value_score(field,item['text']),answer_fields.cue_score(field,item['text']),item.get('bm25_score',0))))
     while len(selected)<limit:
         candidates=[item for item in pool.values() if item['id'] not in chosen]
         if not candidates:break
@@ -346,6 +353,7 @@ def _retrieve_question(question,documents,limit,diagnostics=None):
             documents=list(per_doc.values()),index_required=[need for item in per_doc.values() for need in item.get('index_required',[])],
             requested_fields=[{'key':key,'label':answer_fields.FIELDS[key][0]} for key in keys],
             field_queries=probes,extra_query_limit=12,extra_queries_used=len(probes),
+            numeric_field_candidate_limit=30,
             field_queries_truncated=len(probes)<len(documents)*len(keys),
             candidate_coverage=[{'document_id':document['id'],'field':key,'candidate_evidence_ids':[
                 item['id'] for item in selected if item['document_id']==document['id'] and answer_fields.cue_score(key,item['text'])>0]}
@@ -358,6 +366,28 @@ def numeric_literals(text):
     # Han characters and model labels must not hide digits. Keep grouped numbers
     # and scientific notation atomic: 536 is not evidence for 65,536, nor 4 for 1e-4.
     return [(m.group().casefold(),list(m.span())) for m in re.finditer(r'\d+(?:,\d{3})*(?:\.\d+)?(?:e[-+]?\d+)?',text,re.I)]
+
+
+def identifier_witnesses(text,unknown,ids,sources):
+    """Bind numeric model identifiers to literal same-document source mentions.
+
+    This never exempts an unattested label or a standalone quantity. The witness
+    is added to the displayed citations rather than borrowing a bare digit.
+    """
+    documents={sources[identity].get('document_id') for identity in ids}
+    witnesses=[]
+    for match in re.finditer(r'(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*(?![A-Za-z0-9_])',text):
+        spans=[item['span'] for item in unknown if match.start()<=item['span'][0] and item['span'][1]<=match.end()]
+        if not spans:continue
+        pattern=r'(?<![A-Za-z0-9_-])'+re.escape(match.group())+r'(?![A-Za-z0-9_-])'
+        for identity,source in sources.items():
+            if not source.get('document_id') or source['document_id'] not in documents or source.get('source_kind')=='table_cell':continue
+            original=re.search(pattern,source['text'],re.I)
+            if original:
+                witnesses.append({'identifier':match.group(),'numeric_spans':spans,'evidence_id':identity,
+                                  'source_quote':original.group(),'source_quote_range':list(original.span()),'semantic_verified':False})
+                break
+    return witnesses
 
 
 def reported_ratio_witnesses(text,ids,sources):
@@ -421,6 +451,10 @@ def _validate_claims(payload: dict[str, Any], evidence: list[dict[str, Any]], di
         if witnesses:
             unknown=[item for item in unknown if not any(item['span']==w['numerator_span'] and item['literal']=='1' for w in witnesses)]
             decision['numeric_transforms']=witnesses
+        identifiers=identifier_witnesses(text,unknown,ids,sources) if unknown else []
+        if identifiers:
+            unknown=[item for item in unknown if not any(item['span'] in witness['numeric_spans'] for witness in identifiers)]
+            decision['identifier_witnesses']=identifiers
         if unknown:
             decision.update(reason='novel_numeric_literal',unknown_numbers=unknown)
             continue
@@ -436,7 +470,8 @@ def _validate_claims(payload: dict[str, Any], evidence: list[dict[str, Any]], di
                 if compiled not in verified:verified.append(compiled)
             decision.update(status='accepted',reason='compiled_table_candidate')
             continue
-        value={"text": text.strip(), "evidence_ids": list(dict.fromkeys(ids)), "status": "source_checked"}
+        value={"text": text.strip(), "evidence_ids": list(dict.fromkeys(ids+[item['evidence_id'] for item in identifiers])), "status": "source_checked"}
+        decision['evidence_ids']=value['evidence_ids']
         if isinstance(claim.get('field'),str) and claim['field'] in answer_fields.FIELDS and claim.get('document_id') and all(sources[identity].get('document_id')==claim['document_id'] for identity in ids):
             value.update(field=claim['field'],document_id=claim['document_id'])
         verified.append(value)
@@ -473,6 +508,10 @@ async def _generate(question: str, evidence: list[dict[str, Any]]) -> dict[str, 
     if has_table:
         for original,prepared in zip(evidence,source_payload):prepared['source_kind']=original.get('source_kind','original_block')
     keys=answer_fields.requested(question)
+    if 'sequence_length' in keys:
+        system += '区分训练使用的序列长度与架构允许的最大上下文容量；只找到前者时照录已报告长度，并明确最大容量尚未由给定证据确定，不要把整个长度字段留空，也不能把前者推断为后者。'
+    if 'parameter_count' in keys:
+        system += '参数量字段只回答所问模型规模，不附加未问到的模型个数、评测样本数或实验子集数量；不能将某项评测使用的模型子集概括为整篇论文的所有模型。'
     payload={"question":question,"evidence":source_payload}
     if keys:
         system += ('本次使用逐文逐字段格式，覆盖所问字段，不能把别篇证据填入该篇。只输出field_answers，不输出无关背景或额外缺失要求。'

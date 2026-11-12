@@ -1,3 +1,7 @@
+# 当前工作范围已更新
+
+按用户要求，当前仅完善作品功能。以下旧交付计划保留供用户以后参考，其中视频、GitHub/Gitee、最终PDF、公网及身份材料不再计入产品未完成或本轮开发阻塞。以 [PRODUCT_SCOPE.md](PRODUCT_SCOPE.md) 为准。
+
 # 明确的完成标准与收尾顺序
 
 适用当前 0.40.0。项目目标是完成赛道 10040 的六项功能模块、官方验证用例和交付要求。2026-11-09 核对了官网详情及其公开数据接口，验收状态以 [项目清单](../evaluation/acceptance.json) 为准。[赛题官网](https://www.boxuegu.com/matchTrack/detail/?id=10040)

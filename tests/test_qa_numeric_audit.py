@@ -22,6 +22,19 @@ def test_same_numbers_do_not_prove_conditions_or_units():
     # Deliberately records the limit of a literal guard, never a semantic pass.
     assert qa._validate_claims({'claims':[{'text':'7 days','evidence_ids':['e']}]},EVIDENCE)
 
+
+def test_identifier_digits_require_exact_same_document_mention():
+    evidence=[{'id':'window','document_id':'d','text':'All models use context length 2048.'},
+              {'id':'name','document_id':'d','text':'We call this model ZETA-17.'}]
+    details={}
+    result=qa._validate_claims({'claims':[{'text':'ZETA-17 uses context length 2048.','evidence_ids':['window']}]},evidence,details)
+    assert result[0]['evidence_ids']==['window','name']
+    assert details['decisions'][0]['identifier_witnesses'][0]['source_quote']=='ZETA-17'
+    for bad in ['ZETA-18 uses context length 2048.','ZETA-17 uses 17 layers.','The context length is 17.']:
+        assert not qa._validate_claims({'claims':[{'text':bad,'evidence_ids':['window']}]},evidence)
+    evidence[1]['document_id']='other'
+    assert not qa._validate_claims({'claims':[{'text':'ZETA-17 uses context length 2048.','evidence_ids':['window']}]},evidence)
+
 def test_every_legacy_decision_retains_its_original_index():
     rows=['invalid',{'text':'','evidence_ids':['e']},{'text':'L =','evidence_ids':['e']},
           {'text':'7','evidence_ids':['unknown']},{'text':'7','evidence_ids':['e']}]
