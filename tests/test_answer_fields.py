@@ -55,6 +55,19 @@ def test_unrelated_score_clause_does_not_dominate_layer_probe():
     assert 'BLEU' in answer_fields.probe_query(question,'bleu')
 
 
+def test_layernorm_question_keeps_position_stability_and_warmup():
+    question='比较原始模型与On Layer Normalization in the Transformer Architecture，Pre-LN和Post-LN的位置、训练稳定性和warmup分别如何？'
+    assert set(answer_fields.requested(question))=={'normalization_position','training_stability','warmup'}
+    assert set(answer_fields.requested('比较模型架构和LayerNorm位置'))=={'architecture','normalization_position'}
+
+
+def test_normalization_conditions_have_independent_missing_coverage(evidence):
+    question='LayerNorm的位置、训练稳定性和warmup分别如何？'
+    result=interpret([],evidence,question)
+    assert len(result['answer_coverage'])==6
+    assert all(item['status']=='not_assessed' for item in result['answer_coverage'])
+
+
 @pytest.mark.parametrize('question',[
     'GPU核心时钟频率是多少MHz？只回答论文明确报告的值，不从型号推断。',
     'What core clock frequency in MHz is reported? Do not infer from the GPU model.',
@@ -177,3 +190,16 @@ def test_deleted_source_invalidates_field_coverage(monkeypatch,evidence):
     monkeypatch.setattr(qa.store,'get_document',lambda identity:None if identity=='a' else {'id':'b'})
     qa._filter_deleted_sources(result,['a','b'])
     assert not result['claims'] and result['answer_coverage'][0]['status']=='source_unavailable'
+
+
+def test_direct_normalization_evidence_survives_background_fill(monkeypatch):
+    documents=[{'id':'a','_retrieval_run':'original_a'}]
+    background=[source('intro'+str(i),'a','Architecture and normalization overview.') for i in range(6)]
+    direct=source('order','a','A residual connection is followed by layer normalization.')
+    def retrieve(question,docs,limit,details=None):
+        if details is not None:details.update(used=False)
+        return [direct,*background[:2]] if 'sublayer' in question else background
+    monkeypatch.setattr(qa,'_retrieve',retrieve)
+    monkeypatch.setattr(qa,'_collect_sources',lambda docs:[])
+    hits=qa._retrieve_question('比较LayerNorm位置与warmup。',documents,3)
+    assert len(hits)==3 and 'order' in {hit['id'] for hit in hits}

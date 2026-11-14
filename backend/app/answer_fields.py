@@ -37,6 +37,14 @@ FIELDS={
          'translation results BLEU WMT English German French base big', [r'BLEU|WMT|English|German|French']),
  'architecture':('模型结构',r'架构|模型结构|architecture',
                  'model architecture encoder decoder structure', [r'architecture|encoder|decoder']),
+ 'normalization_position':('LayerNorm位置及残差顺序',r'LayerNorm|layer\s*norm|(?:Pre|Post)[- ]?LN|层归一化',
+                           'layer normalization residual connection before after sublayer Pre-LN Post-LN',
+                           [r'layer.?norm|normalization',r'residual',r'before|after|inside|followed by|→']),
+ 'training_stability':('训练稳定性与分析范围',r'训练稳定|梯度.{0,8}(?:尺度|大小|爆炸|稳定)|training stability|gradient (?:scale|magnitude|explosion)',
+                       'training stability initialization gradients theoretical analysis mean field stable unstable',
+                       [r'stab|gradient',r'initialization|theor|mean.?field']),
+ 'warmup':('Warmup设置与适用条件',r'warm[- ]?up|预热',
+           'learning rate warmup steps training remove without warm-up', [r'warm[- ]?up',r'learning rate|steps|remove']),
  'vocabulary_size':('词表大小',r'词表.{0,12}(?:大小|多少|多大|规模)|vocabulary size|how many.{0,15}(?:wordpieces|subword)',
                     'vocabulary size wordpieces subword units', [r'vocabulary|wordpiece|subword',r'\b\d[\d,]*(?:K)?\b']),
  'tokenization':('分词工具/粒度',r'分词|tokeni[sz]|(?:词表|文本).{0,12}(?:工具|编码)|BPE',
@@ -80,6 +88,7 @@ def requested(question,limit=8):
     question=intent_text(question)
     found=[key for key,(_,pattern,_,_) in FIELDS.items() if re.search(pattern,question,re.I)]
     if 'components' in found and 'architecture' in found:found.remove('architecture')
+    if 'normalization_position' in found and 'architecture' in found and not re.search(r'模型架构|整体结构|overall architecture',question,re.I):found.remove('architecture')
     # "训练硬件" is a broad field only when no explicit hardware subfield exists.
     if not set(found)&{'gpu_count','gpu_model','gpu_memory','gpu_clock','gpu_voltage'} and re.search(r'训练硬件|training hardware|hardware used',question,re.I):
         found.insert(0,'gpu_model')

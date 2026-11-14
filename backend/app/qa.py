@@ -195,6 +195,7 @@ def _continuation_context(ranked,sources,limit,question):
                 and re.match(r'^[a-z]',right['text'].lstrip()))
     candidates=[]
     for rank,item in enumerate(selected):
+        if not isinstance(item.get('source_order'),int):continue
         matched=fields.intersection(_tokens(item['text']))
         if len(matched)<min(2,len(fields)) or not matched:continue
         key=(item['document_id'],item['parse_run_id'])
@@ -333,11 +334,11 @@ def _retrieve_question(question,documents,limit,diagnostics=None):
     for document in documents:
         candidates=[item for item in pool.values() if item['document_id']==document['id']]
         if candidates:add(max(candidates,key=quality))
-    # Keep a reported quantity for each asked field before filling broad context.
+    # Reserve a field-specific passage before broad context can fill the budget.
     for field in keys:
         for document in documents:
             candidates=[item for item in pool.values() if item['document_id']==document['id']
-                        and field in item['retrieval_fields'] and answer_fields.value_score(field,item['text'])]
+                        and field in item['retrieval_fields'] and answer_fields.cue_score(field,item['text'])]
             if candidates:add(max(candidates,key=lambda item:(answer_fields.value_score(field,item['text']),answer_fields.cue_score(field,item['text']),item.get('bm25_score',0))))
     while len(selected)<limit:
         candidates=[item for item in pool.values() if item['id'] not in chosen]
@@ -345,7 +346,9 @@ def _retrieve_question(question,documents,limit,diagnostics=None):
         best=max(candidates,key=quality)
         if quality(best)[0]==0:break
         add(best)
-    for item in [*base,*pool.values()]:add(pool[item['id']])
+    for item in sorted(pool.values(),key=quality,reverse=True):add(item)
+    # Field selection may otherwise discard a split paragraph's continuation.
+    selected=_continuation_context(selected,_collect_sources(documents),limit,question)
     used=[item.get('used',False) for item in per_doc.values()]
     if diagnostics is not None:
         diagnostics.update(details)
@@ -512,6 +515,8 @@ async def _generate(question: str, evidence: list[dict[str, Any]]) -> dict[str, 
         system += '区分训练使用的序列长度与架构允许的最大上下文容量；只找到前者时照录已报告长度，并明确最大容量尚未由给定证据确定，不要把整个长度字段留空，也不能把前者推断为后者。'
     if 'parameter_count' in keys:
         system += '参数量字段只回答所问模型规模，不附加未问到的模型个数、评测样本数或实验子集数量；不能将某项评测使用的模型子集概括为整篇论文的所有模型。'
+    if 'normalization_position' in keys or 'training_stability' in keys or 'warmup' in keys:
+        system += '归一化位置要说明相对于子层变换与残差相加的顺序，不能只用含糊的前后概括。区分原始模型、对照变体、初始化时的理论结论和具体训练实验；某设置可去除warmup不等于任意模型和学习率都不需要warmup。只根据对应论文证据，未报告的性质保留缺失。'
     payload={"question":question,"evidence":source_payload}
     if keys:
         system += ('本次使用逐文逐字段格式，覆盖所问字段，不能把别篇证据填入该篇。只输出field_answers，不输出无关背景或额外缺失要求。'

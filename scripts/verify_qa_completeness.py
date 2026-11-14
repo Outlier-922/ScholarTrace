@@ -12,9 +12,10 @@ def main():
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--live-model',action='store_true')
     parser.add_argument('--cases',nargs='+')
+    parser.add_argument('--pack',type=Path,default=Path(__file__).resolve().parents[1]/'evaluation/qa_completeness_cases.json')
     args=parser.parse_args()
     if args.output.exists():parser.error('Choose a new output path')
-    pack=json.loads((Path(__file__).resolve().parents[1]/'evaluation/qa_completeness_cases.json').read_text(encoding='utf-8'))
+    pack=json.loads(args.pack.read_text(encoding='utf-8'))
     if args.cases:
         if not set(args.cases)<={case['id'] for case in pack['cases']}:parser.error('Unknown case')
         pack['cases']=[case for case in pack['cases'] if case['id'] in args.cases]

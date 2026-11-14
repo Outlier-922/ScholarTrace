@@ -1,0 +1,7 @@
+{
+  "scope":"官方论文跨文架构开发验证，预期事实不发送模型。",
+  "cases":[
+    {"id":"encoder_inheritance","files":["1706.03762v7.pdf","N19-1423.pdf"],"question":"比较 Transformer 和 BERT 的模型架构：BERT继承了哪些编码器结构？两篇模型是否都包含用于生成的解码器？区分自注意力、编码器—解码器注意力与双向上下文，不把未描述的组件当成明确删除。"},
+    {"id":"layernorm_position","files":["1706.03762v7.pdf","2002.04745v2.pdf"],"question":"比较原始 Transformer 与 On Layer Normalization in the Transformer Architecture 讨论的 Post-LN、Pre-LN：LayerNorm分别位于残差相加前还是后？对于训练稳定性和warmup，论文分别得出了什么结论？保留理论分析和实验设置的范围，不把Pre-LN说成原始Transformer默认结构。"}
+  ]
+}
