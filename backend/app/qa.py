@@ -518,12 +518,21 @@ async def _generate(question: str, evidence: list[dict[str, Any]]) -> dict[str, 
     if 'normalization_position' in keys or 'training_stability' in keys or 'warmup' in keys:
         system += '归一化位置要说明相对于子层变换与残差相加的顺序，不能只用含糊的前后概括。区分原始模型、对照变体、初始化时的理论结论和具体训练实验；某设置可去除warmup不等于任意模型和学习率都不需要warmup。只根据对应论文证据，未报告的性质保留缺失。'
     payload={"question":question,"evidence":source_payload}
+    if 'component_presence' in keys:
+        system += ('component_presence必须直接回答问题所指组件是否存在，不能重复整体架构介绍来代替判断。'
+                   '有直接存在证据时status=answered并额外填写presence_status=present；原文明示没有/移除时presence_status=absent，'
+                   '同时support_quote必须逐字摘录同篇引用证据中的明确否定语句。仅描述编码器、未提及解码器，不足以断言没有解码器或删除了它。'
+                   '证据仅未说明、或不能确定所问用途时status=missing，不把未提及当作不存在。否定摘录仍需与所问组件及模型对应。')
     if keys:
         system += ('本次使用逐文逐字段格式，覆盖所问字段，不能把别篇证据填入该篇。只输出field_answers，不输出无关背景或额外缺失要求。'
             '同一字段在保留条件和约数后已有答案时不要又报缺失；不要要求未被问到的精度或更细型号。'
             'JSON格式：{"field_answers":[{"document_id":"给定文献ID","field":"给定字段key","status":"answered或missing","text":"只回答此字段的事实，保留模型/阶段条件","evidence_ids":["ev_x"]}]}。'
             'missing表示给定证据不足，text留空，不能断言整篇没有报告。每个文献/字段仅一项，最多20项。')
         payload['requested_fields']=[{'key':key,'label':answer_fields.FIELDS[key][0]} for key in keys]
+        if 'component_presence' in keys:
+            system += ('补充JSON格式约束：component_presence的answered项必须额外包含'
+                       '"presence_status":"present或absent"；absent项还必须包含"support_quote":"原文否定摘录"。'
+                       '仅折叠空白换行，不改写摘录。其他字段不需要这两项。不得添加没有问到的层数或缩减比例。')
     result=await model_client.chat_json(system,payload,max_tokens=1600)
     return compile_proposal(result,question,evidence)
 

@@ -1,0 +1,6 @@
+{
+  "scope":"官方论文组件存在性开发验证；不作为独立盲测。",
+  "cases":[
+    {"id":"explicit_component_removal","files":["1910.01108v4.pdf"],"question":"DistilBERT 的学生模型是否保留 token-type embeddings 和 pooler？分别回答，并以论文明确陈述为依据；未提及不等于移除了。"}
+  ]
+}

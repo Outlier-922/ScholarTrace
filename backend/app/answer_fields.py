@@ -37,6 +37,10 @@ FIELDS={
          'translation results BLEU WMT English German French base big', [r'BLEU|WMT|English|German|French']),
  'architecture':('模型结构',r'架构|模型结构|architecture',
                  'model architecture encoder decoder structure', [r'architecture|encoder|decoder']),
+ 'component_presence':('所问组件是否存在（区分未说明）',
+                       r'是否.{0,20}(?:包含|含有|具有|具备|使用|采用|存在|保留)|有无.{0,20}(?:组件|编码器|解码器|注意力|层)|(?:does?|do)\b.{0,60}\b(?:include|contain|use|have|retain)\b',
+                       'model architecture component includes contains uses encoder decoder attention',
+                       [r'encoder|decoder|attention|component',r'include|contain|use|without|no |not |only']),
  'normalization_position':('LayerNorm位置及残差顺序',r'LayerNorm|layer\s*norm|(?:Pre|Post)[- ]?LN|层归一化',
                            'layer normalization residual connection before after sublayer Pre-LN Post-LN',
                            [r'layer.?norm|normalization',r'residual',r'before|after|inside|followed by|→']),
@@ -81,7 +85,7 @@ def value_score(key,text):
 def intent_text(question):
     clauses=re.split(r'[，,；;。!?！？\n]',question)
     return ' '.join(clause for clause in clauses if not re.match(
-        r'^\s*(?:不要(?!只)|不(?:从|用|根据|据此|做|要求|需要)|不得|禁止|do not|don\x27t|without)',clause,re.I))
+        r'^\s*(?:不要(?!只)|不(?:从|用|根据|据此|做|要求|需要)|未(?:提及|描述|说明).{0,8}不等于|不得|禁止|do not|don\x27t|without)',clause,re.I))
 
 
 def requested(question,limit=8):
@@ -147,6 +151,18 @@ def interpret(payload,question,evidence,validate,*,validate_audit=None):
                 if (item.get('status')!='answered' or not isinstance(ids,list) or not ids
                         or any(not isinstance(identity,str) or identity not in by_id or by_id[identity]['document_id']!=document for identity in ids)):
                     decision['reason']='invalid_status_or_document_evidence';invalid=True;rejected+=1;continue
+                if field=='component_presence':
+                    verdict=item.get('presence_status')
+                    quote=item.get('support_quote')
+                    decision.update(presence_status=verdict,support_quote=quote)
+                    if not isinstance(verdict,str) or verdict not in {'present','absent'}:
+                        decision['reason']='missing_presence_verdict';invalid=True;rejected+=1;continue
+                    # Negative evidence needs an attributable explicit statement;
+                    # encoder-only descriptions do not prove a decoder was removed.
+                    if verdict=='absent' and (not isinstance(quote,str) or not quote.strip()
+                            or not any(re.sub(r'\s+',' ',quote.strip()) in re.sub(r'\s+',' ',by_id[identity]['text']) for identity in ids)
+                            or not re.search(r'\b(?:no|not|without|neither|removed?|omit(?:ted)?|exclud(?:e|ed))\b|不含|没有|未使用|移除|去掉|不使用',quote,re.I)):
+                        decision['reason']='absence_without_explicit_source';invalid=True;rejected+=1;continue
                 if validate_audit:
                     result,details=validate_audit({'claims':[{'text':text,'evidence_ids':ids}]},evidence)
                     check=details['decisions'][0]

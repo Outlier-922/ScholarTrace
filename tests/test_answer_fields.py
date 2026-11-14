@@ -32,6 +32,49 @@ def test_only_explicit_subfields_are_requested():
     assert 'gpu_memory' not in answer_fields.requested(QUESTION)
 
 
+def test_component_question_is_independent_from_architecture():
+    question='比较模型架构，两篇模型是否都包含用于生成的解码器？'
+    assert set(answer_fields.requested(question))=={'architecture','component_presence'}
+    assert 'component_presence' not in answer_fields.requested('模型是否准确？')
+    assert answer_fields.requested('是否保留pooler？未提及不等于移除了。')==['component_presence']
+    result=interpret([], [source('e','a','An encoder.')], question)
+    assert any(c['field']=='component_presence' and c['status']=='not_assessed' for c in result['answer_coverage'])
+
+
+@pytest.mark.parametrize('verdict,quote,accepted',[
+    ('absent','The model uses an encoder.',False),
+    ('absent','The model has no decoder.',False),
+    ('absent','The model uses no decoder.',True),
+    ('present','',True),
+    (None,'',False),
+    (['absent'],'',False),
+    ({'status':'absent'},'',False),
+])
+def test_presence_requires_verdict_and_explicit_attributed_absence(verdict,quote,accepted):
+    statement='The model uses a decoder.' if verdict=='present' else 'The model uses no decoder.'
+    evidence=[source('e','a',statement)]
+    item={**row('a','component_presence',statement,['e']),
+          'presence_status':verdict,'support_quote':quote}
+    result=interpret([item],evidence,'是否包含解码器？')
+    assert bool(result['claims'])==accepted
+    assert result['field_validation']['semantic_verified'] is False
+
+
+def test_unreported_component_remains_missing_instead_of_absent():
+    result=interpret([row('a','component_presence',status='missing')],
+                     [source('e','a','The model uses an encoder.')],'是否包含解码器？')
+    assert not result['claims'] and result['answer_coverage'][0]['status']=='missing_in_evidence'
+
+
+def test_absence_quote_accepts_only_whitespace_normalization():
+    evidence=[source('e','a','The model uses\nno decoder.')]
+    item={**row('a','component_presence','The model uses no decoder.',['e']),
+          'presence_status':'absent','support_quote':'The model uses no decoder.'}
+    assert interpret([item],evidence,'是否包含解码器？')['claims']
+    item['support_quote']='The model never uses a decoder.'
+    assert not interpret([item],evidence,'是否包含解码器？')['claims']
+
+
 @pytest.mark.parametrize('question,expected',[
     ('模型有多少层，输出维度 d_model 是多少，多头注意力有多少个头？',{'layers','hidden_size','attention_heads'}),
     ('比较模型参数量与context window',{'parameter_count','sequence_length'}),
