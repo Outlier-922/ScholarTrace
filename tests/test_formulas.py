@@ -2,7 +2,7 @@
 import uuid
 import pytest
 from conftest import upload_pdf,wait_for_document
-from backend.app import formulas,formula_native,model_client,store
+from backend.app import formulas,formula_native,formula_ocr,model_client,store
 
 
 @pytest.fixture
@@ -76,6 +76,57 @@ def test_scanned_or_ocr_source_cannot_reach_text_model(client,source,monkeypatch
     monkeypatch.setattr(model_client,'chat_json',forbidden)
     assert client.post('/api/formula-sources/'+value['id']+'/transcribe',json={}).status_code==422
     assert client.post('/api/formula-sources/'+value['id']+'/revisions',json={'latex':'y=x','note':'SYNTHETIC hand entry'}).status_code==200
+
+
+def scan_region(client, source):
+    doc, body, _ = source
+    region_body = {key: value for key,value in body.items() if key!='block_ids'}
+    region_body['region']=[.18,.18,.7,.25]
+    response=client.post('/api/formula-sources',json=region_body)
+    assert response.status_code==200,response.text
+    return region_body,response.json()
+
+
+def test_region_ocr_has_distinct_anchors_and_cache(client,source,monkeypatch):
+    body, value = scan_region(client,source)
+    doc,_,_=source
+    params={key:body[key] for key in ('page','parse_run_id')}
+    original=client.get('/api/documents/'+doc['id']+'/formula-page-image',params=params)
+    assert original.status_code==200 and original.content.startswith(b'\x89PNG')
+    assert value['blocks']==[] and not value['native_supported'] and value['region']==body['region']
+    assert client.post('/api/formula-sources',json=body).json()['id']==value['id']
+    assert client.post('/api/formula-sources',json={**body,'region':[0,0,1,1]}).status_code==422
+    url='/api/formula-sources/'+value['id']
+    assert client.post(url+'/transcribe',json={}).status_code==422
+    seen=[]
+    monkeypatch.setattr(formula_ocr,'runtime_identity',lambda:'test-runtime')
+
+    def recognize(png):
+        seen.append(png)
+        assert png.startswith(b'\x89PNG') and png!=original.content
+        return r'\frac{x_1}{\sqrt{d}}'
+
+    monkeypatch.setattr(formula_ocr,'recognize',recognize)
+    result=client.post(url+'/recognize-scan',json={})
+    assert result.status_code==200,result.text
+    revision=result.json()
+    assert revision['origin']=='scan_ocr_candidate' and revision['region']==value['region']
+    assert revision['image_sha256']==value['image_sha256'] and revision['semantic_verified'] is False
+    assert client.post(url+'/recognize-scan',json={}).json()['id']==revision['id'] and len(seen)==1
+    revised=client.post(url+'/revisions',json={'latex':'x','note':'合成校订','parent_id':revision['id']}).json()
+    exported=client.get('/api/formula-revisions/'+revised['id']+'/export')
+    assert 'Region:' in exported.text and value['image_sha256'] in exported.text
+
+
+def test_region_ocr_unavailable_or_modified_crop_does_not_generate(client,source,monkeypatch):
+    _,value=scan_region(client,source)
+    url='/api/formula-sources/'+value['id']
+    monkeypatch.setattr(formula_ocr,'runtime_identity',lambda:None)
+    assert client.post(url+'/recognize-scan',json={}).status_code==503
+    formulas.repo.image_path(value['id']).write_bytes(b'modified')
+    monkeypatch.setattr(formula_ocr,'runtime_identity',lambda:'test-runtime')
+    assert client.post(url+'/recognize-scan',json={}).status_code==409
+    assert client.get(url+'/revisions').json()['items']==[]
 
 
 def test_scope_and_parent_mismatch_rejected(client,source):

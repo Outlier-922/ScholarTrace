@@ -5,10 +5,33 @@ from pathlib import Path
 import pymupdf
 
 
-def extract(path, expected_sha, page_number, boxes):
-    path = Path(path)
-    if hashlib.sha256(path.read_bytes()).hexdigest() != expected_sha:
+def check_pdf(path, expected_sha):
+    with Path(path).open('rb') as source:
+        digest = hashlib.file_digest(source, 'sha256').hexdigest()
+    if digest != expected_sha:
         raise ValueError('pdf_hash_changed')
+
+
+def render_region(path, expected_sha, page_number, region=None):
+    check_pdf(path, expected_sha)
+    with pymupdf.open(path) as pdf:
+        page = pdf[page_number - 1]
+        if page.rotation:
+            raise ValueError('rotated_formula_page_not_supported')
+        width, height = page.rect.width, page.rect.height
+        area = page.rect if region is None else pymupdf.Rect(
+            region[0] * width, region[1] * height, region[2] * width, region[3] * height
+        )
+        # Preserve detail in small crops while bounding oversized source pages.
+        target = 1_400_000 if region is None else 2_000_000
+        scale = min(1.5 if region is None else 3.0, math.sqrt(target / area.get_area()))
+        if region is not None and min(area.width * scale, area.height * scale) < 12:
+            raise ValueError('formula_crop_too_small')
+        return page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), clip=area, alpha=False).tobytes('png')
+
+
+def extract(path, expected_sha, page_number, boxes):
+    check_pdf(path, expected_sha)
     with pymupdf.open(path) as pdf:
         page = pdf[page_number - 1]
         if page.rotation: raise ValueError('rotated_formula_page_not_supported')

@@ -18,6 +18,11 @@ def valid(payload):
     doc=store.get_document(payload['document_id'])
     if not doc or doc['sha256']!=payload['sha256']:return False
     structure=store.get_structure(doc['id'],page=payload['page'],parse_run_id=payload['parse_run_id'])
+    if not structure or not any(page['number']==payload['page'] for page in structure['pages']):
+        return False
+    if not payload['blocks']:
+        region=payload.get('region')
+        return isinstance(region,list) and len(region)==4 and 0<=region[0]<region[2]<=1 and 0<=region[1]<region[3]<=1
     blocks={b['id']:b for b in (structure or {}).get('blocks',[])}
     return all(b['id'] in blocks and all(b[k]==blocks[b['id']][k] for k in ('text','bbox','page','type','metadata')) for b in payload['blocks'])
 
