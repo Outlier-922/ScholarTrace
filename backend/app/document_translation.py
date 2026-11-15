@@ -153,6 +153,7 @@ def detail(identity,page=None):
         block=blocks.get(unit['block_id'])
         if not block or fingerprint(block)!=unit['source_sha256']:raise HTTPException(409,'原文段落或位置已变化')
         unit['source']=block
+        unit['quality_warnings']=translation.quality_warnings(block,unit.get('reviewed_translation') or unit.get('translation'))
     return {**job,'items':units}
 
 
@@ -304,6 +305,7 @@ def export_text(job,units):
     for unit in units:
         source_text=unit['source']['text'];translated=unit.get('reviewed_translation') or (unit['translation'] if unit['translation'] is not None else '【原样保留：'+unit['reason']+'】' if unit['status']=='preserved' else '【尚未翻译：'+(unit.get('reason') or unit['status'])+'】')
         label=f"PDF第{unit['page']}页 / {unit['block_id']} / {unit['status']}"+(' / 校订候选（未独立核验）' if unit.get('edits') else '')
+        if unit.get('quality_warnings'):label+=' / 需核对：'+'；'.join(unit['quality_warnings'])
         lines+=['','## '+label,'',source_text,'',translated]
         sections.append('<section><header>'+html.escape(label)+'</header><div class="pair"><pre>'+html.escape(source_text)+'</pre><pre>'+html.escape(translated)+'</pre></div></section>')
     page='<!doctype html><html lang="zh"><meta charset="utf-8"><title>原文与译文对照</title><style>body{font:16px/1.7 system-ui;max-width:1400px;margin:30px auto;padding:20px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:24px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}section{border-bottom:1px solid #ddd;padding:20px}header{font-size:12px}@media(max-width:700px){.pair{grid-template-columns:1fr}}</style><h1>原文与译文对照</h1><p>'+html.escape(lines[1])+'</p><p>'+html.escape(lines[2])+'</p>'+''.join(sections)+'</html>'
