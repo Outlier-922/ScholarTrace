@@ -51,6 +51,49 @@ def test_generated_revision_quotes_exports_and_idempotency(client,draft_fixture,
     assert generate(client,current,{**body,'instructions':'A different writing instruction'}).status_code==409
 
 
+def test_quote_repair_requires_unique_match_in_same_parse_version():
+    quote = 'The authors report a bounded experiment.'
+    original = {'id':'a', 'document_id':'paper', 'parse_run_id':'v1', 'page':1, 'text':'Different passage.'}
+    target = {**original, 'id':'b', 'page':3, 'text':quote}
+    assert writing.match_fact_quote(original,quote,[original,target],repair=True)[0] == target
+    for other in ({**target,'document_id':'another'}, {**target,'parse_run_id':'v2'}):
+        with pytest.raises(ValueError,match='quote_not_in_source'):
+            writing.match_fact_quote(original,quote,[original,other],repair=True)
+    with pytest.raises(ValueError,match='quote_not_in_source'):
+        writing.match_fact_quote(original,quote,[original,target,{**target,'id':'c'}],repair=True)
+    with pytest.raises(ValueError,match='quote_not_in_source'):
+        writing.match_fact_quote(original,quote,[original,target])
+
+
+def test_writing_review_keeps_unconfirmed_paraphrase_only_in_attempt(client,draft_fixture,monkeypatch):
+    _, draft = draft_fixture
+    proposal = proposal_for(draft)
+    calls = []
+    monkeypatch.setattr(model_client,'configuration',lambda:{'ready':True})
+
+    async def model(system, payload, *, max_tokens):
+        model_client._budget.get().reserve(max_tokens)
+        calls.append(payload)
+        if len(calls) == 1:
+            return copy.deepcopy(proposal)
+        assert len(payload['claims']) == 2 and 'idea' not in payload
+        checked = payload['claims'][0]
+        return {'checks':[{'claim_id':checked['claim_id'],'status':'supported',
+                          'reason':'Fixture support','unsupported_parts':[],
+                          'quote_support':[dict(checked['quotes'][0])],
+                          'scope':{'status':'aligned','claim_excerpt':checked['text'],'reason':'Fixture scope'}}]}
+
+    monkeypatch.setattr(model_client,'chat_json',model)
+    result = generate(client,draft,{**request_body(draft),'verify_facts':True}).json()
+    assert result['status']=='completed' and result['usage']['calls']==2
+    assert [row['status'] for row in result['fact_checks']]==['supported','insufficient']
+    saved = client.get('/api/studio/drafts/'+draft['id']).json()
+    assert saved['sections'][1]['paragraphs'][0]['kind']=='fact'
+    related = saved['sections'][2]['paragraphs'][0]
+    assert related['kind']=='quote' and related['text']==proposal['sections'][2]['paragraphs'][0]['support_quote']
+    assert result['proposal']==proposal and saved['generation']['semantic_verified'] is False
+
+
 @pytest.mark.parametrize('change',['foreign_evidence','invented_quote','number_outside_quote','plan_as_result','missing_source','extra_reference','wrong_section'])
 def test_rejected_proposal_preserves_candidate_without_changing_draft(client,draft_fixture,monkeypatch,change):
     _,draft=draft_fixture;proposal=proposal_for(draft);fact=proposal['sections'][2]['paragraphs'][0]

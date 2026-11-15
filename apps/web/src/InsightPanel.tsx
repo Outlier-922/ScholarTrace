@@ -7,11 +7,11 @@ import ClaimCheckPanel from './ClaimCheckPanel';
 
 interface Claim { text: string; kind: string; evidence_ids: string[]; quotes: { evidence_id: string; quote: string }[]; }
 interface Assessment { document_id: string; title: string; relation: string; claim: Claim | null; bucket: string; temporal_status: string; source_date: { date: string | null }; candidate_date: { date: string | null }; notice: string; }
-interface Insight { id: string; kind: 'review' | 'future'; topic: string; created_at: string; evidence: Evidence[]; warnings: string[]; rejected_rows?: number; review_rejections?: { number_outside_quotes?: number; paper_scope_omission?: number }; sections?: { title: string; claims: Claim[] }[]; coverage?: { document_id: string; title: string; status: string }[]; assessments?: Assessment[]; }
+interface Insight { id: string; kind: 'review' | 'future'; topic: string; created_at: string; evidence: Evidence[]; warnings: string[]; rejected_rows?: number; review_rejections?: { number_outside_quotes?: number; paper_scope_omission?: number; broader_than_experiment?: number }; sections?: { title: string; claims: Claim[] }[]; coverage?: { document_id: string; title: string; status: string }[]; assessments?: Assessment[]; }
 interface History { id: string; kind: 'review' | 'future'; topic: string; created_at: string; }
 interface Props { graphId: string; sources: { document_id: string; title: string }[]; documents: ResearchDocument[]; onSource: (evidence: Evidence) => void; modelConfigured: boolean; readOnly: boolean; }
 const relations: Record<string, string> = { addressed: '模型建议已有处理', partial: '模型建议部分涉及', not_addressed: '模型未找到对应处理', insufficient: '证据或输出不足' };
-const times: Record<string, string> = { later_version_date: '确切版本日期晚于原方向版本', not_later: '候选版本日期不晚于原版本', same_day_uncertain: '同日，先后顺序不明', unknown: '缺少可核对的版本日期' };
+const times: Record<string, string> = { later_version_date: '候选版本晚于原方向版本', not_later: '候选版本日期不晚于原版本', same_day_uncertain: '同日，先后顺序不明', unknown: '缺少可核对的版本日期', unknown_first_publication: '候选首次公开日期待核对', later_revision_only: '候选早已公开，修订版较晚，新增内容时间待核对' };
 
 export default function InsightPanel({ graphId, sources, documents, onSource, modelConfigured, readOnly }: Props) {
   const [ids, setIds] = useState(sources.slice(0, 8).map(source => source.document_id));
@@ -69,6 +69,7 @@ export default function InsightPanel({ graphId, sources, documents, onSource, mo
       {value.kind === 'review' && <p className="graph-scope-note">未保留的输出条目：{value.rejected_rows || 0}。已显示陈述仍需核对语义支持。</p>}
       {value.review_rejections?.number_outside_quotes ? <p className="graph-scope-note">有 {value.review_rejections.number_outside_quotes} 条陈述中的数字没有出现在所附引文中。</p> : null}
       {value.review_rejections?.paper_scope_omission ? <p className="graph-scope-note">有 {value.review_rejections.paper_scope_omission} 条陈述从片段推断了整篇论文的讨论范围。</p> : null}
+      {value.review_rejections?.broader_than_experiment ? <p className="graph-scope-note">有 {value.review_rejections.broader_than_experiment} 条陈述未保留引文中的作者或实验范围，未纳入草稿。</p> : null}
       {value.warnings.map(warning => <p className="graph-scope-note" key={warning}>{warning}</p>)}</details></section>}
   </div>;
 }

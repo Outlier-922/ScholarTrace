@@ -127,6 +127,20 @@ def test_review_does_not_use_model_name_digits_as_measurements():
     assert insights.checked_claim(value, [source], review_rules=True) is None
 
 
+def test_ligature_before_pdf_line_break_keeps_original_span():
+    text = 'A simple classiﬁ-\ncation layer is added.'
+    anchor = insights.anchor_quote('A simple classification layer is added.',text)
+    assert anchor['quote']==text and anchor['start']==0 and anchor['end']==len(text)
+
+
+def test_review_rejects_scope_expansion_before_saving():
+    source = {'id':'e','document_id':'d','text':'We train our model with cross-entropy loss in this setting.'}
+    for text in ('方法采用交叉熵训练。作者列举了实验条件。', '论文报告所有模型均采用交叉熵训练。'):
+        assert insights.checked_claim(claim([source],text=text),[source],review_rules=True) is None
+    scoped = claim([source],text='作者在该设置中采用交叉熵训练其模型。')
+    assert insights.checked_claim(scoped,[source],review_rules=True)
+
+
 @pytest.mark.parametrize('mutation', ['novel_number', 'fabricated_quote', 'cross_scope', 'one_paper_synthesis'])
 def test_claim_checks_reject_specific_failures(mutation):
     evidence = [{'id':'e1','document_id':'a','text':'Fictional result uses 8 examples.'}, {'id':'e2','document_id':'b','text':'Fictional counterpart uses 9 examples.'}]
@@ -152,6 +166,18 @@ def test_unknown_version_date_never_excludes_direction(client, papers, monkeypat
     with store.connection() as conn: conn.execute('DELETE FROM literature_imports WHERE document_id=?', (docs[1]['id'],))
     row = client.post(f"/api/graphs/{value['id']}/future-assessments", json=body).json()['assessments'][0]
     assert row['relation'] == 'addressed' and row['temporal_status'] == 'unknown' and row['bucket'] == 'retain_for_review'
+
+
+def test_later_revision_of_earlier_work_stays_in_review(client, papers, monkeypatch):
+    docs, value, body = papers
+    monkeypatch.setattr(model_client,'chat_json',future_response)
+    provenance = literature_store.imports(docs[1]['id'])[0]
+    record = literature_store.get_record(provenance['key'])
+    literature_store.save_records([{**record,'published':'2019-12-01T00:00:00Z'}])
+    row = client.post(f"/api/graphs/{value['id']}/future-assessments",json=body).json()['assessments'][0]
+    assert row['relation']=='addressed' and row['bucket']=='retain_for_review'
+    assert row['temporal_status']=='later_revision_only'
+    assert row['candidate_date']['first_published']=='2019-12-01'
 
 
 def test_duplicate_or_cross_paper_assessment_not_trusted(client, papers, monkeypatch):
@@ -228,7 +254,7 @@ def test_partial_or_earlier_result_never_excluded(client, papers, monkeypatch):
     row = client.post(f"/api/graphs/{value['id']}/future-assessments", json=body).json()['assessments'][0]
     assert row['bucket'] == 'retain_for_review'
     record = literature_store.get_record(literature_store.imports(docs[1]['id'])[0]['key'])
-    record.update(updated='2019-01-01T00:00:00Z'); literature_store.save_records([record])
+    record.update(published='2019-01-01T00:00:00Z',updated='2019-01-01T00:00:00Z'); literature_store.save_records([record])
     monkeypatch.setattr(model_client, 'chat_json', future_response)
     row = client.post(f"/api/graphs/{value['id']}/future-assessments", json=body).json()['assessments'][0]
     assert row['temporal_status'] == 'not_later' and row['bucket'] == 'retain_for_review'
@@ -242,12 +268,16 @@ def test_source_deleted_during_generation_not_saved(client, papers, monkeypatch)
     assert client.post(f"/api/graphs/{value['id']}/reviews", json={}).status_code == 409
 
 
-@pytest.mark.parametrize('condition', ['same_day', 'wrong_version', 'wrong_hash'])
+@pytest.mark.parametrize('condition', ['same_day', 'inconsistent_dates', 'wrong_version', 'wrong_hash'])
 def test_unreliable_chronology_never_provisionally_excludes(client, papers, monkeypatch, condition):
     docs, value, body = papers
     provenance = literature_store.imports(docs[1]['id'])[0]
-    if condition == 'same_day':
-        record = literature_store.get_record(provenance['key']); record['updated'] = '2020-01-01T00:00:00Z'; literature_store.save_records([record])
+    if condition in {'same_day','inconsistent_dates'}:
+        record = literature_store.get_record(provenance['key'])
+        record['updated'] = '2020-01-01T00:00:00Z'
+        if condition == 'same_day':
+            record['published'] = record['updated']
+        literature_store.save_records([record])
     elif condition == 'wrong_version':
         store.update_document(docs[1]['id'], version_label='v2')
     else:

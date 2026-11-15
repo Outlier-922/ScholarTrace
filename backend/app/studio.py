@@ -18,7 +18,7 @@ from fastapi import APIRouter,File,HTTPException,Query,UploadFile
 from fastapi.responses import FileResponse,PlainTextResponse,Response
 from pydantic import BaseModel,ConfigDict,Field,model_validator
 from . import graph,literature,literature_store,literature_handoff,plot_runtime as runtime,qa,store,studio_store as repo,source_scope
-from . import writing_generation
+from . import insights,writing_generation
 
 router=APIRouter(prefix='/api/studio',tags=['writing-and-plotting'])
 _render_lock=threading.RLock()
@@ -321,8 +321,12 @@ def validate_sections(sections,evidence):
             elif paragraph['kind']=='fact':
                 if not qa._validate_claims({'claims':[{'text':text,'evidence_ids':ids}]},evidence):raise ValueError('事实需有效来源，且不能增加来源中未报告的数字')
                 if quote:=paragraph.get('support_quote'):
-                    if len(ids)!=1 or writing_generation.normalized(quote) not in writing_generation.normalized(by_id[ids[0]]['text']):raise ValueError('引句不属于所选原文')
-                    if not qa._validate_claims({'claims':[{'text':text,'evidence_ids':ids}]},[{**by_id[ids[0]],'text':quote,'metadata':{}}]):raise ValueError('事实数字不在所附引句内')
+                    if len(ids)!=1:raise ValueError('引句必须绑定一条原文')
+                    _,anchor=writing_generation.match_fact_quote(by_id[ids[0]],quote,[])
+                    if insights.fact_scope_issue(text,[anchor['quote']]):
+                        raise ValueError('请按引句限定论文和实验的适用范围')
+                    if not qa._validate_claims({'claims':[{'text':text,'evidence_ids':ids}]},[{**by_id[ids[0]],'text':anchor['quote'],'metadata':{}}]):raise ValueError('事实数字不在所附引句内')
+                    paragraph['support_quote']=anchor['quote']
                 paragraph['review_status']='source_and_numbers_checked_semantics_pending'
             elif paragraph['kind']=='analysis':paragraph['review_status']='user_analysis_unverified'
             else:paragraph['review_status']='planned_not_executed'
