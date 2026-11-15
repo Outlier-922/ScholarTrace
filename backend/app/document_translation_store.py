@@ -40,6 +40,12 @@ def items(identity,page=None,pending=False,limit=None):
     with store.connection() as conn:return [json.loads(row[0]) for row in conn.execute(sql,args)]
 
 
+def item(identity,block_id):
+    with store.connection() as conn:
+        row=conn.execute('SELECT payload FROM document_translation_units WHERE job_id=? AND block_id=?',(identity,block_id)).fetchone()
+        return json.loads(row[0]) if row else None
+
+
 def mutate(identity,change,expected=None,unit=None):
     with store.connection() as conn:
         conn.execute('BEGIN IMMEDIATE')

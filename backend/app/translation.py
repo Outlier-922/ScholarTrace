@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from . import model_client, research_store, store
 
 router = APIRouter(prefix="/api", tags=["translation"])
-PROMPT_VERSION = "translation-v4-context-units"
+PROMPT_VERSION = "translation-v5-semantic-groups"
 _tasks: dict[str, asyncio.Task] = {}
 PROTECTED = r"```[\s\S]*?```|\$\$[\s\S]*?\$\$|(?<!\\)\$[^$\n]+\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|https?://[^\s<>]+|\[\d+(?:\s*[,;–-]\s*\d+)*\]|[α-ωΑ-Ω](?:[_{}\d]+)?|[-+]?\d+(?:\.\d+)?\s*%\s+points?\b|[-+]?\d+(?:[.,]\d+)*(?:[eE][-+]?\d+)?(?:\s*(?:%|GB|MB|TB|GHz|MHz|ms|GPU|TPU))?"
 
@@ -104,6 +104,8 @@ async def translate_block(document_id, run_id, block, language, glossary):
                   '采用符合上下文的学术术语，例如损失函数的term是项而非学期，保留否定、比较方向、条件、语气和不确定性。'
                   'points按对应指标译为分或点，不擅自补百分比单位；若原文写% point而单位含混，原样保留这一单位组合，勿写%个百分点。'
                   'protected_contents给出占位符实际内容以帮助理解，输出仍保留占位符。输出JSON:{"translation":"译文"}。')
+        if block.get('_translation_group'):
+            system += '本次text已将跨页续句合成连续原文。请整体连贯翻译，不再按原页面切分，不重复译文。'
         payload = await model_client.chat_json(system, {"target_language": language, "text": protected,
                     "context":context,"protected_contents":replacements}, max_tokens=3500)
         translated = restore_text(payload.get("translation"), replacements)

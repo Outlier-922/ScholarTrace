@@ -15,14 +15,14 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response, PlainTextResponse, HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import model_client, research_store, source_scope, store, translation
+from . import model_client, research_store, source_scope, store, translation, translation_groups
 from . import document_translation_store as repo
 
 router=APIRouter(prefix='/api/document-translations',tags=['bounded-document-translation'])
 _workers={}
 _slots=asyncio.Semaphore(1)
 _closing=False
-DONE={'translated','cached','preserved'}
+DONE={'translated','cached','preserved','linked'}
 ACTIVE={'queued','running','pause_requested','cancel_requested'}
 
 
@@ -36,6 +36,7 @@ class PlanRequest(BaseModel):
     block_ids:list[str]=Field(default_factory=list,max_length=300)
     target_language:Literal['zh','en']='zh'
     glossary:dict[str,str]=Field(default_factory=dict)
+    join_continuations:bool=True
 
 
 class BatchRequest(BaseModel):
@@ -79,6 +80,14 @@ def checked_block(job,unit):
     structure=store.get_structure(job['document_id'],page=unit['page'],parse_run_id=job['source']['parse_run_id'])
     block=next((block for block in (structure or {}).get('blocks',[]) if block['id']==unit['block_id']),None)
     if not block or fingerprint(block)!=unit['source_sha256']:raise HTTPException(409,'原文段落或位置已变化，停止翻译')
+    if unit.get('group_sources'):
+        members=[]
+        for ref in unit['group_sources']:
+            part=store.get_structure(job['document_id'],page=ref['page'],parse_run_id=job['source']['parse_run_id'])
+            candidate=next((b for b in (part or {}).get('blocks',[]) if b['id']==ref['block_id']),None)
+            if not candidate or fingerprint(candidate)!=ref['source_sha256']:raise HTTPException(409,'跨页联合原文已变化，停止翻译')
+            members.append(candidate)
+        return translation_groups.combined(members)
     return block
 
 
@@ -123,12 +132,24 @@ def build_plan(body,artifact_id=None,persist=True):
         units.append({'block_id':block['id'],'page':block['page'],'block_type':block['type'],'source_sha256':fingerprint(block),
             'character_count':len(block['text']),'status':status,'reason':reason or ('段落超过12000字符，需拆分后重新规划' if status=='blocked' else ''),
             'cache_key':key,'translation':None,'attempts':0})
-    counts={status:sum(unit['status']==status for unit in units) for status in ('pending','preserved','blocked')}
+    grouped=[]
+    if body.join_continuations:
+        by_id={unit['block_id']:unit for unit in units}
+        for left,right in translation_groups.pairs(structure['blocks'],set(by_id)):
+            primary,linked=by_id[left['id']],by_id[right['id']]
+            if primary['status']!='pending' or linked['status']!='pending':continue
+            primary['group_sources']=[{'block_id':b['id'],'page':b['page'],'source_sha256':fingerprint(b)} for b in (left,right)]
+            joined=translation_groups.combined([left,right])
+            primary['cache_key']=translation.cache_key(body.document_id,body.parse_run_id,joined,body.target_language,body.glossary)
+            linked.update(status='linked',linked_to=left['id'],linked_page=left['page'],reason='与前页续句整体翻译，不重复生成')
+            grouped.append({'primary':left['id'],'continuation':right['id'],'pages':[left['page'],right['page']]})
+    cache_hits=sum(unit['status']=='pending' and unit['cache_key'] in cached for unit in units)
+    counts={status:sum(unit['status']==status for unit in units) for status in ('pending','preserved','blocked','linked')}
     requested_pages=set(range(1,document['page_count']+1)) if body.scope=='document' else set(range(body.page_start,body.page_end+1)) if body.scope=='pages' else {unit['page'] for unit in units}
     covered_pages={unit['page'] for unit in units}
     now=store.now();job={'id':artifact_id or str(uuid.uuid4()),'document_id':body.document_id,'source':frozen,'spec':body.model_dump(),
-        'model_identity':model_client.identity(),'prompt_version':translation.PROMPT_VERSION,'manifest_version':'document-translation-v1',
-        'manifest_digest':hashlib.sha256(json.dumps([(unit['block_id'],unit['source_sha256']) for unit in units]).encode()).hexdigest(),
+        'model_identity':model_client.identity(),'prompt_version':translation.PROMPT_VERSION,'manifest_version':'document-translation-v2','continuation_groups':grouped,
+        'manifest_digest':hashlib.sha256(json.dumps([(unit['block_id'],unit['source_sha256'],unit.get('group_sources'),unit.get('linked_to')) for unit in units],sort_keys=True).encode()).hexdigest(),
         'status':'planned','control':None,'revision':1,'created_at':now,'updated_at':now,'total':len(units),'counts':counts,
         'character_count':sum(unit['character_count'] for unit in units),'page_count':len(requested_pages),'block_page_count':len(covered_pages),
         'pages_without_blocks':sorted(requested_pages-covered_pages),
@@ -154,6 +175,16 @@ def detail(identity,page=None):
         if not block or fingerprint(block)!=unit['source_sha256']:raise HTTPException(409,'原文段落或位置已变化')
         unit['source']=block
         unit['quality_warnings']=translation.quality_warnings(block,unit.get('reviewed_translation') or unit.get('translation'))
+        if unit.get('group_sources'):
+            joined=checked_block(job,unit)
+            unit['group_text']=joined['text']
+            unit['translation_sources']=[next(b for b in store.get_structure(job['document_id'],page=ref['page'],parse_run_id=job['source']['parse_run_id'])['blocks'] if b['id']==ref['block_id']) for ref in unit['group_sources']]
+            unit['quality_warnings']=['本译文覆盖两页原文，请整体核对；不代表逐字跨页对齐。']
+        if unit.get('linked_to'):
+            primary=repo.item(identity,unit['linked_to'])
+            if not primary:raise HTTPException(409,'跨页翻译主段不存在')
+            checked_block(job,primary)
+            unit['linked_source']=checked_block(job,{**primary,'group_sources':[]})
     return {**job,'items':units}
 
 
@@ -303,7 +334,7 @@ def export_text(job,units):
            '仅已生成/缓存段落有译文；原样保留不等于翻译，未处理/失败/超长块不算完成。语义未核验。']
     sections=[]
     for unit in units:
-        source_text=unit['source']['text'];translated=unit.get('reviewed_translation') or (unit['translation'] if unit['translation'] is not None else '【原样保留：'+unit['reason']+'】' if unit['status']=='preserved' else '【尚未翻译：'+(unit.get('reason') or unit['status'])+'】')
+        source_text=unit.get('group_text') or unit['source']['text'];translated=unit.get('reviewed_translation') or (unit['translation'] if unit['translation'] is not None else '【跨页续段：译文见第'+str(unit['linked_page'])+'页主段 '+unit['linked_to']+'】' if unit['status']=='linked' else '【原样保留：'+unit['reason']+'】' if unit['status']=='preserved' else '【尚未翻译：'+(unit.get('reason') or unit['status'])+'】')
         label=f"PDF第{unit['page']}页 / {unit['block_id']} / {unit['status']}"+(' / 校订候选（未独立核验）' if unit.get('edits') else '')
         if unit.get('quality_warnings'):label+=' / 需核对：'+'；'.join(unit['quality_warnings'])
         lines+=['','## '+label,'',source_text,'',translated]
