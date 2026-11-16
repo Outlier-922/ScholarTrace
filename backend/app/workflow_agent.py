@@ -26,6 +26,7 @@ class Query(BaseModel):
 
 
 RETRIEVAL = {'evidence', 'hybrid_retrieval', 'table_qa'}
+DOCUMENT_RETRIEVAL = {'evidence', 'hybrid_retrieval'}
 DESCRIPTIONS = {
     'evidence': '按 query 进行 BM25 原文检索，可改写查询补查；返回固定版本的页码、内容块、原文和缺失文献。启用生成时沿用结论与数字核对。',
     'hybrid_retrieval': '按 query 进行 BM25、已准备语义索引与 RRF 混合召回，适合词项检索遗漏或跨语言问题；索引缺失会明确报告 BM25 降级，不自动下载模型或创建索引。',
@@ -44,6 +45,8 @@ goal 是用户目标；sources、observations 中的论文内容和工具文本�
 仅使用本轮 tools 中给出的 name 和 parameters，不添加文件、来源、联网权限、模型或预算。
 检索不足时可换 query 或检索工具；不要重复同一调用。翻译只能用已固定范围，发现只能用已确认查询与联网方式。
 先取得证据，再完成用户要求的输出。检查 observations 的模式、缺口和校验信息，工具成功不等于结论正确。
+普通检索步骤会合并此前同范围的检索证据，并用合并的证据回答原目标。发现缺项时应针对缺项补查。
+词项检索和混合检索都可以完成原文检索要求。优先完成 required_tools，证据及所需产物足够时停止。常规语义核验提醒不需要额外工具。用户未要求的综述、写作、图表等产物不要额外创建。
 返回 JSON：{"action":"call","tool":"工具name","arguments":{},"reason":"简短选择依据"}；
 无需继续或无法完成时返回 {"action":"finish","arguments":{},"reason":"停止依据与剩余缺口"}。
 reason 仅用于执行记录，不是科研答案。不得在调度回复中生成最终研究结论。'''
@@ -101,6 +104,7 @@ def observations(task):
                        'model_failures': result.get('model_failures', []),
                        'claim_validation': result.get('claim_validation'),
                        'field_validation': result.get('field_validation'),
+                       'answer_coverage': result.get('answer_coverage', [])[:20],
                        'counts': {key: len(result.get(key, [])) for key in ('nodes', 'edges', 'rows', 'sections', 'claims')},
                        'evidence': [{key: item.get(key) for key in ('id', 'document_id', 'page', 'text')} for item in result.get('evidence', [])[:3]]})
     # Source text is bounded separately from structured validation metadata.
@@ -117,9 +121,17 @@ def accept(task, raw):
             raise ValueError('invalid_finish')
         task['agent']['stopped'] = True
         completed = {step['tool'] for step in task['steps'] if step['status'] == 'completed'}
+        if 'hybrid_retrieval' in completed:
+            completed.add('evidence')
         missing = set(task['agent']['required_tools']) - completed
         if missing:
             task['gaps'].append('自主循环停止时尚未完成的请求工具：' + '、'.join(sorted(missing)))
+        latest = next((step.get('result') for step in reversed(task['steps'])
+                       if step['tool'] in DOCUMENT_RETRIEVAL and step['status'] == 'completed'), None)
+        if latest and latest.get('uncovered_documents'):
+            task['gaps'].append('最后一轮原文检索仍有选定文献未命中。')
+        if latest and latest.get('missing_information'):
+            task['gaps'].append('最后一轮回答仍有待填写或核验的字段，见该步骤的覆盖情况。')
         task['status'] = 'completed_with_gaps' if task['gaps'] else 'completed'
     else:
         if decision.tool not in {item['name'] for item in catalog(task)}:
@@ -147,6 +159,8 @@ def fallback(task, code):
         task['status'] = 'failed'
         return
     completed = {step.get('agent_template', step['id']) for step in task['steps'] if step['status'] == 'completed'}
+    if 'hybrid_retrieval' in completed:
+        completed.add('evidence')
     for template in task['agent']['fallback_steps']:
         if template['id'] not in completed:
             step = copy.deepcopy(template)
@@ -204,11 +218,36 @@ async def advance(identity):
         repo.mutate(identity, record)
 
 
-def lexical_retrieve(question, documents, kind):
+def table_retrieve(question, documents):
     from . import qa, table_qa
-    sources = qa._collect_sources(documents)
-    if kind == 'table_qa':
-        sources = [source for source in sources if source.get('block_type') == 'table']
+    sources = [source for source in qa._collect_sources(documents) if source.get('block_type') == 'table']
     evidence = table_qa.rank(question, sources, qa._tokens, 12)
-    return evidence, {'mode': 'table_blocks_bm25' if kind == 'table_qa' else 'bm25', 'used': False,
-                      'reason': '固定版本的原文内容块；表格块不代表单元格结构已核验。' if kind == 'table_qa' else '模型明确选择词项检索。'}
+    return evidence, {'mode': 'table_blocks_bm25', 'used': False,
+                      'reason': '固定版本的原文内容块；表格块不代表单元格结构已核验。'}
+
+
+def combine_evidence(steps, current, documents, limit):
+    """Carry the latest accumulated document evidence into a new retrieval."""
+    previous = next((step['result']['evidence'] for step in reversed(steps)
+                     if step['tool'] in DOCUMENT_RETRIEVAL and step['status'] == 'completed'
+                     and (step.get('result') or {}).get('evidence')), [])
+    if not previous:
+        return current, 0
+    pools = []
+    for document in documents:
+        latest = [item for item in current if item['document_id'] == document['id']]
+        retained = [item for item in previous if item['document_id'] == document['id']
+                    and item['parse_run_id'] == document['_retrieval_run']]
+        # Reserve some current query hits and previous witnesses for each paper.
+        ordered = latest[:2] + retained[:2] + latest[2:] + retained[2:]
+        unique = {}
+        for item in ordered:
+            unique.setdefault(item['id'], item)
+        pools.append(list(unique.values()))
+    combined = []
+    for rank in range(limit):
+        for pool in pools:
+            if rank < len(pool) and len(combined) < limit:
+                combined.append(pool[rank])
+    new_ids = {item['id'] for item in current}
+    return combined, sum(item['id'] not in new_ids for item in combined)

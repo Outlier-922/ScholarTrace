@@ -292,14 +292,31 @@ async def retrieve(payload,supplement=False):
     use_dimension_queries=supplement or any(step['tool']=='comparison' for step in payload['steps'])
     question=payload.get('agent_query',payload['goal'])+(' '+ ' '.join(comparison.DIMENSIONS[key]['query'] for key in payload['dimensions']) if use_dimension_queries else '')
     retrieval={}
-    if payload.get('retrieval_kind') in {'evidence','table_qa'}:
-        evidence,retrieval=await run_in_threadpool(workflow_agent.lexical_retrieve,question,documents,payload['retrieval_kind'])
+    kind = payload.get('retrieval_kind')
+    if kind == 'table_qa':
+        evidence,retrieval=await run_in_threadpool(workflow_agent.table_retrieve,question,documents)
+    elif kind in workflow_agent.DOCUMENT_RETRIEVAL:
+        evidence = await run_in_threadpool(qa._retrieve_question, payload['goal'], documents, 12,
+                                           retrieval, initial_query=question, sparse_only=kind=='evidence')
+        evidence, carried = workflow_agent.combine_evidence(payload['steps'], evidence, documents, 12)
+        retrieval['carried_evidence_count'] = carried
+        if carried:
+            retrieval['coverage'] = {document['id']: sum(item['document_id'] == document['id'] for item in evidence)
+                                     for document in documents}
+            for cell in retrieval.get('candidate_coverage', []):
+                cell['candidate_evidence_ids'] = [
+                    item['id'] for item in evidence if item['document_id'] == cell['document_id']
+                    and qa.answer_fields.cue_score(cell['field'], item['text'])
+                ]
     else:
         evidence=await run_in_threadpool(qa._retrieve_question,question,documents,min(12,max(3,len(documents)*3)),retrieval)
     result={'mode':'evidence_only','evidence':evidence,'claims':[],'question':question,'uncovered_documents':[document['id'] for document in documents if not any(item['document_id']==document['id'] for item in evidence)],
             'retrieval':retrieval,'answer':'原文候选证据，尚未形成语义核验后的回答。'}
     if payload['use_model'] and evidence:
-        try:proposed=await qa._generate(payload['goal'],evidence)
+        try:
+            requested = qa.answer_fields.requested(payload['goal'])
+            options = {'documents': documents} if qa.answer_fields.SCOPED_FIELDS.intersection(requested) else {}
+            proposed = await qa._generate(payload['goal'], evidence, **options)
         except (httpx.HTTPError,ValueError) as error:
             if not isinstance(error,ValueError) or str(error)!='model_budget_exhausted':
                 raise policy.ModelStepFailure(result,error) from error
@@ -516,7 +533,7 @@ async def run(identity):
                         later['depends_on']=['supplement' if dependency==step['id'] else dependency for dependency in later['depends_on']]
                     if 'plan_history' in payload:policy.snapshot(payload,'missing_documents','插入一次缺失文献补检索，仍使用原来源与总预算。')
                     payload['query_expansions']=1;repo.event(payload,'增加一次补检索','部分所选文献没有命中；最多补检索一轮，仍受总调用预算约束。')
-                elif step['tool']=='evidence' and result.get('uncovered_documents'):
+                elif not payload.get('agent') and step['tool']=='evidence' and result.get('uncovered_documents'):
                     payload['gaps'].append('仍有文献无命中；未再自动补检索，检索不到不证明原文未报告。')
             repo.mutate(identity,complete)
     except asyncio.CancelledError:
@@ -552,6 +569,8 @@ def markdown(payload):
         elif step['tool']=='translation' and result:lines+=['',workflow_translation.markdown(result)]
         elif step['tool'] in {'evidence','hybrid_retrieval','table_qa','review'}:
             lines+=['',result.get('answer','')]
+            missing = result.get('missing_information') or []
+            if missing:lines+=['','### 需要继续核对',*['- '+str(item) for item in missing]]
             for item in result.get('evidence',[]):lines += ['',f'原文候选 / {item["title"]} / PDF 第 {item["page"]} 页 / {item["parse_run_id"]} / {item["block_id"]}',item['text']]
         elif result:lines+=['',f'受控产物 ID：{result.get("id",step["artifact_id"])}；类型：{step["tool"]}。']
     lines+=['','## 计划版本与反馈','']

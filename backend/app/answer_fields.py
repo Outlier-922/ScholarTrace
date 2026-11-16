@@ -2,6 +2,8 @@
 from __future__ import annotations
 import re
 
+SCOPED_FIELDS = {'parameter_updates', 'reference_policy'}
+
 # No paper identities or expected experimental values occur in this registry.
 FIELDS={
  'gpu_clock':('GPU核心时钟频率',r'核心时钟|MHz|megahertz|core clock|clock frequency',
@@ -23,6 +25,13 @@ FIELDS={
  'objective':('训练目标/损失组成',r'损失|训练目标|loss|objective',
               'training objective loss distillation masked modeling contrastive symmetric cross entropy cosine',
               [r'loss|objective',r'cross.?entropy',r'distill|contrastive',r'cosine|masked.{0,25}model']),
+ 'parameter_updates':('训练与冻结的参数或模型',
+                      r'冻结|哪些参数.{0,6}(?:训练|更新)|优化哪(?:个|一种|一个)?模型|参数更新范围|\b(?:frozen|freeze|trainable weights|trainable parameters)\b|which (?:model|policy|weights) (?:is|are) (?:optimized|updated)',
+                      'fine tuning trainable parameters frozen pretrained model weights adapters optimize language model policy',
+                      [r'frozen|freeze|trainable|directly optimiz',r'adapters?|weights|policy|parameters']),
+ 'reference_policy':('参考模型与用途',r'参考(?:模型|策略)|reference (?:model|policy)',
+                     'reference policy reference model log ratio logratios ref_logratios KL SFT preference objective log probability',
+                     [r'reference (?:model|policy)|π\s*ref|ref_logratios',r'log|deviat|divergence|initializ|ratio']),
  'components':('架构部件变化',r'移除|去掉|哪些部件|removed|remove.{0,15}(?:component|embedding)',
                'student architecture removed embeddings pooler components', [r'remov|architecture',r'embedding|pooler|component']),
  'layers':('层数及变化',r'层数|多少层|number of layers|how many layers',
@@ -61,7 +70,7 @@ FIELDS={
  'training_steps':('训练步数',r'训练.{0,12}(?:步|steps)|步数|training steps',
                     'pre-training number steps iterations', [r'\bsteps?\b',r'iterations']),
  'epochs':('训练轮数',r'训练轮数|epochs|多少轮','training number epochs', [r'\bepochs?\b']),
- 'optimizer':('优化器/超参数',r'优化器|optimizer|Adam|beta|β|权重衰减|学习率|learning rate|调度',
+ 'optimizer':('优化器/超参数',r'优化器|optimizer|Adam|\bbeta\s*[_-]?[12]\b|β|权重衰减|学习率|learning rate|调度',
               'training optimizer Adam beta learning rate weight decay schedule warmup', [r'Adam|optimizer',r'beta|β|learning rate|weight decay|schedule']),
  'formula':('所问公式',r'公式|equation|formula','equation formula objective definition', [r'=|equation|formula']),
 }
@@ -75,11 +84,23 @@ VALUE_PATTERNS={
     'parameter_count':r'\b\d+(?:\.\d+)?\s*(?:million|billion|[MB])(?:\s+[A-Za-z-]+){0,2}\s+parameters?\b',
     'sequence_length':r'(?:nctx|sequence length|context (?:window|length))\s*(?:=|of|is)?\s*\d+|\b\d+\s+(?:consecutive |contiguous )?tokens\b',
     'bleu':r'BLEU\s*(?:score)?\s*(?:of|is|=)?\s*\d+',
+    'parameter_updates':r'\bfrozen\b.{0,110}(?:pretrained|model|weights)|\btrainable (?:parameters|weights)|directly optimiz\w+ (?:a |the )?language model',
+    'reference_policy':r'\breference (?:model|policy)\b.{0,115}(?:SFT|deviat|initializ|log)|\bdeviation from.{0,55}\breference (?:model|policy)\b',
 }
 
 
 def value_score(key,text):
     return min(3,len(re.findall(VALUE_PATTERNS[key],text,re.I))) if key in VALUE_PATTERNS else 0
+
+
+def reference_usage_score(text):
+    """Prefer passages that connect the reference policy to the computed loss."""
+    if re.search(r'(?:loss\w*|objective).{0,125}\bref_logratios\b', text, re.I | re.S):
+        return 3
+    if re.search(r'\bref_logratios\b|\breference (?:policy|model)\b.{0,70}\blog.{0,20}ratio', text, re.I | re.S):
+        return 2
+    return int(bool(re.search(r'(?:optimi[zs]e|minimi[zs]e).{0,100}\b(?:given|fixed)\s+(?:π\s*ref|reference)',
+                              text, re.I | re.S)))
 
 
 def intent_text(question):
@@ -97,6 +118,43 @@ def requested(question,limit=8):
     if not set(found)&{'gpu_count','gpu_model','gpu_memory','gpu_clock','gpu_voltage'} and re.search(r'训练硬件|training hardware|hardware used',question,re.I):
         found.insert(0,'gpu_model')
     return found[:limit] if limit else found
+
+
+def requested_items(question, sources):
+    """Map each requested paper/field pair to the user's relevant wording."""
+    keys = requested(question)
+    if not keys:
+        return {}
+    titles = {source.get('document_id', source.get('id')): source.get('title', '') for source in sources}
+    aliases = {}
+    for identity, title in titles.items():
+        short = title.split(':', 1)[0].strip()
+        words = re.findall(r'[A-Za-z]+', short)
+        acronym = ''.join(word[0].upper() for word in words) if 2 <= len(words) <= 6 else ''
+        for alias in (short, acronym):
+            if len(alias) >= 3:
+                aliases.setdefault(alias.casefold(), set()).add(identity)
+    sentences = [intent_text(sentence) for sentence in re.split(r'[。！？!?；;\n]', question)]
+    items = {}
+    for key in keys:
+        relevant = [sentence for sentence in sentences if re.search(FIELDS[key][1], sentence, re.I)]
+        by_subject = {identity: [] for identity in titles}
+        for sentence in relevant:
+            subjects = {next(iter(identities)) for alias, identities in aliases.items() if len(identities) == 1
+                        and re.search(r'(?<![a-z0-9])' + re.escape(alias) + r'(?![a-z0-9])', sentence.casefold())}
+            if key not in SCOPED_FIELDS or not subjects:
+                subjects = titles.keys()
+            for identity in subjects:
+                by_subject[identity].append(sentence)
+        for identity in titles:
+            if by_subject[identity] or not relevant:
+                items[identity, key] = ' '.join(by_subject[identity])[:400]
+    return {(identity, key): items[identity, key] for identity in titles for key in keys
+            if (identity, key) in items}
+
+
+def requested_pairs(question, sources):
+    return list(requested_items(question, sources))
 
 
 def cue_score(key,text):
@@ -122,26 +180,31 @@ def formula_fragment(text):
     return text.count('{')!=text.count('}')
 
 
-def interpret(payload,question,evidence,validate,*,validate_audit=None):
+def interpret(payload,question,evidence,validate,*,validate_audit=None,documents=None):
     """Compile only allowlisted document/field rows; legacy callers still work."""
     keys=requested(question)
     if not keys or 'field_answers' not in payload:return None
     incoming=payload['field_answers']
     if not isinstance(incoming,list):raise ValueError('invalid_field_answers')
-    by_id={item['id']:item for item in evidence};documents={item['document_id'] for item in evidence}
+    by_id={item['id']:item for item in evidence}
+    sources = evidence if documents is None else documents
+    targets = requested_pairs(question, sources)
+    allowed = set(targets)
     groups={};rejected=0;decisions=[]
     for index,item in enumerate(incoming[:20]):
         decision={'index':index,'status':'rejected','reason':'invalid_document_or_field'};decisions.append(decision)
         if (not isinstance(item,dict) or not isinstance(item.get('document_id'),str) or not isinstance(item.get('field'),str)
-                or item['document_id'] not in documents or item['field'] not in keys):
+                or (item['document_id'], item['field']) not in allowed):
             rejected+=1;continue
         decision.update(document_id=item['document_id'],field=item['field'])
         key=(item['document_id'],item['field']);groups.setdefault(key,[]).append((item,decision))
     claims=[];coverage=[];missing=[]
-    for document in dict.fromkeys(item['document_id'] for item in evidence):
-        first=next(item for item in evidence if item['document_id']==document)
+    for document in dict.fromkeys(identity for identity, _ in targets):
+        first=next(item for item in sources if item.get('document_id', item.get('id')) == document)
         title=first['title']+(' · '+first['version_label'] if first.get('version_label') else '')
         for field in keys:
+            if (document, field) not in allowed:
+                continue
             rows=groups.get((document,field),[]);accepted=[];states=set();invalid=False
             for item,decision in rows:
                 states.add(item.get('status') if isinstance(item.get('status'),str) else 'invalid')

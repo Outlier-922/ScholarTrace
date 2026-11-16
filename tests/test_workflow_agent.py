@@ -197,3 +197,27 @@ def test_stop_policy_never_executes_fallback(client, papers, monkeypatch):
     start(client, task)
     finished = wait(client, task['id'])
     assert finished['status'] == 'failed' and finished['usage']['tool_calls'] == 0
+
+
+def test_next_retrieval_carries_earlier_paper_within_the_shared_limit(client, papers, monkeypatch):
+    def retrieve(question, documents, limit, diagnostics, *, initial_query, sparse_only):
+        index = 0 if initial_query == 'first paper' else 1
+        assert sparse_only == (index == 1)
+        diagnostics['coverage'] = {doc['id']: int(i == index) for i, doc in enumerate(documents)}
+        return workflow.qa._collect_sources([documents[index]])[:1]
+
+    monkeypatch.setattr(workflow.qa, '_retrieve_question', retrieve)
+    provider(monkeypatch, [call('hybrid_retrieval', 'first paper'), call('evidence', 'second paper'), FINISH])
+    task = planned(client, papers, planner='agent', goal='查看所选论文的原文', actions=['evidence'], max_tool_calls=4)
+    start(client, task)
+    finished = wait(client, task['id'])
+    assert finished['status'] == 'completed_with_gaps'
+    first, second = [step['result'] for step in finished['steps']]
+    assert len(first['uncovered_documents']) == 1
+    assert second['uncovered_documents'] == []
+    assert second['retrieval']['carried_evidence_count'] == 1
+    assert len(second['evidence']) == 2 and sum(second['retrieval']['coverage'].values()) == 2
+    assert first['evidence'][0]['id'] in {item['id'] for item in second['evidence']}
+    assert second['mode'] == 'evidence_only' and second['claims'] == []
+    assert all('未命中' not in gap for gap in finished['gaps'])
+    assert finished['usage']['tool_calls'] == 2

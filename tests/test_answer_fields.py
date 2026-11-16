@@ -246,3 +246,34 @@ def test_direct_normalization_evidence_survives_background_fill(monkeypatch):
     monkeypatch.setattr(qa,'_collect_sources',lambda docs:[])
     hits=qa._retrieve_question('比较LayerNorm位置与warmup。',documents,3)
     assert len(hits)==3 and 'order' in {hit['id'] for hit in hits}
+
+
+def test_named_reference_model_field_stays_in_scope_when_one_paper_has_no_hits():
+    question = 'Alpha 微调时冻结哪些参数？Beta Policy Tuning 的参考模型如何使用？分别说明训练目标。'
+    docs = [{'id': 'a', 'title': 'Alpha: Model Adaptation'}, {'id': 'b', 'title': 'Beta Policy Tuning: A Study'}]
+    evidence = [{**source('ea', 'a', 'The base weights are frozen.'), 'title': docs[0]['title']}]
+    requests = answer_fields.requested_items(question, docs)
+    assert '冻结哪些参数' in requests['a', 'parameter_updates']
+    assert '参考模型如何使用' in requests['b', 'reference_policy']
+    proposal = {'field_answers': [
+        row('a', 'parameter_updates', 'The base weights are frozen.', ['ea']),
+        row('a', 'reference_policy', 'The base model is the reference.', ['ea']),
+        row('b', 'reference_policy', 'The base model is the reference.', ['ea']),
+    ]}
+    result = answer_fields.interpret(proposal, question, evidence, qa._validate_claims, documents=docs)
+    coverage = {(cell['document_id'], cell['field']): cell['status'] for cell in result['answer_coverage']}
+    assert coverage == {('a', 'objective'): 'not_assessed', ('a', 'parameter_updates'): 'has_candidate_answer',
+                        ('b', 'objective'): 'not_assessed', ('b', 'reference_policy'): 'needs_review'}
+    assert len(result['claims']) == 1 and result['field_validation']['rejected_rows'] == 2
+
+
+def test_reference_evidence_retains_loss_calculation_beyond_baseline_description(monkeypatch):
+    docs = [{'id': 'a', 'title': 'Synthetic Study'}]
+    baseline = source('baseline', 'a', 'The reference policy is initialized to the initial SFT model.')
+    input_only = source('input', 'a', 'The reference model log probabilities are provided as input.')
+    generic = source('background', 'a', 'The reference model log ratios are used in related work.')
+    usage = source('usage', 'a', 'losses = -F.logsigmoid(beta * (pi_logratios - ref_logratios))')
+    monkeypatch.setattr(qa, '_retrieve', lambda *args: [baseline, input_only, generic, usage])
+    monkeypatch.setattr(qa, '_collect_sources', lambda docs: [])
+    hits = qa._retrieve_question('参考模型如何参与计算？', docs, 2)
+    assert 'usage' in {hit['id'] for hit in hits}
