@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import { postJSON, request } from './api';
 import type { DocumentBlock } from './types';
+import RegionPicker from './RegionPicker';
 import './formulas.css';
 
 type Region = DocumentBlock['bbox'];
@@ -10,44 +11,6 @@ interface Source { id: string; page: number; blocks: DocumentBlock[]; native_sup
 interface Revision { id: string; latex: string; origin: string; note: string; created_at: string; }
 interface Props { documentId: string; runId: string; page: number; modelConfigured: boolean; readOnly: boolean; onSource: (block: DocumentBlock) => void; onRegion: (bbox: Region) => void; }
 const originLabel = (origin: string) => origin === 'scan_ocr_candidate' ? '扫描公式候选' : origin === 'model_candidate' ? '原生字形候选' : '手工修订';
-
-function RegionPicker({ url, region, onChange, disabled }: {
-  url: string; region: Region | null; onChange: (region: Region | null) => void; disabled: boolean;
-}) {
-  const start = useRef<{ x: number; y: number; id: number } | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
-  function point(event: PointerEvent<HTMLDivElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const clamp = (n: number) => Math.max(0, Math.min(1, n));
-    return { x: clamp((event.clientX - bounds.left) / bounds.width), y: clamp((event.clientY - bounds.top) / bounds.height) };
-  }
-  function move(event: PointerEvent<HTMLDivElement>) {
-    if (start.current?.id !== event.pointerId) return;
-    const { x, y } = point(event);
-    const first = start.current;
-    onChange([Math.min(first.x,x), Math.min(first.y,y), Math.max(first.x,x), Math.max(first.y,y)]);
-  }
-  return <>
-    <p>在原页图像上拖动，框住一条完整公式。分子、分母和上下标都应在框内。</p>
-    <div className="formula-region-picker" onPointerDown={event => {
-      if (!loaded || disabled || !event.isPrimary || event.button !== 0) return;
-      start.current = { ...point(event), id: event.pointerId };
-      event.currentTarget.setPointerCapture(event.pointerId);
-      onChange(null);
-    }} onPointerMove={move} onPointerUp={event => { move(event); start.current = null; }} onPointerCancel={() => {
-      start.current = null;
-      onChange(null);
-    }}>
-      <img src={url} alt="待框选的原始 PDF 页面" draggable={false} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
-      {loaded && region && <div className="formula-selected-region" style={{
-        left: region[0]*100+'%', top: region[1]*100+'%',
-        width: (region[2]-region[0])*100+'%', height: (region[3]-region[1])*100+'%',
-      }} />}
-    </div>
-    {failed && <p role="alert">该页原图无法用于框选。</p>}
-  </>;
-}
 
 export default function FormulaPanel({ documentId, runId, page, modelConfigured, readOnly, onSource, onRegion }: Props) {
   const [blocks, setBlocks] = useState<(DocumentBlock & { formula_hint: boolean })[]>([]);
@@ -101,10 +64,10 @@ export default function FormulaPanel({ documentId, runId, page, modelConfigured,
     {scan && source ? <button disabled={busy || readOnly} onClick={() => {
       setRegion(null);
       changeSelection();
-    }}>重新框选</button> : scan ? <RegionPicker
+    }}>重新框选</button> : scan ? <><p>在原页图像上拖动，框住一条完整公式。分子、分母和上下标都应在框内。</p><RegionPicker
       url={`/api/documents/${documentId}/formula-page-image?page=${page}&parse_run_id=${encodeURIComponent(runId)}`}
-      region={region} disabled={busy || readOnly} onChange={box => { changeSelection(); setRegion(box); }}
-    /> : <>
+      key={`${documentId}-${runId}-${page}`} region={region} disabled={busy || readOnly} onChange={box => { changeSelection(); setRegion(box); }}
+    /></> : <>
       <label><input type="checkbox" checked={all} onChange={e => setAll(e.target.checked)} />显示本页其他内容块</label>
       <div className="formula-blocks">{blocks.filter(b => all || b.formula_hint || ids.includes(b.id)).map(b => (
         <label key={b.id}><input type="checkbox" checked={ids.includes(b.id)}

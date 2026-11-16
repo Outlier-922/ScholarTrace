@@ -1,4 +1,4 @@
-"""Explicit native table regions, immutable grid candidates and manual edits."""
+"""Explicit table regions, immutable native/OCR candidates and manual edits."""
 import asyncio
 import csv
 import hashlib
@@ -8,10 +8,12 @@ import math
 import re
 import uuid
 from pathlib import Path
+from typing import Literal
 from fastapi import APIRouter,HTTPException,Query,Request
-from fastapi.responses import FileResponse,PlainTextResponse,JSONResponse
+from fastapi.responses import FileResponse,PlainTextResponse,JSONResponse,Response
 from pydantic import BaseModel,ConfigDict,Field
-from . import store,table_refine_native as native,table_refine_store as repo
+from . import ocr,store,table_refine_native as native,table_refine_scan as scan,table_refine_store as repo
+from .formulas import page_input,render_region
 
 router=APIRouter(prefix='/api',tags=['table-refinement'])
 
@@ -25,6 +27,7 @@ class SourceRequest(BaseModel):
     header_bottom:float
     anchor_block_id:str|None=Field(default=None,max_length=100)
     column_cuts:list[float]|None=Field(default=None,min_length=1,max_length=39)
+    method:Literal['native','scan_ocr']='native'
 
 
 class RevisionRequest(BaseModel):
@@ -72,19 +75,32 @@ async def create(body:SourceRequest,request:Request):
     if body.anchor_block_id and not anchor:raise HTTPException(422,'原候选不属于指定页面/解析版本。')
     path=Path(doc['file_path']).resolve()
     if not path.is_relative_to((store.data_dir()/'uploads').resolve()):raise HTTPException(404,'原PDF不可用。')
-    key=hashlib.sha256(json.dumps([native.VERSION,doc['sha256'],body.model_dump()],sort_keys=True).encode()).hexdigest()
+    scanned=body.method=='scan_ocr'
+    algorithm=scan.VERSION if scanned else native.VERSION
+    key=hashlib.sha256(json.dumps([algorithm,doc['sha256'],body.model_dump(exclude={'method'})],sort_keys=True).encode()).hexdigest()
     for old in repo.history(doc['id'],'source'):
         if old['source_key']==key:return old
     try:
-        result,png=await asyncio.get_running_loop().run_in_executor(request.app.state.parse_executor,native.extract,str(path),doc['sha256'],body.page,box,body.header_bottom,(anchor or {}).get('metadata',{}),cuts)
-    except (ValueError,RuntimeError,OSError,IndexError):raise HTTPException(422,'区域重建失败：请检查表头、列界与范围；旋转页或过大表格暂不支持。') from None
+        extractor,args=(scan.extract,(cuts,)) if scanned else (native.extract,((anchor or {}).get('metadata',{}),cuts))
+        result,png=await asyncio.get_running_loop().run_in_executor(request.app.state.parse_executor,extractor,str(path),doc['sha256'],body.page,box,body.header_bottom,*args)
+    except ocr.OCRUnavailable:raise HTTPException(503,'本机 OCR 尚未准备。请在作品运行环境准备 OCR 后重试。') from None
+    except (ValueError,RuntimeError,OSError,IndexError,ImportError):
+        if scanned:raise HTTPException(422,'未能从所选区域重建扫描表格。请框住完整表头与数据，检查表头下缘；自动分列不清时可手填列界。旋转页面暂不支持。') from None
+        raise HTTPException(422,'区域重建失败：请检查表头、列界与范围；旋转页或过大表格暂不支持。') from None
     identity=str(uuid.uuid4())
-    value={'id':identity,'kind':'source','created_at':store.now(),'source_key':key,'document_id':doc['id'],'sha256':doc['sha256'],'parse_run_id':body.parse_run_id,'page':body.page,'page_geometry':{k:page[k] for k in ('width','height','rotation','cropbox')},'anchor':anchor,'bbox':box,'header_bottom':body.header_bottom,'requested_column_cuts':body.column_cuts,'algorithm':native.VERSION,'semantic_verified':False,**result}
+    value={'id':identity,'kind':'source','created_at':store.now(),'source_key':key,'document_id':doc['id'],'sha256':doc['sha256'],'parse_run_id':body.parse_run_id,'page':body.page,'page_geometry':{k:page[k] for k in ('width','height','rotation','cropbox')},'anchor':anchor,'bbox':box,'header_bottom':body.header_bottom,'requested_column_cuts':body.column_cuts,'algorithm':algorithm,'method':body.method,'semantic_verified':False,**result}
     try:repo.image_path(identity).write_bytes(png);repo.save(value)
     except ValueError:
         repo.image_path(identity).unlink(missing_ok=True)
         raise HTTPException(409,'读取期间来源已变化，未保存。') from None
     return value
+
+
+@router.get('/documents/{identity}/table-page-image')
+async def table_page_image(identity:str,request:Request,page:int=Query(ge=1),parse_run_id:str=Query(min_length=1,max_length=100)):
+    doc,_,path=page_input(identity,page,parse_run_id)
+    png=await render_region(request,doc,path,page)
+    return Response(png,media_type='image/png',headers={'Cache-Control':'no-store'})
 
 
 @router.get('/documents/{identity}/table-regions')

@@ -6,6 +6,7 @@ from collections import Counter
 from fastapi import HTTPException
 from pydantic import BaseModel,ConfigDict,Field,StrictInt
 from . import store,table_refine_store as repo
+from .table_refine_scan import VERSION as SCAN_ALGORITHM
 
 VERSION='pinned-native-table-qa-v1'
 
@@ -24,6 +25,7 @@ def resolve(selections,documents,parse_runs):
         seen.add(selection.source_id)
         source=repo.get(selection.source_id)
         if not source or source['kind']!='source':raise HTTPException(404,'所选表格来源不可用。')
+        if source.get('algorithm')==SCAN_ALGORITHM:raise HTTPException(422,'扫描表格候选仅供原图核对，暂不能加入问答。')
         identity=source['document_id'];run=source['parse_run_id']
         if identity not in ids:raise HTTPException(422,'表格不属于本次所选文献。')
         if identity in runs and runs[identity]!=run:raise HTTPException(422,'同一文献的表格和问答必须使用同一个解析版本。')
@@ -56,6 +58,7 @@ def row_context(source,row):
 
 
 def cell_evidence(source,document,row,column):
+    if source.get('algorithm')==SCAN_ALGORITHM:return None
     grid=source['grid'];count=len(grid['columns']);cell=grid['cells'][row*count+column]
     if cell['covered_by'] or cell['text'] in (None,'') or not cell['word_ids']:return None
     label=grid['columns'][column]['label'];context,anchors=row_context(source,row)
