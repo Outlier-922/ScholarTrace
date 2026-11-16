@@ -11,7 +11,7 @@ from fastapi import APIRouter,HTTPException,Query,Request
 from fastapi.responses import FileResponse,PlainTextResponse,Response
 from pydantic import BaseModel,ConfigDict,Field,model_validator
 from starlette.concurrency import run_in_threadpool
-from . import formula_native,formula_ocr,formula_store as repo,insights,model_client,source_scope,store
+from . import formula_native,formula_ocr,formula_scan_layout,formula_store as repo,insights,model_client,source_scope,store
 
 router=APIRouter(prefix='/api',tags=['formula-latex'])
 VERSION='native-glyph-formula-v1'
@@ -112,11 +112,19 @@ async def formula_page_image(identity:str,request:Request,page:int=Query(ge=1),p
 
 @router.get('/documents/{identity}/formula-blocks')
 def blocks(identity:str,page:int=Query(ge=1),parse_run_id:str=Query(min_length=1,max_length=100)):
-    structure=store.get_structure(identity,page=page,parse_run_id=parse_run_id)
-    if not structure:raise HTTPException(404,'指定解析版本或页码不可用。')
-    refs=source_scope.reference_block_ids(store.get_structure(identity,parse_run_id=parse_run_id) or {})
-    rows=[{**b,'formula_hint':b['type']=='formula_candidate' or bool(re.search(r'[=∑∏∫√∂∇≤≥∈]',b['text']))} for b in structure['blocks'] if b['id'] not in refs and b['type'] not in {'title','heading','reference'}]
+    structure = store.get_structure(identity, parse_run_id=parse_run_id)
+    page_record = next((p for p in structure['pages'] if p['number'] == page), None) if structure else None
+    if not page_record:
+        raise HTTPException(404, '指定解析版本或页码不可用。')
+    refs = source_scope.reference_block_ids(structure)
+    page_blocks = [b for b in structure['blocks'] if b['page'] == page and b['id'] not in refs]
+    status = page_record['status'] if page_record['status'] in {'ocr_ready', 'needs_ocr'} else 'native'
+    if page_record['rotation'] and status != 'native':
+        status = 'rotated'
+    regions = formula_scan_layout.locate(page_blocks) if status == 'ocr_ready' else []
+    rows=[{**b,'formula_hint':b['type']=='formula_candidate' or bool(re.search(r'[=∑∏∫√∂∇≤≥∈]',b['text']))} for b in page_blocks if b['type'] not in {'title','heading','reference'}]
     return {'items':rows,'scan_ocr_ready':bool(formula_ocr.runtime_identity()),
+            'scan_layout': {'status': status, 'items': regions},
             'notice':'标记只是公式候选线索，可能漏检或误检；可展开其他内容块补选。'}
 
 
