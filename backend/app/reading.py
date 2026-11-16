@@ -5,7 +5,7 @@ import re
 
 from fastapi import APIRouter, HTTPException, Query
 
-from . import qa, store
+from . import ocr, qa, source_scope, store
 
 router = APIRouter(prefix="/api", tags=["reading"])
 MARKER = re.compile(r"\[(\d{1,4}(?:\s*[,;–—-]\s*\d{1,4})*)\]")
@@ -25,8 +25,8 @@ def expand_marker(value: str) -> list[str]:
     return list(dict.fromkeys(result))[:40]
 
 
-def citation_anchor(block, match, parse_run_id, reference_ids):
-    return {
+def citation_anchor(block, match, parse_run_id, reference_ids, line_spans=()):
+    anchor = {
         "id": f"cite_{block['id']}_{match.start()}",
         "marker_text": match.group(),
         "page": block["page"],
@@ -37,6 +37,10 @@ def citation_anchor(block, match, parse_run_id, reference_ids):
         "parse_run_id": parse_run_id,
         "reference_ids": reference_ids,
     }
+    line = next((item for item in line_spans if item["start"] <= match.start() and match.end() <= item["end"]), None)
+    if line:
+        anchor["line_bbox"] = line["bbox"]
+    return anchor
 
 
 def citation_map(document_id: str, parse_run_id: str | None = None):
@@ -51,19 +55,23 @@ def citation_map(document_id: str, parse_run_id: str | None = None):
         if not block:
             continue
         item = {**reference, "bbox": block["bbox"], "parse_run_id": structure["parse_run_id"], "backlinks": [], "status": "unverified_reference"}
+        if reference.get("source_spans"):
+            item["line_bbox"] = reference["source_spans"][0]["bbox"]
         references.append(item)
         if reference.get("marker"):
             by_marker.setdefault(str(int(reference["marker"])), []).append(item)
     links = []
+    bibliography = source_scope.reference_block_ids(structure)
     for block in structure["blocks"]:
-        if qa._is_reference(block):
+        if block["id"] in bibliography or (qa._is_reference(block) and block.get("metadata", {}).get("extraction") != "rapidocr"):
             continue
+        line_spans = ocr.source_line_spans(block)
         for match in MARKER.finditer(block["text"]):
             numbers = expand_marker(match.group(1))
             targets = [by_marker[number][0] for number in numbers if len(by_marker.get(number, [])) == 1]
             if not targets:
                 continue
-            source = citation_anchor(block, match, structure["parse_run_id"], [item["id"] for item in targets])
+            source = citation_anchor(block, match, structure["parse_run_id"], [item["id"] for item in targets], line_spans)
             links.append(source)
             for target in targets:
                 target["backlinks"].append(source)

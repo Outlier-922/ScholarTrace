@@ -25,9 +25,12 @@ def reference_block_ids(structure):
         if block['type']=='heading':
             if re.fullmatch(r'(?:\d+[.\s]*)?(references|bibliography|参考文献)',text,re.I):
                 inside=True;blocked.add(block['id']);continue
-            if inside and (re.match(r'appendix|附录|attention visualizations|chapter\s+\d+|part\s+\d+|第.{1,8}章',text,re.I)
+            if inside and (block.get('heading_level') == 1 and block.get('metadata',{}).get('extraction') == 'rapidocr'
+                           or re.match(r'appendix|附录|attention visualizations|chapter\s+\d+|part\s+\d+|第.{1,8}章',text,re.I)
                            or re.match(r'^[A-Z](?:\.\d+)?\s+(?:Additional|Details|Experiments|Illustrations|Comparison)',text)
                            or re.match(r'^\d{1,2}(?:\.\d+)*[.\s]+\s*[A-Za-z]',text)):
                 inside=False
         if inside:blocked.add(block['id'])
+    for entry in structure.get('references',[]):
+        blocked.update(part['block_id'] for part in entry.get('source_spans',[]))
     return blocked

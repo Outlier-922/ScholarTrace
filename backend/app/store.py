@@ -120,6 +120,7 @@ def init_db() -> None:
             ("parse_runs", "config_json", "TEXT NOT NULL DEFAULT '{}'"),
             ("outlines", "parse_run_id", "TEXT"),
             ("reference_entries", "parse_run_id", "TEXT"),
+            ("reference_entries", "source_spans", "TEXT"),
         ):
             existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
             if column not in existing:
@@ -407,10 +408,11 @@ def save_references(document_id: str, references: list[dict[str, Any]], parse_ru
         conn.execute("DELETE FROM reference_entries WHERE document_id=? AND parse_run_id=?", (document_id, identity))
         for ref in references:
             conn.execute("""INSERT INTO reference_entries
-                (id,document_id,marker,text,page,block_id,doi,arxiv_id,parse_run_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (id,document_id,marker,text,page,block_id,doi,arxiv_id,parse_run_id,source_spans)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                          (ref.get("id") or new_id("ref"), document_id, ref.get("marker"), ref["text"],
-                          ref["page"], ref["block_id"], ref.get("doi"), ref.get("arxiv_id"), identity))
+                          ref["page"], ref["block_id"], ref.get("doi"), ref.get("arxiv_id"), identity,
+                          json.dumps(ref["source_spans"], ensure_ascii=False) if ref.get("source_spans") else None))
 
 
 def get_structure(document_id: str, page: int | None = None, parse_run_id: str | None = None) -> dict[str, Any] | None:
@@ -444,10 +446,14 @@ def get_structure(document_id: str, page: int | None = None, parse_run_id: str |
         outlines = [dict(row) for row in conn.execute(
             "SELECT id,title,level,page,block_id FROM outlines WHERE document_id=? AND parse_run_id=? ORDER BY page,order_index", (document_id, identity))]
         references = [dict(row) for row in conn.execute(
-            "SELECT id,marker,text,page,block_id,doi,arxiv_id FROM reference_entries WHERE document_id=? AND parse_run_id=? ORDER BY page,rowid", (document_id, identity))]
+            """SELECT id,marker,text,page,block_id,doi,arxiv_id,source_spans FROM reference_entries
+               WHERE document_id=? AND parse_run_id=? ORDER BY page,rowid""", (document_id, identity))]
         for reference in references:
+            spans = reference.pop("source_spans")
+            if spans:
+                reference["source_spans"] = json.loads(spans)
             reference["is_candidate"] = True
-            reference["verification_status"] = "unverified_native_candidate"
+            reference["verification_status"] = "ocr_unverified" if spans else "unverified_native_candidate"
     return {"document_id": document_id, "parse_run_id": identity, "parse_run": run, "pages": pages,
             "blocks": blocks, "outline": outlines, "references": references}
 

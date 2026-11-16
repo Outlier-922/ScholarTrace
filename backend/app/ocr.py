@@ -196,3 +196,20 @@ def extract_ocr(page) -> list[dict[str, Any]]:
                       "confidence": round(min(1.0, max(0.0, confidence)), 6),
                       "polygon": points, "extraction": "rapidocr"})
     return lines
+
+
+def source_line_spans(block: dict[str, Any]) -> list[dict[str, Any]]:
+    """Map recognized lines to exact offsets in the stored parse block."""
+    metadata = block.get("metadata", {})
+    if metadata.get("extraction") != "rapidocr":
+        return []
+    spans, cursor = [], 0
+    for line in metadata.get("lines", []):
+        text = line["text"]
+        start = block["text"].find(text, cursor)
+        if not text or start == -1:
+            continue
+        cursor = start + len(text)
+        spans.append({"block_id": block["id"], "page": block["page"], "bbox": line["bbox"],
+                      "start": start, "end": cursor, "text": text})
+    return spans

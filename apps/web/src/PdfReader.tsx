@@ -16,8 +16,9 @@ import type { TranslationHandle } from './TranslationPane';
 import { request } from './api';
 import ReferenceDiscovery from './ReferenceDiscovery';
 
-interface CitationLink { id: string; marker_text: string; page: number; block_id: string; bbox: DocumentBlock['bbox']; reference_ids: string[]; context: string; }
-interface ReferenceEntry { id: string; marker: string | null; text: string; page: number; block_id: string; bbox: DocumentBlock['bbox']; backlinks: CitationLink[]; }
+interface CitationSource { page: number; block_id: string; bbox: DocumentBlock['bbox']; line_bbox?: DocumentBlock['bbox']; text?: string; context?: string; }
+interface CitationLink extends CitationSource { id: string; marker_text: string; offset: number; reference_ids: string[]; context: string; }
+interface ReferenceEntry extends CitationSource { id: string; marker: string | null; text: string; backlinks: CitationLink[]; source_spans?: CitationSource[]; }
 interface CitationMap { parse_run_id: string; links: CitationLink[]; references: ReferenceEntry[]; }
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -68,7 +69,12 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
   const [citationError, setCitationError] = useState('');
   const [activeCitation, setActiveCitation] = useState<CitationLink | null>(null);
   const [hotspots, setHotspots] = useState<{ link: CitationLink; left: number; top: number; width: number; height: number }[]>([]);
-  const [readingHistory, setReadingHistory] = useState<{ page: number; block: string | null }[]>([]);
+  const [readingHistory, setReadingHistory] = useState<CitationLink[]>([]);
+  const [citationFocus, setCitationFocus] = useState<{ source: CitationSource; run: string | undefined; label: string } | null>(null);
+  const focusedRegion = citationFocus && citationFocus.source.line_bbox && citationFocus.run === structure?.parse_run_id &&
+    citationFocus.source.page === page && citationFocus.source.block_id === selectedBlock
+      ? { bbox: citationFocus.source.line_bbox, label: citationFocus.label } : null;
+  const visibleRegion = focusedRegion || regionTarget;
   const [linked, setLinked] = useState(true);
   const translationRef = useRef<TranslationHandle>(null);
   const suppressUntil = useRef(0);
@@ -82,13 +88,24 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
   const pageTotal = pdf?.numPages || document.page_count || 1;
   const pageStatus = structure?.pages.find((item) => item.number === page)?.status;
   const ocrBlocks = pageBlocks.filter((block) => isOcrBlock(block) && block.text.trim());
-  const ocrLines = ocrBlocks.flatMap((block) => block.metadata?.lines?.length ? block.metadata.lines.map((line, index) => ({ ...line, id: `${block.id}_${index}` })) : [{ id: block.id, text: block.text, bbox: block.bbox }]);
+  const ocrLines = ocrBlocks.flatMap(block => {
+    const lines = block.metadata?.lines?.length ? block.metadata.lines : [{ text: block.text, bbox: block.bbox }];
+    let cursor = 0;
+    return lines.map((line, index) => {
+      const start = block.text.indexOf(line.text, cursor);
+      if (start >= 0) cursor = start + line.text.length;
+      return { ...line, id: `${block.id}_${index}`, blockId: block.id,
+        offset: start >= 0 ? Array.from(block.text.slice(0, start)).length : undefined };
+    });
+  });
 
   useEffect(() => {
-    setCitations(null); setCitationError(''); setReadingHistory([]); setActiveCitation(null);
+    setCitations(null); setCitationError(''); setReadingHistory([]); setActiveCitation(null); setCitationFocus(null);
     if (!structure?.parse_run_id || (!['ready', 'partial'].includes(document.status) && structure.parse_run_id === document.parse_run_id)) return;
     const controller = new AbortController();
-    void request<CitationMap>(`/documents/${document.id}/citations?parse_run_id=${encodeURIComponent(structure.parse_run_id)}`, { signal: controller.signal }).then(setCitations).catch(() => { if (!controller.signal.aborted) setCitationError('引用映射暂不可用'); });
+    void request<CitationMap>(`/documents/${document.id}/citations?parse_run_id=${encodeURIComponent(structure.parse_run_id)}`, { signal: controller.signal }).then(result => {
+      if (!controller.signal.aborted) setCitations(result);
+    }).catch(() => { if (!controller.signal.aborted) setCitationError('引用映射暂不可用'); });
     return () => controller.abort();
   }, [document.id, structure?.parse_run_id, document.status]);
 
@@ -177,36 +194,76 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
   }, [pdf, page, availableWidth, zoom, view]);
 
   useEffect(() => {
-    if (!loading && (selectedBlock || regionTarget) && (view === 'pdf' || view === 'parallel')) {
+    if (!loading && (selectedBlock || visibleRegion) && (view === 'pdf' || view === 'parallel')) {
       highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
     }
-  }, [selectedBlock, regionTarget, page, loading, view]);
+  }, [selectedBlock, regionTarget, citationFocus, page, loading, view]);
 
   useEffect(() => {
     if (loading || !citations || (view !== 'pdf' && view !== 'parallel')) { setHotspots([]); return; }
     const paper = canvasRef.current?.parentElement;
-    const layer = ocrBlocks.length && ocrSelection ? paper?.querySelector('.ocr-selection-layer') : textRef.current;
+    const layer = ocrBlocks.length ? paper?.querySelector('.ocr-selection-layer') : textRef.current;
     if (!paper || !layer) return;
+    const paperBox = paper.getBoundingClientRect();
+    const next: typeof hotspots = [];
+    const pageLinks = citations.links.filter(item => item.page === page);
+    const addHotspot = (link: CitationLink, rect: DOMRect) => {
+      if (rect.width > 0 && rect.height > 0) next.push({ link, left: rect.left - paperBox.left, top: rect.top - paperBox.top, width: rect.width, height: rect.height });
+    };
+    if (ocrBlocks.length) {
+      const byOffset = new Map(pageLinks.map(link => [`${link.block_id}:${link.offset}`, link]));
+      for (const span of layer.querySelectorAll<HTMLElement>('[data-ocr-offset]')) {
+        const node = span.firstChild;
+        const text = node?.textContent;
+        if (!node || !text) continue;
+        const start = Number(span.dataset.ocrOffset);
+        for (const match of text.matchAll(/\[\d{1,4}(?:\s*[,;–—-]\s*\d{1,4})*\]/g)) {
+          const offset = start + Array.from(text.slice(0, match.index)).length;
+          const link = byOffset.get(`${span.dataset.ocrBlock}:${offset}`);
+          if (link?.marker_text !== match[0]) continue;
+          const range = layer.ownerDocument.createRange();
+          range.setStart(node, match.index);
+          range.setEnd(node, match.index + match[0].length);
+          addHotspot(link, range.getBoundingClientRect());
+        }
+      }
+      setHotspots(next);
+      return;
+    }
     const walker = layer.ownerDocument.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
     const nodes: { node: Node; start: number; end: number }[] = [];
     let content = ''; let node = walker.nextNode();
     while (node) { const text = node.textContent || ''; nodes.push({ node, start: content.length, end: content.length + text.length }); content += text; node = walker.nextNode(); }
-    const paperBox = paper.getBoundingClientRect();
-    const next: typeof hotspots = [];
     for (const match of content.matchAll(/\[\d{1,4}(?:\s*[,;–—-]\s*\d{1,4})*\]/g)) {
       const first = nodes.find(item => item.end > match.index!); const last = nodes.find(item => item.end >= match.index! + match[0].length);
       if (!first || !last) continue;
       const range = layer.ownerDocument.createRange(); range.setStart(first.node, match.index! - first.start); range.setEnd(last.node, match.index! + match[0].length - last.start);
       const rect = range.getBoundingClientRect(); const x = (rect.left + rect.width / 2 - paperBox.left) / paperBox.width; const y = (rect.top + rect.height / 2 - paperBox.top) / paperBox.height;
-      const link = citations.links.find(item => { const bounds = displayBounds(item.bbox); return item.page === page && item.marker_text.replace(/\s/g, '') === match[0].replace(/\s/g, '') && x >= parseFloat(bounds.left) / 100 - .01 && x <= (parseFloat(bounds.left) + parseFloat(bounds.width)) / 100 + .01 && y >= parseFloat(bounds.top) / 100 - .01 && y <= (parseFloat(bounds.top) + parseFloat(bounds.height)) / 100 + .01; });
-      if (link && rect.width > 0 && rect.height > 0) next.push({ link, left: rect.left - paperBox.left, top: rect.top - paperBox.top, width: rect.width, height: rect.height });
+      const link = pageLinks.find(item => { const bounds = displayBounds(item.line_bbox || item.bbox); return item.marker_text.replace(/\s/g, '') === match[0].replace(/\s/g, '') && x >= parseFloat(bounds.left) / 100 - .01 && x <= (parseFloat(bounds.left) + parseFloat(bounds.width)) / 100 + .01 && y >= parseFloat(bounds.top) / 100 - .01 && y <= (parseFloat(bounds.top) + parseFloat(bounds.height)) / 100 + .01; });
+      if (link) addHotspot(link, rect);
     }
     setHotspots(next);
   }, [loading, citations, page, view, zoom, pageSize.width, pageRotation, ocrSelection, structure]);
 
-  function sourceBlock(source: { block_id: string; page: number; bbox: DocumentBlock['bbox']; text?: string; context?: string }): DocumentBlock { return { id: source.block_id, page: source.page, bbox: source.bbox, text: source.text || source.context || '', type: 'paragraph', order: 0 }; }
-  function jumpReference(link: CitationLink, targetId?: string) { if (!targetId && link.reference_ids.length > 1) { setActiveCitation(link); return; } const target = citations?.references.find(item => item.id === (targetId || link.reference_ids[0])); if (!target) return; setActiveCitation(null); setReadingHistory(current => [...current, { page, block: link.block_id }]); onSelectBlock(sourceBlock(target)); setView('pdf'); }
-  function returnToCitation() { const target = readingHistory.at(-1); if (!target) return; setReadingHistory(current => current.slice(0, -1)); onPage(target.page); if (target.block) onSelectBlock({ id: target.block, page: target.page, bbox: [0, 0, 1, 1], text: '', type: 'paragraph', order: 0 }); setView('pdf'); }
+  function focusCitation(source: CitationSource, label: string) {
+    setCitationFocus({ source, label, run: structure?.parse_run_id });
+    onSelectBlock({ id: source.block_id, page: source.page, bbox: source.bbox, text: source.text || source.context || '', type: 'paragraph', order: 0 });
+    setView('pdf');
+  }
+  function jumpReference(link: CitationLink, targetId?: string) {
+    if (!targetId && link.reference_ids.length > 1) { setActiveCitation(link); return; }
+    const target = citations?.references.find(item => item.id === (targetId || link.reference_ids[0]));
+    if (!target) return;
+    setActiveCitation(null);
+    setReadingHistory(current => [...current, link]);
+    focusCitation(target, `参考文献 [${target.marker}]`);
+  }
+  function returnToCitation() {
+    const target = readingHistory.at(-1);
+    if (!target) return;
+    setReadingHistory(current => current.slice(0, -1));
+    focusCitation(target, `正文引用 ${target.marker_text}`);
+  }
   function syncFromPdf() {
     if (view !== 'parallel' || !linked || performance.now() < suppressUntil.current || !scrollRef.current || !pageSize.height) return;
     const root = scrollRef.current; const paperTop = (canvasRef.current?.parentElement?.getBoundingClientRect().top || root.getBoundingClientRect().top) - root.getBoundingClientRect().top + root.scrollTop; const position = root.scrollTop + root.clientHeight * .25 - paperTop;
@@ -289,26 +346,46 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
             <ScanFigurePanel key={`${document.id}-${structure.parse_run_id}-${page}`}
               documentId={document.id} runId={structure.parse_run_id} page={page}
               onSource={(bbox, label) => { setRegionTarget({bbox, label}); setView('pdf'); }} />
-          </Suspense> : view === 'tables' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载表格工具…</p>}><TablePanel title={document.title} onUse={onUseTable} documentId={document.id} runId={structure.parse_run_id} page={page} readOnly={readOnly} onSource={(bbox,label)=>{setRegionTarget({bbox,label});setView('pdf');}} /></Suspense> : view === 'formulas' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载公式工具…</p>}><FormulaPanel documentId={document.id} runId={structure.parse_run_id} page={page} modelConfigured={modelConfigured} readOnly={readOnly} onRegion={bbox => { setRegionTarget({bbox,label:'公式选区'}); setView('pdf'); }} onSource={block => { onPage(block.page); onSelectBlock(block); setView('pdf'); }} /></Suspense> : view === 'references' ? <div className="reference-list"><h3>References 原文条目</h3>{structure?.parse_run_id && onOpenReferenceSearch && <ReferenceDiscovery documentId={document.id} runId={structure.parse_run_id} readOnly={readOnly} onOpen={onOpenReferenceSearch} />}<p>数字引用可双向跳转；作者年份格式暂保留列表。</p>{citationError && <p role="alert">{citationError}</p>}{citations?.references.map(reference => <article key={reference.id}><strong>{reference.marker ? `[${reference.marker}]` : '未编号条目'}</strong><p>{reference.text}</p>{onFindReference && <button onClick={() => onFindReference(reference.text)}><Search size={12} />查找书目</button>}<button onClick={() => { onSelectBlock(sourceBlock(reference)); setView('pdf'); }}><Target size={12} />原文条目 · 第{reference.page}页</button><div>{reference.backlinks.map(link => <button key={link.id} title={link.context} onClick={() => { onSelectBlock(sourceBlock(link)); setView('pdf'); }}>正文引用 · 第{link.page}页</button>)}</div></article>)}{citations && !citations.references.length && <p>当前解析未识别出参考文献条目。</p>}</div> : error ? <div className="reader-error"><FileText size={28} /><h3>原文暂时无法显示</h3><p>{error}</p><a href={`/api/documents/${document.id}/pdf`} target="_blank" rel="noreferrer">直接打开 PDF</a></div> : (view === 'pdf' || view === 'parallel') ? (
+          </Suspense> : view === 'tables' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载表格工具…</p>}><TablePanel title={document.title} onUse={onUseTable} documentId={document.id} runId={structure.parse_run_id} page={page} readOnly={readOnly} onSource={(bbox,label)=>{setRegionTarget({bbox,label});setView('pdf');}} /></Suspense> : view === 'formulas' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载公式工具…</p>}><FormulaPanel documentId={document.id} runId={structure.parse_run_id} page={page} modelConfigured={modelConfigured} readOnly={readOnly} onRegion={bbox => { setRegionTarget({bbox,label:'公式选区'}); setView('pdf'); }} onSource={block => { onPage(block.page); onSelectBlock(block); setView('pdf'); }} /></Suspense>  : view === 'references' ? <div className="reference-list">
+          <h3>References 原文条目</h3>
+          {structure?.parse_run_id && onOpenReferenceSearch && <ReferenceDiscovery documentId={document.id} runId={structure.parse_run_id} readOnly={readOnly} onOpen={onOpenReferenceSearch} />}
+          <p>点击数字引用可双向跳转。扫描条目请对照原图。</p>
+          {citationError && <p role="alert">{citationError}</p>}
+          {citations?.references.map(reference => {
+            const continuation = new Map<number, CitationSource>();
+            for (const part of reference.source_spans ?? []) {
+              if (part.page !== reference.page && !continuation.has(part.page)) continuation.set(part.page, part);
+            }
+            return <article key={reference.id}>
+              <strong>{reference.marker ? `[${reference.marker}]` : '未编号条目'}</strong>
+              <p>{reference.text}</p>
+              {onFindReference && <button onClick={() => onFindReference(reference.text)}><Search size={12} />查找书目</button>}
+              <button onClick={() => focusCitation(reference, `参考文献 [${reference.marker}]`)}><Target size={12} />原文条目 · 第{reference.page}页</button>
+              {[...continuation.values()].map(part => <button key={part.page} onClick={() => focusCitation({ ...part, line_bbox: part.bbox }, '参考文献续文')}><Target size={12} />原文续页 · 第{part.page}页</button>)}
+              <div>{reference.backlinks.map(link => <button key={link.id} title={link.context} onClick={() => focusCitation(link, `正文引用 ${link.marker_text}`)}>正文引用 · 第{link.page}页</button>)}</div>
+            </article>;
+          })}
+          {citations && !citations.references.length && <p>当前解析未识别出参考文献条目。</p>}
+        </div> : error ? <div className="reader-error"><FileText size={28} /><h3>原文暂时无法显示</h3><p>{error}</p><a href={`/api/documents/${document.id}/pdf`} target="_blank" rel="noreferrer">直接打开 PDF</a></div> : (view === 'pdf' || view === 'parallel') ? (
           <>
             {loading && <div className="pdf-loading"><LoaderCircle className="spin" size={23} /><span>正在渲染原文</span></div>}
             <div className="pdf-paper" style={pageSize.width ? { width: pageSize.width, height: pageSize.height } : undefined}>
               <canvas ref={canvasRef} />
               <div className="textLayer" ref={textRef} />
-              {ocrSelection && ocrLines.length > 0 && <div className="ocr-selection-layer" aria-label="OCR 识别文字层">{ocrLines.map((line) => <span key={line.id} className="ocr-selection-text" style={ocrLineStyle(line.bbox, line.text)} title="OCR 识别文字，可选中复制；请对照原图核验">{line.text}</span>)}</div>}
+              {ocrLines.length > 0 && <div className="ocr-selection-layer" aria-label="OCR 识别文字层" aria-hidden={!ocrSelection} style={ocrSelection ? undefined : { visibility: 'hidden' }}>{ocrLines.map((line) => <span key={line.id} className="ocr-selection-text" data-ocr-block={line.blockId} data-ocr-offset={line.offset} style={ocrLineStyle(line.bbox, line.text)} title="OCR 识别文字，可选中复制；请对照原图核验">{line.text}</span>)}</div>}
               <div className={`block-overlays ${showBlocks ? 'show-all' : ''}`}>
-                {pageBlocks.filter((block) => showBlocks || !regionTarget && block.id === selectedBlock).map((block) => (
+                {pageBlocks.filter((block) => showBlocks || !visibleRegion && block.id === selectedBlock).map((block) => (
                   <button
                     key={block.id}
                     ref={block.id === selectedBlock ? highlightRef : undefined}
-                    className={`block-highlight ${!regionTarget && block.id === selectedBlock ? 'selected' : ''}`}
+                    className={`block-highlight ${!visibleRegion && block.id === selectedBlock ? 'selected' : ''}`}
                     title={block.text.slice(0, 160)}
                     aria-label={`定位内容：${block.text.slice(0, 60)}`}
                     style={displayBounds(block.bbox)}
                     onClick={() => onSelectBlock(block)}
                   />
                 ))}
-                {regionTarget && <button ref={highlightRef} className="block-highlight selected" title={regionTarget.label} aria-label={regionTarget.label} style={displayBounds(regionTarget.bbox)} />}
+                {visibleRegion && <button ref={highlightRef} className="block-highlight selected" title={visibleRegion.label} aria-label={visibleRegion.label} style={displayBounds(visibleRegion.bbox)} />}
               </div>
               <div className="citation-links-layer">{hotspots.map((spot, index) => <button key={`${spot.link.id}_${index}`} style={{ left: spot.left, top: spot.top, width: spot.width, height: spot.height }} onClick={() => jumpReference(spot.link)} title={`跳转至References ${spot.link.marker_text}`} aria-label={`跳转到参考文献 ${spot.link.marker_text}`} />)}</div>
             </div>

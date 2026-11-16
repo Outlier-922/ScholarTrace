@@ -15,10 +15,13 @@ import pymupdf as fitz
 from . import ocr, store
 from .graph_identity import author_name, norm
 from .ocr_outline import HEADING_WORDS, annotate_headings
+from .scan_bibliography import numbered_scan_entries
 
 logger = logging.getLogger(__name__)
 
 ARXIV = re.compile(r"\barxiv\s*:\s*(\d{4}\.\d{4,5})(v\d+)?", re.I)
+SCAN_ARXIV = re.compile(r"(?:\barxiv\s*:|(?<=preprint)arxiv\s*:|\bcorr,?\s+abs/)\s*"
+                        r"(\d{4}\.\d{4,5})(?:v\d+)?(?=(?:19|20)\d{2}\b|\D|$)", re.I)
 ARXIV_HEADER = re.compile(r"[ \t]*arxiv[ \t]*:[ \t]*(\d{4}\.\d{4,5})(v\d+)?"
                           r"(?:[ \t]*\[[a-z][a-z0-9.-]*\].*)?[ \t]*", re.I)
 FINGERPRINT_LIMIT = 2048
@@ -177,32 +180,55 @@ def _classify(text: str, level: int | None, title: str | None, page_number: int)
 
 
 def _references(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    result, inside = [], False
+    result, scan, inside = [], [], False
+
+    def add_entry(entry: dict[str, Any]) -> None:
+        doi = re.search(r"\b10\.\d{4,9}/[^\s<>]+", entry["text"])
+        arxiv = (SCAN_ARXIV if entry.get("source_spans") else ARXIV).search(entry["text"])
+        result.append({**entry, "doi": doi.group().rstrip(".,;") if doi else None,
+                       "arxiv_id": arxiv.group(1) if arxiv else None})
+
+    def add_old_candidates(block: dict[str, Any]) -> None:
+        # Native and unnumbered bibliography entries keep their original extraction.
+        for entry in re.split(r"(?m)(?=^\s*\[\d+\]\s)", block["text"]):
+            entry = entry.strip()
+            if len(entry) >= 12:
+                marker = re.match(r"^\s*\[(\d+)\]", entry)
+                add_entry({"text": entry, "marker": marker.group(1) if marker else None,
+                           "page": block["page"], "block_id": block["id"]})
+
+    def flush_scan() -> None:
+        if scan:
+            entries = numbered_scan_entries(scan)
+            if entries:
+                for entry in entries:
+                    add_entry(entry)
+            else:
+                for block in scan:
+                    add_old_candidates(block)
+            scan.clear()
+
     for block in blocks:
         text = block["text"].strip()
         if block["type"] == "heading" and re.match(r"^(?:\d+\.?\s*)?(references|bibliography|参考文献)\s*$", text, re.I):
+            flush_scan()
             inside = True
             continue
         if inside and block["type"] == "heading" and (
             re.match(r"appendix|附录|acknowledg", text, re.I)
             or block.get("heading_level") == 1 and block.get("metadata", {}).get("extraction") == "rapidocr"
         ):
+            flush_scan()
             inside = False
         if not inside or not text:
             continue
-        # A block may contain several numbered references. Keep original text.
-        entries = re.split(r"(?m)(?=^\s*\[\d+\]\s)", text)
-        for entry in entries:
-            entry = entry.strip()
-            if len(entry) < 12:
-                continue
-            marker = re.match(r"^\s*\[(\d+)\]", entry)
-            doi = re.search(r"\b10\.\d{4,9}/[^\s<>]+", entry)
-            arxiv = ARXIV.search(entry)
-            result.append({"text": entry, "marker": marker.group(1) if marker else None,
-                           "page": block["page"], "block_id": block["id"],
-                           "doi": doi.group().rstrip(".,;") if doi else None,
-                           "arxiv_id": arxiv.group(1) if arxiv else None})
+        if block.get("metadata", {}).get("extraction") == "rapidocr":
+            if block["type"] not in {"figure_caption", "table_caption"}:
+                scan.append(block)
+        else:
+            flush_scan()
+            add_old_candidates(block)
+    flush_scan()
     return result
 
 
