@@ -129,6 +129,17 @@ def test_region_ocr_unavailable_or_modified_crop_does_not_generate(client,source
     assert client.get(url+'/revisions').json()['items']==[]
 
 
+def test_invalid_scan_recognition_preserves_crop_for_correction(client, source, monkeypatch):
+    _, value = scan_region(client, source)
+    url = '/api/formula-sources/' + value['id']
+    monkeypatch.setattr(formula_ocr, 'runtime_identity', lambda: 'test-runtime')
+    monkeypatch.setattr(formula_ocr, 'recognize', lambda png: r'\frac{x}{')
+    response = client.post(url + '/recognize-scan', json={})
+    assert response.status_code == 502 and '未通过 LaTeX 检查' in response.json()['detail']
+    assert client.get(url + '/image').status_code == 200
+    assert client.get(url + '/revisions').json()['items'] == []
+
+
 def test_scope_and_parent_mismatch_rejected(client,source):
     doc,body,value=source
     assert client.post('/api/formula-sources',json={**body,'block_ids':['foreign']}).status_code==422

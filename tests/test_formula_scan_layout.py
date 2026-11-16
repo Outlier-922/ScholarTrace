@@ -1,4 +1,8 @@
-from backend.app import formula_scan_layout, formulas
+from hashlib import sha256
+
+import pymupdf
+
+from backend.app import formula_native, formula_scan_layout, formulas
 
 
 def block(identity, text, bbox, kind="paragraph", page=1):
@@ -63,8 +67,50 @@ def test_formula_block_response_selects_current_page_and_disables_unready_scans(
         "blocks": blocks, "pages": pages,
     } if parse_run_id == "run" else None)
     monkeypatch.setattr(formulas.formula_ocr, "runtime_identity", lambda: None)
-    result = formulas.blocks("doc", 1, "run")
+    result = formulas._page_blocks("doc", 1, "run")
     assert result["scan_ocr_ready"] is False
     assert [item["hint"] for item in result["scan_layout"]["items"]] == ["f(x) = x^2"]
     for page, status in ((2, "native"), (3, "needs_ocr"), (4, "rotated")):
-        assert formulas.blocks("doc", page, "run")["scan_layout"] == {"status": status, "items": []}
+        assert formulas._page_blocks("doc", page, "run")["scan_layout"] == {"status": status, "items": []}
+
+
+def test_two_columns_keep_separate_formula_labels_and_join_fraction_fragments():
+    rows = []
+    text = "Nearby prose provides the margins for this article."
+    for index in range(5):
+        y = .10 + index * .025
+        rows.extend([
+            block(f"left-{index}", text, [.10, y, .48, y+.014]),
+            block(f"right-{index}", text, [.52, y, .90, y+.014]),
+        ])
+    rows.extend([
+        block("fraction", "f(x) =", [.14,.24,.27,.256]),
+        block("upper", "i=1", [.28,.226,.325,.239]),
+        block("lower", "e−x", [.325,.251,.415,.269]),
+        block("left-label", "(1)", [.45,.240,.48,.255]),
+        block("right-anchor", "g(x)=x^2 (2)", [.545,.246,.895,.263]),
+    ])
+    first, second = formula_scan_layout.locate(rows)
+    assert first["label"] == "(1)" and .415 < first["bbox"][2] < .45 and first["bbox"][3] >= .269
+    assert second["label"] == "(2)" and second["bbox"][0] > .5
+    assert second["label_trim"] == "right"
+
+
+def test_pixel_trim_preserves_equation_and_removes_separated_printed_label(tmp_path):
+    path = tmp_path / "equation-with-label.pdf"
+    with pymupdf.open() as doc:
+        page = doc.new_page(width=600, height=800)
+        page.insert_text((335, 310), "g(x) = x", fontsize=13)
+        page.insert_text((510, 310), "(2)", fontsize=13)
+        doc.save(path)
+    digest = sha256(path.read_bytes()).hexdigest()
+    crop = {"bbox": [.54,.36,.877,.397], "label": "(2)", "hint": "g(x) = x", "label_trim": "right"}
+    [result] = formula_native.trim_equation_labels(path, digest, 1, [crop])
+    assert .62 < result["bbox"][2] < .85
+    assert "label_trim" not in result and result["label"] == "(2)"
+    assert formula_native.render_region(path, digest, 1, result["bbox"]).startswith(b"\x89PNG")
+
+
+def test_elementwise_product_and_tilde_accent_are_supported_latex():
+    latex = r"\tilde{r}_t = W_r \cdot (\mu_r \odot x_t + (1 - \mu_r) \odot x_{t-1})"
+    assert formulas.validate_tex(latex) == latex

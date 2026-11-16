@@ -31,4 +31,4 @@
 
 源码限制为4000字符的数学子集。服务端检查命令、括号与环境，**不完整解析TeX，也不证明数学等价**；直接通过API保存的结构合法片段仍可能渲染失败。页面用本地打包的KaTeX 0.19.1解析，错误以文本显示，并在预览失败时禁用手工保存。配置为`trust:false`、`maxSize:8`、`maxExpand:100`，每次使用新宏表；参见[KaTeX安全文档](https://katex.org/docs/security.html)和[渲染选项](https://katex.org/docs/options.html)。
 
-官方扫描件的 8 个独立公式位置已逐个核对。其他扫描版式、跨页公式和复杂公式准确率仍待验收，旋转扫描页暂不支持裁图。[自动定位实测](STAGE75_TEST_REPORT.md) · [手工框选实测](STAGE67_TEST_REPORT.md)
+官方单栏扫描件的 8 个独立公式，以及双栏验收副本中的 22 个公式位置已逐个核对。跨页公式、通栏混排和复杂公式准确率仍待验收，旋转扫描页暂不支持裁图。[双栏实测](STAGE76_TEST_REPORT.md) · [单栏实测](STAGE75_TEST_REPORT.md) · [手工框选实测](STAGE67_TEST_REPORT.md)

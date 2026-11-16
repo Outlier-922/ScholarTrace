@@ -10,6 +10,9 @@ from .ocr import source_line_spans
 
 _CAPTION = re.compile(r"^(figure|fig\.?|图|table|表)\s*\d", re.I)
 _LABEL = re.compile(r"^\(\s*\d{1,3}(?:[.\-]\d{1,3})?[a-z]?\s*\)$", re.I)
+_SUFFIX = re.compile(r"\s+(\(\s*\d{1,3}(?:[.\-]\d{1,3})?[a-z]?\s*\))$", re.I)
+_LIMIT = re.compile(r"^[a-z]\s*=\s*\d+$", re.I)
+_CLAUSE = re.compile(r"\b(?:where|which|that|while)\s+\w+\s+\w+", re.I)
 _RELATION = re.compile(r"[=≈≃≡≤≥∝≠]")
 _LHS = re.compile(r"(?:where\s+)?[\wα-ωΑ-Ω∑∏∫√][\w\d α-ωΑ-Ω∑∏∫√'.,+*/()\[\]{}_|^−\-]{0,46}$", re.I)
 _DISPLAY_SYMBOL = re.compile(r"[∑∏∫√]")
@@ -75,6 +78,131 @@ def _caption_bands(captions, prose):
     return bands
 
 
+def _gutter(prose):
+    # Estimate the inner page margins from the long prose lines. Short headings
+    # and columns in a single figure cannot establish a page-wide gutter.
+    left = [row for row in prose if row.width >= .24 and row.bbox[2] <= .516]
+    right = [row for row in prose if row.width >= .24 and row.bbox[0] >= .484]
+    if min(len(left), len(right)) < 5:
+        return None
+    starts = sorted(row.bbox[0] for row in right)
+    ends = sorted(row.bbox[2] for row in left)
+    inner_left = ends[(len(ends) - 1) * 3 // 4]
+    inner_right = starts[(len(starts) - 1) // 4]
+    if inner_right - inner_left < .012:
+        return None
+    return (inner_left + inner_right) / 2
+
+
+def _column_regions(rows, prose, blocked, bounds, height):
+    left_edge = median(row.bbox[0] for row in prose)
+    right_edges = sorted(row.bbox[2] for row in prose)
+    right_edge = right_edges[(len(right_edges) - 1) * 3 // 4]
+    labels = [row for row in rows if _LABEL.fullmatch(row.text) and row.bbox[0] > right_edge - .105]
+    algebra = [row for row in rows if _RELATION.search(row.text) and row.width >= .055 and not _LIMIT.fullmatch(row.text)]
+    scoped = [row for row in algebra if not any(
+        a <= (row.bbox[0]+row.bbox[2])/2 <= c and b <= row.center_y <= d for a,b,c,d in blocked
+    )]
+    numbers = {}
+    for label in labels:
+        candidates = [row for row in scoped if row not in numbers and row.bbox[2] <= label.bbox[0] + .004
+                      and row.bbox[0] <= label.bbox[0] - .069
+                      and abs(row.center_y - label.center_y) <= height * .62
+                      and len(_WORDS.findall(row.text)) <= 7]
+        if not candidates:
+            # The number beside a stacked fraction may sit below the baseline.
+            candidates = [row for row in scoped if row not in numbers and row.bbox[2] < label.bbox[0]
+                          and _RELATION.fullmatch(row.text[-1:]) and height*.62 < label.center_y-row.center_y < height*2.6]
+        if candidates:
+            row = min(candidates, key=lambda item: (abs(item.center_y-label.center_y), -item.width))
+            numbers[row] = label
+
+    anchors = {}
+    for row in scoped:
+        suffix = _SUFFIX.search(row.text) if row.bbox[2] >= right_edge - .054 and _math(row) else None
+        if row in numbers or suffix:
+            anchors[row] = (numbers.get(row), suffix)
+            continue
+        if not _math(row) or any(abs(root.center_y-row.center_y) < height*.75 for root in numbers):
+            continue
+        before = min((row.bbox[1] - line.bbox[3] for line in prose if line.center_y < row.center_y), default=1)
+        after = min((line.bbox[1] - row.bbox[3] for line in prose if line.center_y >= row.center_y), default=1)
+        detached_clause = any(line is not row and abs(line.center_y-row.center_y) < height*.45 and
+                              (len(_WORDS.findall(line.text)) >= 3 or _CLAUSE.search(line.text)) and not _math(line)
+                              for line in rows)
+        if before >= height*.16 and after >= height*.13 and not detached_clause:
+            if row.bbox[0] >= left_edge + .019 or "(" in row.text.split("=", 1)[0]:
+                anchors[row] = (None, None)
+
+    extras = {row: [] for row in anchors}
+    for line in rows:
+        if line in anchors or line in prose or _LABEL.fullmatch(line.text) or len(_WORDS.findall(line.text)) >= 3:
+            continue
+        nearby = []
+        for root, (number, suffix) in anchors.items():
+            stacked = bool(_RELATION.fullmatch(root.text[-1:]))
+            right = number.bbox[0] if number else bounds[1]
+            if (abs(root.center_y-line.center_y) <= height*(1.75 if stacked else .75)
+                    and (line.bbox[0] >= root.bbox[0] - .019 if stacked else
+                         _overlap(line.bbox[0], line.bbox[2], root.bbox[0], root.bbox[2]) >= -.016)
+                    and line.bbox[2] <= right + .035):
+                nearby.append(root)
+        if nearby:
+            root = min(nearby, key=lambda item: (abs(item.center_y-line.center_y), item.bbox))
+            extras[root].append(line)
+
+    regions = []
+    for row, (label, suffix) in sorted(anchors.items(), key=lambda entry: entry[0].center_y):
+        parts = [row, *extras[row]]
+        x0, y0 = (min(line.bbox[i] for line in parts) for i in (0, 1))
+        x1, y1 = (max(line.bbox[i] for line in parts) for i in (2, 3))
+        above = max((line.bbox[3] for line in prose if line.bbox[3] <= row.bbox[1]), default=.052)
+        top = min(y0, above + .006)
+        bottom = min((line.bbox[1] for line in prose if line.bbox[1] >= row.bbox[3]), default=.932)
+        bottom = min(bottom, min((line.bbox[1] for line in rows if line not in anchors
+                                  and line.text.casefold().startswith("where ")
+                                  and line.bbox[1] > row.center_y + height*.65), default=.932))
+        for other in anchors:
+            if other.center_y < row.center_y:
+                top = max(top, (other.bbox[3] + row.bbox[1]) / 2)
+            elif other.center_y > row.center_y:
+                bottom = min(bottom, (other.bbox[1] + row.bbox[3]) / 2)
+        detached = label is not None and label.center_y - row.center_y > height*.62
+        if label is None and suffix is None and row.text.count("(") > row.text.count(")"):
+            # Unclosed OCR fragments can hide the end of the equation. Use the
+            # remaining width of this column while keeping the prose row limits.
+            x1 = max(x1, right_edge)
+        right = min(x1+.008, label.bbox[0]-.003) if label and not detached else x1+.008
+        if detached:
+            bottom = min(bottom, label.bbox[3])
+        bbox = (max(bounds[0], x0-.008), max(top, y0-.008), min(bounds[1], right), min(bottom, y1+.006))
+        if bbox[2]-bbox[0] >= .028 and .009 <= bbox[3]-bbox[1] <= .105:
+            hint = row.text[:suffix.start()] if suffix else row.text
+            regions.append({
+                "bbox": [round(v, 6) for v in bbox], "hint": hint[:108] if _math(row) else "公式原图",
+                "label": label.text if label else suffix[1] if suffix else None,
+                **({"label_trim": "bottom"} if detached else {"label_trim": "right"} if suffix else {}),
+            })
+    return regions
+
+
+def _two_columns(rows, captions, blocked, prose, gutter, height):
+    regions = []
+    for bounds in ((0, gutter), (gutter, 1)):
+        # A few OCR polygons cross the measured gutter by a pixel. Allow that
+        # measurement error, then clamp the saved crop to its own column.
+        def inside(line):
+            return bounds[0] - .008 <= line.bbox[0] and line.bbox[2] <= bounds[1] + .008
+
+        column = [row for row in rows if inside(row)]
+        context = [row for row in prose if inside(row)]
+        column_captions = [c for c in captions if inside(c) or
+                           (c.bbox[0] < gutter - .12 and c.bbox[2] > gutter + .12)]
+        if context:
+            regions += _column_regions(column, context, blocked + _caption_bands(column_captions, context), bounds, height)
+    return regions[:24]
+
+
 def locate(blocks):
     """Return independent same-page regions, leaving uncertain text in the reader."""
     rows = []
@@ -97,6 +225,9 @@ def locate(blocks):
         return []
     height = max(.008, min(.023, median(row.height for row in rows)))
     prose = [row for row in rows if _prose(row) and not _math(row)]
+    gutter = _gutter(prose)
+    if gutter is not None:
+        return _two_columns(rows, captions, blocked, prose, gutter, height)
     blocked += _caption_bands(captions, prose)
     labels = [row for row in rows if _LABEL.fullmatch(row.text)]
     candidates = []

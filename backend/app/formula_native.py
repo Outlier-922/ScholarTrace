@@ -30,6 +30,49 @@ def render_region(path, expected_sha, page_number, region=None):
         return page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), clip=area, alpha=False).tobytes('png')
 
 
+def trim_equation_labels(path, expected_sha, page_number, suggestions):
+    """Trim only when the pixels separate a small trailing printed equation label."""
+    import numpy as np
+
+    check_pdf(path, expected_sha)
+    result = []
+    with pymupdf.open(path) as pdf:
+        page = pdf[page_number - 1]
+        if page.rotation:
+            raise ValueError('rotated_formula_page_not_supported')
+        width, height = page.rect.width, page.rect.height
+        scale = min(2.0, 1800 / max(width, height))
+        for item in suggestions:
+            candidate = {**item}
+            direction = candidate.pop("label_trim", None)
+            if direction is None:
+                result.append(candidate)
+                continue
+            bounds = list(candidate["bbox"])
+            clip = pymupdf.Rect(*(v * size for v, size in zip(bounds, (width, height) * 2)))
+            pixels = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), clip=clip, colorspace=pymupdf.csGRAY, alpha=False)
+            ink = np.frombuffer(pixels.samples, dtype=np.uint8).reshape((pixels.height, pixels.width)) < 190
+            axis = 0 if direction == "right" else 1
+            occupied = np.flatnonzero(ink.any(axis=axis))
+            total = (width if axis == 0 else height) * scale
+            gap = .015 if axis == 0 else .0027
+            maximum_label = .052 if axis == 0 else .024
+            extent = pixels.width if axis == 0 else pixels.height
+            at_edge = occupied.size and extent - occupied[-1] <= .024 * total
+            splits = [i for i, distance in enumerate(np.diff(occupied))
+                      if at_edge and distance >= gap * total
+                      and occupied[-1] - occupied[i+1] <= maximum_label * total]
+            if splits:
+                separation = splits[-1]
+                offset = pixels.x if axis == 0 else pixels.y
+                endpoint = (offset + occupied[separation] + min(3, (occupied[separation+1] - occupied[separation])/2)) / total
+                if bounds[axis] + (.028 if axis == 0 else .009) <= endpoint < bounds[axis+2]:
+                    bounds[axis+2] = round(float(endpoint), 6)
+                    candidate["bbox"] = bounds
+            result.append(candidate)
+    return result
+
+
 def extract(path, expected_sha, page_number, boxes):
     check_pdf(path, expected_sha)
     with pymupdf.open(path) as pdf:
