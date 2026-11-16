@@ -14,6 +14,7 @@ import pymupdf as fitz
 
 from . import ocr, store
 from .graph_identity import author_name, norm
+from .ocr_outline import HEADING_WORDS, annotate_headings
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +22,6 @@ ARXIV = re.compile(r"\barxiv\s*:\s*(\d{4}\.\d{4,5})(v\d+)?", re.I)
 ARXIV_HEADER = re.compile(r"[ \t]*arxiv[ \t]*:[ \t]*(\d{4}\.\d{4,5})(v\d+)?"
                           r"(?:[ \t]*\[[a-z][a-z0-9.-]*\].*)?[ \t]*", re.I)
 FINGERPRINT_LIMIT = 2048
-HEADING_WORDS = re.compile(r"^(abstract|introduction|background|related work|method(?:s|ology)?|"
-                           r"experiments?|results?|discussion|conclusions?|references|bibliography|"
-                           r"appendix(?:\s+[A-Z])?|acknowledg(?:e)?ments?|摘要|引言|参考文献|附录)\s*$", re.I)
 
 
 def _normalized_bbox(bbox: list[float] | tuple[float, ...], width: float, height: float) -> list[float]:
@@ -93,18 +91,18 @@ def _body_font(pdf: fitz.Document) -> float:
     return sizes.most_common(1)[0][0] if sizes else 10
 
 
-def _ocr_paragraphs(lines: list[dict[str, Any]], width: float, height: float) -> list[dict[str, Any]]:
+def _ocr_paragraphs(lines: list[dict[str, Any]], width: float, height: float,
+                    page_number: int = 1) -> list[dict[str, Any]]:
     """Group adjacent same-column OCR lines, retaining every original line box."""
-    ordered = _reading_order(lines, width)
+    ordered = _reading_order(annotate_headings(lines, width, height, page_number), width)
     grouped: list[dict[str, Any]] = []
-    body_size = statistics.median([line["font_size"] for line in lines]) if lines else 10
     for line in ordered:
-        line_record = {"text": line["text"], "bbox": _normalized_bbox(line["rect"], width, height),
-                       "confidence": line["confidence"]}
-        level = _heading_level(line["text"], line["font_size"], body_size, False)
+        records = [{"text": part["text"], "bbox": _normalized_bbox(part["rect"], width, height),
+                    "confidence": part["confidence"]} for part in line.get("source_lines", [line])]
+        level = line["ocr_heading_level"]
         previous = grouped[-1] if grouped else None
         merge = False
-        if previous and not level and not previous.get("ocr_heading"):
+        if previous and not level and not previous["ocr_heading_level"]:
             a, b = previous["rect"], line["rect"]
             previous_height = max(1.0, previous["last_height"])
             same_column = abs(a[0] - b[0]) < max(18, width * .025) and (a[0] < width / 2) == (b[0] < width / 2)
@@ -116,12 +114,11 @@ def _ocr_paragraphs(lines: list[dict[str, Any]], width: float, height: float) ->
             previous["text"] += "\n" + line["text"]
             previous["rect"] = [min(previous["rect"][0], line["rect"][0]), min(previous["rect"][1], line["rect"][1]),
                                 max(previous["rect"][2], line["rect"][2]), max(previous["rect"][3], line["rect"][3])]
-            previous["ocr_lines"].append(line_record)
+            previous["ocr_lines"].extend(records)
             previous["confidence"] = sum(item["confidence"] for item in previous["ocr_lines"]) / len(previous["ocr_lines"])
             previous["last_height"] = line["rect"][3] - line["rect"][1]
         else:
-            grouped.append({**line, "ocr_lines": [line_record], "ocr_heading": bool(level),
-                            "body_size": body_size, "last_height": line["rect"][3] - line["rect"][1]})
+            grouped.append({**line, "ocr_lines": records, "last_height": line["rect"][3] - line["rect"][1]})
     return grouped
 
 
@@ -186,7 +183,10 @@ def _references(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if block["type"] == "heading" and re.match(r"^(?:\d+\.?\s*)?(references|bibliography|参考文献)\s*$", text, re.I):
             inside = True
             continue
-        if inside and block["type"] == "heading" and re.match(r"appendix|附录|acknowledg", text, re.I):
+        if inside and block["type"] == "heading" and (
+            re.match(r"appendix|附录|acknowledg", text, re.I)
+            or block.get("heading_level") == 1 and block.get("metadata", {}).get("extraction") == "rapidocr"
+        ):
             inside = False
         if not inside or not text:
             continue
@@ -346,7 +346,8 @@ def parse_document(document_id: str, expected_run_id: str | None = None) -> None
                 image_info = page.get_image_info()
                 if perform_ocr and sum(len(value["text"]) for value in raw) < 20 and image_info:
                     try:
-                        recognized = first_ocr if number == 1 and first_ocr is not None else _ocr_paragraphs(ocr.extract_ocr(page), width, height)
+                        recognized = (first_ocr if number == 1 and first_ocr is not None
+                                      else _ocr_paragraphs(ocr.extract_ocr(page), width, height, number))
                         if recognized:
                             raw, used_ocr = recognized, True
                     except Exception:
@@ -354,8 +355,8 @@ def parse_document(document_id: str, expected_run_id: str | None = None) -> None
                         logger.warning("OCR failed for document %s page %s", document_id, number, exc_info=True)
                 blocks = []
                 for order, value in enumerate(raw):
-                    page_body_size = value.get("body_size", body_size) if used_ocr else body_size
-                    level = _heading_level(value["text"], value["font_size"], page_body_size, value["bold"])
+                    level = (value["ocr_heading_level"] if used_ocr else
+                             _heading_level(value["text"], value["font_size"], body_size, value["bold"]))
                     kind = _classify(value["text"], level, title, number)
                     if kind == "title":
                         level = 1
