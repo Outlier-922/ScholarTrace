@@ -479,6 +479,8 @@ from . import formulas
 app.include_router(formulas.router)
 from . import table_refinement
 app.include_router(table_refinement.router)
+from . import scan_figures
+app.include_router(scan_figures.router)
 from . import literature_batches
 app.include_router(literature_batches.router)
 from . import reference_discovery
