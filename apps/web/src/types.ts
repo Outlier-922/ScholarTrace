@@ -67,6 +67,7 @@ export interface SourceLocation {
   parse_run_id?: string;
   page: number;
   block_id: string;
+  ocr_line_bbox?: [number, number, number, number];
 }
 
 export interface Evidence extends SourceLocation {

@@ -105,3 +105,46 @@ def test_contact_block_with_an_organization_and_multiple_mailboxes_does_not_crea
     store.set_run_status(doc['parse_run_id'], 'ready')
     assert client.get(f"/api/documents/{doc['id']}/front-matter").json()['authors'] == []
     assert client.delete(f"/api/documents/{doc['id']}").status_code == 200
+
+
+def test_ocr_byline_requires_unique_geometry_and_leaves_unprinted_affiliation_empty():
+    def block(index, kind, rows):
+        text = '\n'.join(text for text, _ in rows)
+        boxes = [box for _, box in rows]
+        return {
+            'id': f'block-{index}', 'document_id': 'doc', 'parse_run_id': 'scan', 'page': 1,
+            'type': kind, 'text': text, 'bbox': [min(box[0] for box in boxes), min(box[1] for box in boxes),
+                                                max(box[2] for box in boxes), max(box[3] for box in boxes)],
+            'metadata': {'extraction': 'rapidocr', 'lines': [
+                {'text': value, 'bbox': box, 'confidence': .97} for value, box in rows
+            ]},
+        }
+
+    blocks = [
+        block(0, 'title', [('Synthetic Scanned Study', [.2, .10, .8, .13])]),
+        block(1, 'paragraph', [('Alex Fixture*', [.49, .171, .65, .185]),
+                               ('alex@example.test', [.47, .187, .68, .201])]),
+        block(2, 'paragraph', [('Mira Example†', [.20, .174, .35, .187]),
+                               ('Example University', [.18, .188, .38, .201]),
+                               ('mira@example.test', [.18, .202, .38, .215])]),
+        block(3, 'heading', [('Abstract', [.40, .30, .60, .32])]),
+        block(4, 'paragraph', [('Unrelated prose from the manuscript.', [.18, .82, .80, .834]),
+                               ('†Work performed while at Other Institute.', [.18, .835, .59, .849])]),
+    ]
+    doc = {'id': 'doc', 'title': 'Synthetic Scanned Study'}
+    structure = {'blocks': blocks, 'parse_run_id': 'scan'}
+    result = front_matter.extract(doc, structure)
+    assert result['extraction'] == 'rapidocr'
+    mira, alex = result['authors']
+    assert [a['source']['text'] for a in (mira, alex)] == ['Mira Example', 'Alex Fixture']
+    assert alex['affiliations'] == []
+    institution = mira['affiliations'][0]['source']
+    assert institution['text'] == 'Example University'
+    assert institution['ocr_line_bbox'] == (.18, .188, .38, .201)
+    assert blocks[2]['text'][institution['start']:institution['end']] == institution['text']
+    assert [note['text'] for note in mira['work_notes']] == ['†Work performed while at Other Institute.']
+
+    # Both institutions could belong to the same author based on alignment.
+    # The extractor must leave the conflict unresolved rather than use input order.
+    blocks.append(block(5, 'paragraph', [('Conflicting Institute', [.19, .188, .37, .201])]))
+    assert front_matter.extract(doc, structure)['authors'] == []

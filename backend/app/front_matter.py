@@ -1,7 +1,8 @@
-"""Read author and affiliation candidates from native first-page evidence."""
+"""Read author and affiliation candidates from first-page evidence."""
 
 import hashlib
 import re
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,6 +39,15 @@ class Line:
             'page': self.block['page'], 'block_id': self.block['id'],
             'start': self.start + start, 'end': self.start + end, 'text': self.text[start:end],
         }
+
+
+@dataclass(frozen=True)
+class OcrLine(Line):
+    bbox: tuple[float, float, float, float]
+    confidence: float
+
+    def source(self, start: int = 0, end: int | None = None) -> dict[str, Any]:
+        return {**super().source(start, end), 'ocr_line_bbox': self.bbox, 'ocr_confidence': self.confidence}
 
 
 def _lines(block: Block) -> list[Line]:
@@ -131,12 +141,104 @@ def _numbered_footnotes(blocks: list[Block]) -> dict[str, list[dict[str, Any]]]:
     return definitions
 
 
+def _ocr_lines(block: Block) -> list[OcrLine]:
+    """Bind each OCR line to its saved line box and a literal block substring."""
+    lines = _lines(block)
+    records = block['metadata'].get('lines') or []
+    if len(records) != len(lines) or any(record.get('text') != line.text for line, record in zip(lines, records)):
+        return []
+    result = []
+    left, top, right, bottom = block['bbox']
+    for line, record in zip(lines, records):
+        x0, y0, x1, y1 = record['bbox']
+        confidence = record['confidence']
+        if left <= x0 < x1 <= right and top <= y0 < y1 <= bottom and 0 <= confidence <= 1:
+            result.append(OcrLine(block, line.text, line.start, (x0, y0, x1, y1), confidence))
+    return result
+
+
+def _aligned_above(lower: OcrLine, header: list[OcrLine]) -> list[OcrLine]:
+    left, top, right, _ = lower.bbox
+    candidates = []
+    for upper in header:
+        x0, y0, x1, bottom = upper.bbox
+        if top - y0 < .006 or not -.006 <= top - bottom <= .016:
+            continue
+        overlap = min(right, x1) - max(left, x0)
+        if overlap >= .7 * min(right - left, x1 - x0) and abs(left + right - x0 - x1) <= .08:
+            candidates.append(upper)
+    nearest = max((line.bbox[1] for line in candidates), default=0)
+    return [line for line in candidates if nearest - line.bbox[1] <= .005]
+
+
+def _ocr_byline(document: dict[str, Any], structure: dict[str, Any]) -> list[dict[str, Any]]:
+    blocks = [b for b in structure['blocks'] if b['page'] == 1 and b['text']
+              and b.get('metadata', {}).get('extraction') == 'rapidocr' and b['bbox'][0] >= .075]
+    title_end = _title_end(blocks, document['title'])
+    if title_end is None:
+        return []
+    lines = [line for block in blocks for line in _ocr_lines(block)]
+    stop = min((line.bbox[1] for line in lines
+                if line.bbox[1] >= title_end and norm(line.text) in {'abstract', '摘要'}),
+               default=title_end + .25)
+    header = [line for line in lines if title_end - .004 <= line.bbox[1] < min(stop, .65)
+              and line.bbox[3] <= stop + .004]
+    if len(header) > 160:
+        return []
+    notes = [(line, match) for line in lines if line.confidence >= .80 and .70 <= line.bbox[1] <= .93
+             if (match := WORK_NOTE.fullmatch(line.text))]
+    candidates = []
+    for contact in header:
+        if contact.confidence < .80 or contact.text.startswith('{') or not EMAIL_LINE.fullmatch(contact.text):
+            continue
+        adjacent = _aligned_above(contact, header)
+        if len(adjacent) != 1 or adjacent[0].confidence < .80:
+            continue
+        name = adjacent[0]
+        organization = None
+        if INSTITUTION.search(name.text) and '@' not in name.text:
+            organization = name
+            adjacent = _aligned_above(organization, header)
+            if len(adjacent) != 1 or adjacent[0].confidence < .80:
+                continue
+            name = adjacent[0]
+        match = _name(name)
+        if match is None:
+            continue
+        note_marks = set(re.findall(r'[†‡]', match['marks']))
+        work_notes = [line.source() for line, note in notes if note['marker'] in note_marks
+                      and sum(other['marker'] == note['marker'] for _, other in notes) == 1]
+        candidates.append((name, {
+            'source': name.source(*match.span('name')),
+            'affiliations': [{'source': organization.source(), 'method': 'ocr_contact_layout'}] if organization else [],
+            'work_notes': work_notes,
+        }))
+    name_counts = Counter((name.block['id'], name.start) for name, _ in candidates)
+    unique = [(name, item) for name, item in candidates if name_counts[name.block['id'], name.start] == 1]
+    if not any(item['affiliations'] for _, item in unique):
+        return []
+    # OCR block order can interleave columns. Group near-equal baselines
+    # before sorting horizontally so all names in a printed row stay together.
+    result = []
+    row = []
+    for pair in sorted(unique, key=lambda pair: sum(pair[0].bbox[1::2])):
+        if row and sum(pair[0].bbox[1::2]) - sum(row[0][0].bbox[1::2]) > .016:
+            result.extend(item for _, item in sorted(row, key=lambda pair: pair[0].bbox[0]))
+            row = []
+        row.append(pair)
+    result.extend(item for _, item in sorted(row, key=lambda pair: pair[0].bbox[0]))
+    return result
+
+
 def extract(document: dict[str, Any], structure: dict[str, Any]) -> dict[str, Any]:
     blocks = [block for block in structure['blocks']
               if block['page'] == 1 and block['text'] and native(block) and block['bbox'][0] >= .075]
     result = {'document_id': document['id'], 'parse_run_id': structure['parse_run_id'], 'authors': []}
     title_end = _title_end(blocks, document['title'])
     if title_end is None:
+        ocr_authors = _ocr_byline(document, structure)
+        if ocr_authors:
+            result.update(authors=ocr_authors, extraction='rapidocr')
         return result
     stop = min((block['bbox'][1] for block in blocks
                 if block['bbox'][1] >= title_end and norm(block['text']) in {'abstract', '摘要'}),

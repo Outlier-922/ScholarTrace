@@ -58,6 +58,9 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
     if ('source_kind' in sourceEvidence && (sourceEvidence.source_kind === 'table_cell' || sourceEvidence.source_kind === 'table_draft')) {
       setRegionTarget({bbox:sourceEvidence.bbox,label:sourceEvidence.table_cell?`问答表格第${sourceEvidence.table_cell.row+1}行第${sourceEvidence.table_cell.column+1}列`:'手工稿对应原页（未核验）'});
     }
+    else if (sourceEvidence.ocr_line_bbox) {
+      setRegionTarget({bbox:sourceEvidence.ocr_line_bbox,label:'首页署名原文'});
+    }
     else setRegionTarget(null);
     setView('pdf');
   },[sourceEvidence,document.id,structure?.parse_run_id,page,selectedBlock]);

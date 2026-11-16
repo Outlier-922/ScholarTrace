@@ -9,6 +9,7 @@ interface HeaderSource extends SourceLocation {
 }
 
 interface HeaderAuthors {
+  extraction?: 'rapidocr';
   authors: {
     source: HeaderSource;
     affiliations: { source: HeaderSource; method: string }[];
@@ -40,7 +41,7 @@ export default function FrontMatter({ documentId, parseRunId, status, onSource }
     {error ? <p role="status">暂时无法读取首页署名</p> : !result ? <p role="status">正在读取首页署名…</p>
       : !result.authors.length ? <p>当前解析未找到足够明确的首页署名。可打开 PDF 首页核对。</p>
       : <>
-        <p>首页原文候选，点击定位。</p>
+        <p>{result.extraction === 'rapidocr' ? '首页 OCR 识别候选，点击核对原图。' : '首页原文候选，点击定位。'}</p>
         <ol>{result.authors.map(author => <li key={`${author.source.block_id}-${author.source.start}`}>
           <button aria-label={`定位作者 ${author.source.text}`} onClick={() => onSource(author.source)}>
             <strong>{author.source.text}</strong>
@@ -48,7 +49,7 @@ export default function FrontMatter({ documentId, parseRunId, status, onSource }
           {author.affiliations.length ? author.affiliations.map(({ source }) =>
             <button key={`${source.block_id}-${source.start}`} aria-label={`定位机构 ${source.text}`}
               onClick={() => onSource(source)}>{source.text}</button>)
-            : <small>署名机构待核对</small>}
+            : <small>{result.extraction === 'rapidocr' ? '未识别出署名机构' : '署名机构待核对'}</small>}
           {author.work_notes.map(note => <button className="front-matter-note" key={`${note.block_id}-${note.start}`}
             onClick={() => onSource(note)}>工作期间脚注 · {note.text}</button>)}
         </li>)}</ol>
