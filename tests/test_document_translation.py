@@ -10,10 +10,11 @@ import time
 import zipfile
 
 import httpx
+import pymupdf
 import pytest
 
 from backend.app import document_translation as full, model_client, store, translation, workflow
-from conftest import wait_for_document
+from conftest import upload_pdf, wait_for_document
 from test_workflow import papers, planned, start, wait, configure
 
 
@@ -45,7 +46,7 @@ def run(client,job,**options):
     return done(client,job['id'])
 
 
-def provider(monkeypatch,fail=False,model=None):
+def provider(monkeypatch,fail=False,model=None,*,status_code=None):
     configure(monkeypatch);monkeypatch.setenv('LLM_MODEL',model or 'document-fixture-'+uuid.uuid4().hex);calls=[]
     class FakeClient:
         def __init__(self,**kwargs):pass
@@ -54,6 +55,9 @@ def provider(monkeypatch,fail=False,model=None):
         async def post(self,url,**kwargs):
             payload=json.loads(kwargs['json']['messages'][-1]['content']);calls.append(payload)
             if fail:raise httpx.ReadTimeout('synthetic private provider failure')
+            if status_code:
+                return httpx.Response(status_code, json={'error': 'synthetic private provider failure'},
+                                      request=httpx.Request('POST',url))
             return httpx.Response(200,json={'choices':[{'message':{'content':json.dumps({'translation':'合成译文：'+payload['text']})}}],
                 'usage':{'prompt_tokens':100,'completion_tokens':50}},request=httpx.Request('POST',url))
     monkeypatch.setattr(model_client.httpx,'AsyncClient',FakeClient)
@@ -115,11 +119,63 @@ def test_whole_document_preserved_units_do_not_count_as_translations(client,pape
     page=client.get('/api/document-translations/'+job['id']+'?page=1').json();assert all(unit['page']==1 for unit in page['items'])
 
 
-def test_failed_request_never_retries_automatically_and_budget_is_retained(client,papers,monkeypatch):
-    calls=provider(monkeypatch,fail=True);job=plan(client,papers[0],2);result=run(client,job,allow_model=True)
+def test_layout_keeps_cells_and_bibliography_but_translates_numeric_prose_and_appendix(client, tmp_path, monkeypatch):
+    path = tmp_path / 'synthetic-translation-layout.pdf'
+    with pymupdf.open() as pdf:
+        for _ in range(3):
+            page = pdf.new_page(width=400, height=600)
+            page.insert_text((60, 60), 'Synthetic fixture PDF')
+        for y in (132, 156, 222):
+            pdf[0].draw_line((72, y), (328, y))
+        pdf.save(path)
+    doc = wait_for_document(client, upload_pdf(client, path)['id'])
+    calls = provider(monkeypatch)
+
+    def save(page, entries):
+        rows = [{'id': store.new_id('blk'), 'type': kind, 'text': text, 'bbox': bbox,
+                 'order': i, 'metadata': {'extraction': 'native_pdf'}, 'section_path': sections}
+                for i, (kind, text, bbox, sections) in enumerate(entries)]
+        store.save_page(doc['id'], doc['parse_run_id'], page, 400, 600, 0, [0, 0, 400, 600], 'ready', rows)
+        return [row['id'] for row in rows]
+
+    table, cell, heading, body_text = save(1, [
+        ('table_caption', 'Table 1: Example results.', [.18,.17,.82,.20], []),
+        ('paragraph', 'Accuracy 78.5', [.23,.30,.45,.32], []),
+        ('heading', '3.1\nExperimental Setup', [.18,.39,.72,.42], []),
+        ('table_candidate', 'The synthetic model was tested under the stated conditions and reports 7 samples, 8 groups and 9 trials.', [.18,.43,.82,.50], []),
+    ])
+    _, reference = save(2, [
+        ('heading', 'References', [.18,.12,.48,.16], ['References']),
+        ('paragraph', 'Example Author. Synthetic Paper.', [.18,.19,.82,.24], ['References']),
+    ])
+    appendix, caption = save(3, [
+        ('heading', 'Appendix: Results', [.18,.1,.54,.15], ['References','Appendix: Results']),
+        ('figure_caption', 'Figure 1: Additional synthetic results.', [.18,.42,.82,.46], ['References','Appendix: Results']),
+    ])
+
+    job = plan(client, doc)
+    assert job['estimate']['uncached_requests'] == 5
+    final = run(client, job, allow_model=True, max_model_calls=5, max_output_tokens=17500)
+    assert final['status'] == 'completed' and len(calls) == 5
+    units = {unit['block_id']: unit for unit in full.detail(final['id'])['items']}
+    for key in [table, heading, body_text, appendix, caption]:
+        assert units[key]['status'] == 'translated'
+    assert units[heading]['translation'].startswith('3.1\n')
+    assert any(call['text'] == 'Experimental Setup' for call in calls)
+    assert units[body_text]['source']['type'] == 'table_candidate'
+    assert units[cell]['reason'] == '原表区文字原样保留'
+    assert units[reference]['status'] == 'preserved'
+    assert units[cell]['translation'] is units[reference]['translation'] is None
+
+
+@pytest.mark.parametrize('status_code',[None,402])
+def test_failed_request_never_retries_automatically_and_budget_is_retained(client,papers,monkeypatch,status_code):
+    calls=provider(monkeypatch,fail=status_code is None,status_code=status_code);job=plan(client,papers[0],2);result=run(client,job,allow_model=True)
     assert result['status']=='failed' and len(calls)==1 and result['counts']['failed']==1
     assert result['totals']['calls']==result['totals']['unreported_usage']==1 and result['totals']['reserved_output_tokens']==3500
     assert 'synthetic private provider failure' not in json.dumps(result)
+    if status_code==402:
+        assert 'HTTP 402' in result['notice'] and full.repo.items(job['id'])[0]['error_code']=='model_payment_required'
     assert client.post('/api/document-translations/'+job['id']+'/control',json={'action':'resume','expected_revision':result['revision']}).status_code==409
     successes=provider(monkeypatch,model=os.environ['LLM_MODEL']);finished=run(client,result,allow_model=True)
     assert finished['status']=='completed' and len(successes)==2 and finished['totals']['calls']==3

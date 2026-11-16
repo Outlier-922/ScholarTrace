@@ -33,6 +33,23 @@ def test_only_strong_bounded_continuations_are_grouped(change):
     assert not groups.pairs(rows,{'right'})
 
 
+def test_page_figure_and_footer_do_not_break_a_confirmed_sentence_continuation():
+    rows = blocks()
+    rows[0]['text'] = 'For each synthetic input the method computes the final output as a weighted sum'
+    rows[1].update(type='figure_caption', text='Figure 1: Synthetic results.')
+    rows[2].update(text='of the values from the selected input, under the stated configuration.',
+                   bbox=[.15,.39,.85,.44])
+    rows.insert(1, {'id':'footnote','page':1,'type':'paragraph','bbox':[.17,.90,.84,.94],
+                    'metadata':{'extraction':'native_pdf'},
+                    'text':'4This footnote expands on one property of the synthetic trial and is a separate note.'})
+    for block in rows:
+        block['section_path'] = ['3 Method']
+    pair, = groups.pairs(rows, {'left','right','footnote'})
+    assert [part['id'] for part in pair] == ['left', 'right']
+    rows[-1]['section_path'] = ['4 Results']
+    assert groups.pairs(rows, {'left','right'}) == []
+
+
 @pytest.fixture
 def grouped_source(client,papers,monkeypatch):
     document=dict(papers[0]);base=store.get_structure(document['id'],parse_run_id=document['parse_run_id']);rows=blocks()

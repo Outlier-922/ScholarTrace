@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response, PlainTextResponse, HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from . import document_translation_layout as layout
 from . import model_client, research_store, source_scope, store, translation, translation_groups
 from . import document_translation_store as repo
 
@@ -87,13 +88,22 @@ def checked_block(job,unit):
             candidate=next((b for b in (part or {}).get('blocks',[]) if b['id']==ref['block_id']),None)
             if not candidate or fingerprint(candidate)!=ref['source_sha256']:raise HTTPException(409,'跨页联合原文已变化，停止翻译')
             members.append(candidate)
-        return translation_groups.combined(members)
-    return block
+        return translation_groups.combined([prepared_block(members[0], unit), *members[1:]])
+    return prepared_block(block, unit)
 
 
-def preserve_reason(block,reference_ids):
-    if block['id'] in reference_ids or any(word in str(block.get('section_path','')).casefold() for word in ('references','bibliography','参考文献')):return '参考文献原样保留'
-    if block['type'] in {'figure','formula','formula_candidate','code','table','table_candidate'}:return '图像、公式、代码或表格原样保留'
+def prepared_block(block, unit):
+    return {**block, '_translate_as_prose': True} if unit.get('translate_as_prose') else block
+
+
+def preserve_reason(block,reference_ids,visual_ids):
+    if block['id'] in reference_ids or 'reference' in block['type']:return '参考文献原样保留'
+    if block['id'] in visual_ids:return visual_ids[block['id']]
+    if block['type'] in {'figure','formula','code','table'}:return '图像、公式、代码或表格原样保留'
+    if block['type'] in {'formula_candidate','table_candidate'} and not layout.is_prose(block['text']):
+        return '公式或表格候选原样保留'
+    if block['type']=='paragraph' and layout.is_display_math(block['text']):
+        return '独立公式片段原样保留'
     if not block['text'].strip():return '无文本内容，参看原PDF'
     protected,_=translation.protect_text(block['text'],{})
     import re
@@ -122,24 +132,38 @@ def build_plan(body,artifact_id=None,persist=True):
         blocks=[block for block in blocks if block['id'] in body.block_ids]
     if not blocks or len(blocks)>20000 or sum(len(block['text']) for block in blocks)>5_000_000:raise HTTPException(422,'范围需在1—20000块、500万字符以内；超出时请按章节或页码规划')
     references=source_scope.reference_block_ids(structure);units=[]
+    requested_pages = {block['page'] for block in blocks}
+    internal = store.get_internal_document(body.document_id)
+    if not internal:
+        raise HTTPException(409,'翻译原始文件不可用')
+    # Use the whole selected page for layout context even in block selection.
+    visual_ids = layout.visual_blocks(internal['file_path'], [
+        block for block in structure['blocks'] if block['page'] in requested_pages and block['id'] not in references
+    ])
     with store.connection() as conn:cached={row[0] for row in conn.execute('SELECT cache_key FROM translations WHERE document_id=? AND parse_run_id=? AND language=?',(body.document_id,body.parse_run_id,body.target_language))}
     cache_hits=0
     for block in blocks:
-        reason=preserve_reason(block,references)
-        key=translation.cache_key(body.document_id,body.parse_run_id,block,body.target_language,body.glossary)
+        reason=preserve_reason(block,references,visual_ids)
+        translate_as_prose = not reason and translation.preserves_block(block)
+        effective = prepared_block(block, {'translate_as_prose': translate_as_prose})
+        key=translation.cache_key(body.document_id,body.parse_run_id,effective,body.target_language,body.glossary)
         status='preserved' if reason else 'blocked' if len(block['text'])>12000 else 'pending'
         if status=='pending' and key in cached:cache_hits+=1
         units.append({'block_id':block['id'],'page':block['page'],'block_type':block['type'],'source_sha256':fingerprint(block),
             'character_count':len(block['text']),'status':status,'reason':reason or ('段落超过12000字符，需拆分后重新规划' if status=='blocked' else ''),
             'cache_key':key,'translation':None,'attempts':0})
+        if translate_as_prose:
+            units[-1]['translate_as_prose'] = True
     grouped=[]
     if body.join_continuations:
         by_id={unit['block_id']:unit for unit in units}
-        for left,right in translation_groups.pairs(structure['blocks'],set(by_id)):
+        for left,right in translation_groups.pairs(structure['blocks'],set(by_id),preserved_ids={
+            *references, *visual_ids, *(unit['block_id'] for unit in units if unit['status'] == 'preserved'),
+        }):
             primary,linked=by_id[left['id']],by_id[right['id']]
             if primary['status']!='pending' or linked['status']!='pending':continue
             primary['group_sources']=[{'block_id':b['id'],'page':b['page'],'source_sha256':fingerprint(b)} for b in (left,right)]
-            joined=translation_groups.combined([left,right])
+            joined=translation_groups.combined([prepared_block(left,primary),right])
             primary['cache_key']=translation.cache_key(body.document_id,body.parse_run_id,joined,body.target_language,body.glossary)
             linked.update(status='linked',linked_to=left['id'],linked_page=left['page'],reason='与前页续句整体翻译，不重复生成')
             grouped.append({'primary':left['id'],'continuation':right['id'],'pages':[left['page'],right['page']]})
@@ -148,8 +172,8 @@ def build_plan(body,artifact_id=None,persist=True):
     requested_pages=set(range(1,document['page_count']+1)) if body.scope=='document' else set(range(body.page_start,body.page_end+1)) if body.scope=='pages' else {unit['page'] for unit in units}
     covered_pages={unit['page'] for unit in units}
     now=store.now();job={'id':artifact_id or str(uuid.uuid4()),'document_id':body.document_id,'source':frozen,'spec':body.model_dump(),
-        'model_identity':model_client.identity(),'prompt_version':translation.PROMPT_VERSION,'manifest_version':'document-translation-v2','continuation_groups':grouped,
-        'manifest_digest':hashlib.sha256(json.dumps([(unit['block_id'],unit['source_sha256'],unit.get('group_sources'),unit.get('linked_to')) for unit in units],sort_keys=True).encode()).hexdigest(),
+        'model_identity':model_client.identity(),'prompt_version':translation.PROMPT_VERSION,'manifest_version':'document-translation-v3','continuation_groups':grouped,
+        'manifest_digest':hashlib.sha256(json.dumps([(unit['block_id'],unit['source_sha256'],unit.get('group_sources'),unit.get('linked_to'),unit.get('translate_as_prose')) for unit in units],sort_keys=True).encode()).hexdigest(),
         'status':'planned','control':None,'revision':1,'created_at':now,'updated_at':now,'total':len(units),'counts':counts,
         'character_count':sum(unit['character_count'] for unit in units),'page_count':len(requested_pages),'block_page_count':len(covered_pages),
         'pages_without_blocks':sorted(requested_pages-covered_pages),
@@ -297,10 +321,20 @@ async def run(identity):
             except asyncio.CancelledError:raise
             except (httpx.HTTPError,ValueError,KeyError,TypeError,IndexError) as error:
                 exhausted=isinstance(error,ValueError) and str(error)=='model_budget_exhausted'
-                unit.update(status='pending' if exhausted else 'failed',error_code='model_budget_exhausted' if exhausted else type(error).__name__)
+                payment_required = isinstance(error, httpx.HTTPStatusError) and error.response.status_code == 402
+                code = str(error) if isinstance(error, ValueError) and (exhausted or str(error) in translation.VALIDATION_ERRORS) else type(error).__name__
+                if payment_required:
+                    code = 'model_payment_required'
+                unit.update(status='pending' if exhausted else 'failed',error_code=code)
                 def fail(value):
                     value['batch']['active_seconds']+=round(time.monotonic()-started,3)
-                    value.update(status='budget_exhausted' if exhausted else 'failed',notice='本批模型预算已用尽，未发出该请求。' if exhausted else '本段调用或内容保护检查失败；完成段落保留，不自动重发。')
+                    if exhausted:
+                        notice = '本批模型预算已用尽，未发出该请求。'
+                    elif payment_required:
+                        notice = '模型服务返回 HTTP 402。请检查服务商账单或额度，服务恢复后可从失败段继续。'
+                    else:
+                        notice = '本段调用或内容保护检查失败，已保存完成的译文。'
+                    value.update(status='budget_exhausted' if exhausted else 'failed', notice=notice)
                 repo.mutate(identity,fail,unit=unit);return
             unit.update(status=status,translation=text,error_code=None)
             def complete(value):
