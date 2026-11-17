@@ -42,6 +42,7 @@ interface Props {
 
 export default function PdfReader({ document, structure, page, onPage, selectedBlock, onSelectBlock, ocrReady = false, onRequestReprocess, modelConfigured = false, readOnly = false, onFindReference, onOpenReferenceSearch, sourceEvidence, onUseTable }: Props) {
   const [regionTarget,setRegionTarget]=useState<{bbox:DocumentBlock['bbox'];label:string}|null>(null);
+  const [formulaTarget,setFormulaTarget]=useState<{bbox:DocumentBlock['bbox'];page:number;documentId:string;runId:string|undefined}|null>(null);
   useEffect(()=>setRegionTarget(null),[document.id,structure?.parse_run_id,page,selectedBlock]);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState('');
@@ -74,7 +75,9 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
   const focusedRegion = citationFocus && citationFocus.source.line_bbox && citationFocus.run === structure?.parse_run_id &&
     citationFocus.source.page === page && citationFocus.source.block_id === selectedBlock
       ? { bbox: citationFocus.source.line_bbox, label: citationFocus.label } : null;
-  const visibleRegion = focusedRegion || regionTarget;
+  const formulaRegion = formulaTarget?.documentId === document.id && formulaTarget.runId === structure?.parse_run_id &&
+    formulaTarget.page === page ? { bbox:formulaTarget.bbox, label:'公式选区' } : null;
+  const visibleRegion = focusedRegion || regionTarget || formulaRegion;
   const [linked, setLinked] = useState(true);
   const translationRef = useRef<TranslationHandle>(null);
   const suppressUntil = useRef(0);
@@ -198,7 +201,7 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
     if (!loading && (selectedBlock || visibleRegion) && (view === 'pdf' || view === 'parallel')) {
       highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
     }
-  }, [selectedBlock, regionTarget, citationFocus, page, loading, view]);
+  }, [selectedBlock, regionTarget, citationFocus, formulaTarget, page, loading, view]);
 
   useEffect(() => {
     if (loading || !citations || (view !== 'pdf' && view !== 'parallel')) { setHotspots([]); return; }
@@ -347,7 +350,14 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
             <ScanFigurePanel key={`${document.id}-${structure.parse_run_id}-${page}`}
               documentId={document.id} runId={structure.parse_run_id} page={page}
               onSource={(bbox, label) => { setRegionTarget({bbox, label}); setView('pdf'); }} />
-          </Suspense> : view === 'tables' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载表格工具…</p>}><TablePanel title={document.title} onUse={onUseTable} documentId={document.id} runId={structure.parse_run_id} page={page} readOnly={readOnly} onSource={(bbox,label)=>{setRegionTarget({bbox,label});setView('pdf');}} /></Suspense> : view === 'formulas' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载公式工具…</p>}><FormulaPanel documentId={document.id} runId={structure.parse_run_id} page={page} rotation={pageRecord?.rotation} modelConfigured={modelConfigured} readOnly={readOnly} onRegion={bbox => { setRegionTarget({bbox,label:'公式选区'}); setView('pdf'); }} onSource={block => { onPage(block.page); onSelectBlock(block); setView('pdf'); }} /></Suspense>  : view === 'references' ? <div className="reference-list">
+          </Suspense> : view === 'tables' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载表格工具…</p>}><TablePanel title={document.title} onUse={onUseTable} documentId={document.id} runId={structure.parse_run_id} page={page} readOnly={readOnly} onSource={(bbox,label)=>{setRegionTarget({bbox,label});setView('pdf');}} /></Suspense> : view === 'formulas' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载公式工具…</p>}><FormulaPanel documentId={document.id} runId={structure.parse_run_id} page={page} pageTotal={pageTotal} rotation={pageRecord?.rotation} modelConfigured={modelConfigured} readOnly={readOnly}
+              onRegion={(bbox, sourcePage = page) => {
+                setRegionTarget(null); setCitationFocus(null);
+                setFormulaTarget({bbox, page: sourcePage, documentId: document.id, runId: structure?.parse_run_id});
+                if (sourcePage !== page) onPage(sourcePage);
+                setView('pdf');
+              }}
+              onSource={block => { setFormulaTarget(null); onPage(block.page); onSelectBlock(block); setView('pdf'); }} /></Suspense>  : view === 'references' ? <div className="reference-list">
           <h3>References 原文条目</h3>
           {structure?.parse_run_id && onOpenReferenceSearch && <ReferenceDiscovery documentId={document.id} runId={structure.parse_run_id} readOnly={readOnly} onOpen={onOpenReferenceSearch} />}
           <p>点击数字引用可双向跳转。扫描条目请对照原图。</p>

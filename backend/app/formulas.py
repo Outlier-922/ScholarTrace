@@ -9,7 +9,7 @@ import weakref
 from pathlib import Path
 from fastapi import APIRouter,HTTPException,Query,Request
 from fastapi.responses import FileResponse,PlainTextResponse,Response
-from pydantic import BaseModel,ConfigDict,Field,model_validator
+from pydantic import BaseModel,ConfigDict,Field,field_validator,model_validator
 from starlette.concurrency import run_in_threadpool
 from . import formula_native,formula_ocr,formula_scan_layout,formula_store as repo,insights,model_client,source_scope,store
 
@@ -33,17 +33,25 @@ class SourceRequest(BaseModel):
     page:int=Field(ge=1,strict=True)
     block_ids:list[str]=Field(default_factory=list,max_length=6)
     region:tuple[float,float,float,float]|None=None
+    continuation:tuple[float,float,float,float]|None=None
+
+    @field_validator('region','continuation')
+    @classmethod
+    def validate_region(cls,region):
+        if region is None:
+            return None
+        x0,y0,x1,y1=region
+        if not (0<=x0<x1<=1 and 0<=y0<y1<=1 and x1-x0>=.015 and .008<=y1-y0<=.35
+                and (x1-x0)*(y1-y0)<=.2):
+            raise ValueError('请把框选范围缩小到一条公式，并包含完整上下标和分式')
+        return tuple(round(value,6) for value in region)
 
     @model_validator(mode='after')
     def validate_selection(self):
         if bool(self.block_ids)==(self.region is not None):
             raise ValueError('请选择内容块或框选一个公式区域')
-        if self.region is not None:
-            x0,y0,x1,y1=self.region
-            if not (0<=x0<x1<=1 and 0<=y0<y1<=1 and x1-x0>=.015 and .008<=y1-y0<=.35
-                    and (x1-x0)*(y1-y0)<=.2):
-                raise ValueError('请把框选范围缩小到一条公式，并包含完整上下标和分式')
-            self.region=tuple(round(value,6) for value in self.region)
+        if self.continuation is not None and self.region is None:
+            raise ValueError('请先框选当前页的片段，再框选紧接的下一页')
         return self
 
 
@@ -154,13 +162,27 @@ async def create_source(body:SourceRequest,request:Request):
     binding=[VERSION,doc['sha256'],body.parse_run_id,sorted(ids)] if body.region is None else [
         'formula-region-v1',doc['sha256'],body.parse_run_id,body.page,body.region
     ]
+    if body.continuation is not None:
+        if not any(p['number']==body.page+1 for p in structure['pages']):
+            raise HTTPException(422,'当前解析版本中没有下一页。')
+        binding.extend(['next-page',body.continuation])
     key=hashlib.sha256(json.dumps(binding,sort_keys=True).encode()).hexdigest()
+    async with _locks.setdefault('source:'+key,asyncio.Lock()):
+        return await _save_source(request,body,doc,path,chosen,key)
+
+
+async def _save_source(request,body,doc,path,chosen,key):
     for old in repo.history(doc['id'],'source'):
         if old['source_key']==key:return old
+    continued_png=None
     if body.region is not None:
         png=await render_region(request,doc,path,body.page,body.region)
         result={'glyphs':[],'region':list(body.region),'crop_bbox':list(body.region),
                 'image_sha256':hashlib.sha256(png).hexdigest()}
+        if body.continuation is not None:
+            continued_png=await render_region(request,doc,path,body.page+1,body.continuation)
+            result['continuation']={'page':body.page+1,'region':list(body.continuation),
+                                    'image_sha256':hashlib.sha256(continued_png).hexdigest()}
     else:
         try:
             loop=asyncio.get_running_loop()
@@ -170,17 +192,35 @@ async def create_source(body:SourceRequest,request:Request):
     value={'id':identity,'kind':'source','document_id':doc['id'],'sha256':doc['sha256'],'parse_run_id':body.parse_run_id,'page':body.page,'blocks':chosen,'source_key':key,'created_at':store.now(),**result,
            'native_supported':len(result['glyphs'])>=4 and all(b['type']!='figure' and b.get('metadata',{}).get('extraction') not in {'ocr','rapidocr'} and not b.get('metadata',{}).get('ocr_performed') for b in chosen),
            'warnings':['请核对选区是否包含完整公式，并避开题注与编号。'] if body.region else ['文字模型只接收原生字形和坐标。','公式可能跨多个块，请补选分母和上下标。']}
+    if continued_png is not None:
+        value['warnings']=['请对照两页原图录入或校订同一条公式。']
+    images=[(repo.image_path(identity),png)]
+    if continued_png is not None:
+        images.append((repo.image_path(identity,continued=True),continued_png))
     try:
-        repo.image_path(identity).write_bytes(png);repo.save(value)
-    except ValueError:
-        repo.image_path(identity).unlink(missing_ok=True)
-        raise HTTPException(409,'读取期间原文已变化，来源未保存。') from None
+        for target,raw in images:
+            target.write_bytes(raw)
+        repo.save(value)
+    except Exception as exc:
+        for target,_ in images:
+            target.unlink(missing_ok=True)
+        if isinstance(exc,ValueError):
+            raise HTTPException(409,'读取期间原文已变化，来源未保存。') from None
+        raise
     return value
 
 
 @router.get('/formula-sources/{identity}/image')
-def image(identity:str):
-    value=require(identity,'source');path=repo.image_path(value['id'])
+def image(identity:str,page:int|None=Query(default=None,ge=1)):
+    value=require(identity,'source')
+    continued=page is not None and page!=value['page']
+    if continued and page!=value.get('continuation',{}).get('page'):
+        raise HTTPException(404,'该页没有关联裁图。')
+    if value.get('continuation'):
+        part=value['continuation'] if continued else value
+        return Response(_read_crop(value['id'],part['image_sha256'],continued=continued),
+                        media_type='image/png',headers={'Cache-Control':'no-store'})
+    path=repo.image_path(value['id'])
     if not path.is_file():raise HTTPException(404,'公式预览暂不可用。')
     return FileResponse(path,media_type='image/png',headers={'Cache-Control':'no-store'})
 
@@ -194,7 +234,9 @@ def source_detail(identity:str):
 def source_history(identity:str,page:int=Query(ge=1),parse_run_id:str=Query(min_length=1,max_length=100)):
     if not store.get_structure(identity,page=page,parse_run_id=parse_run_id):raise HTTPException(404,'指定来源不可用。')
     return {'items':[{'id':v['id'],'created_at':v['created_at'],'block_ids':[b['id'] for b in v['blocks']],
-                      'region':v.get('region')} for v in repo.history(identity,'source') if v['page']==page and v['parse_run_id']==parse_run_id]}
+                      'region':v.get('region'),'continuation_page':v.get('continuation',{}).get('page')}
+                     for v in repo.history(identity,'source')
+                     if v['parse_run_id']==parse_run_id and page in (v['page'],v.get('continuation',{}).get('page'))]}
 
 
 @router.get('/formula-sources/{identity}/revisions')
@@ -209,6 +251,8 @@ def save_revision(source,latex,origin,note,parent_id=None,extra=None):
     value.update(extra or {})
     if source.get('region'):
         value.update(region=source['region'],image_sha256=source['image_sha256'])
+    if source.get('continuation'):
+        value['continuation']=source['continuation']
     try:repo.save(value)
     except ValueError:raise HTTPException(409,'保存期间原文已变化，未保存公式。') from None
     return value
@@ -244,22 +288,38 @@ async def transcribe(identity:str):
         return save_revision(value,latex,'model_candidate','；'.join(notes) or '模型未报告不确定处，不代表公式正确。',extra={'prompt_version':VERSION,'model_identity':model_client.identity()})
 
 
+def _read_crop(identity,digest,*,continued=False):
+    try:
+        with repo.image_path(identity,continued=continued).open('rb') as image:
+            png=image.read(8_000_001)
+    except OSError:
+        raise HTTPException(409,'公式裁图已不可读，请重新框选。') from None
+    if len(png)>8_000_000 or hashlib.sha256(png).hexdigest()!=digest:
+        raise HTTPException(409,'公式裁图已变化，请重新框选。')
+    return png
+
+
+def _check_cross_page_crops(source):
+    if source.get('continuation'):
+        _read_crop(source['id'],source['image_sha256'])
+        _read_crop(source['id'],source['continuation']['image_sha256'],continued=True)
+
+
 @router.post('/formula-sources/{identity}/recognize-scan')
 async def recognize_scan(identity:str):
     lock=_locks.setdefault(identity,asyncio.Lock())
     async with lock:
         source=require(identity,'source')
+        if source.get('continuation'):
+            raise HTTPException(422,'跨页公式可对照两页原图录入一条 LaTeX 公式。')
         if not source.get('region'):
             raise HTTPException(422,'请先在原页框选一条公式。')
         doc,_,path=page_input(source['document_id'],source['page'],source['parse_run_id'])
         try:
             await run_in_threadpool(formula_native.check_pdf,path,doc['sha256'])
-            with repo.image_path(identity).open('rb') as image:
-                png=image.read(8_000_001)
         except (OSError,ValueError):
             raise HTTPException(409,'原始文件或公式裁图已变化，请重新框选。') from None
-        if len(png)>8_000_000 or hashlib.sha256(png).hexdigest()!=source['image_sha256']:
-            raise HTTPException(409,'公式裁图已变化，请重新框选。')
+        png=await run_in_threadpool(_read_crop,identity,source['image_sha256'])
         runtime=await run_in_threadpool(formula_ocr.runtime_identity)
         if not runtime:
             raise HTTPException(503,'本地公式识别模型尚未准备，仍可对照裁图手工录入。')
@@ -290,14 +350,19 @@ def edit(identity:str,body:EditRequest):
     if body.parent_id and require(body.parent_id,'formula')['source_id']!=identity:raise HTTPException(422,'父版本不属于当前公式来源。')
     try:latex=validate_tex(body.latex)
     except ValueError:raise HTTPException(422,'公式源码超出支持范围，或括号/环境未闭合。') from None
+    _check_cross_page_crops(value)
     return save_revision(value,latex,'user_edited',body.note,body.parent_id)
 
 
 @router.get('/formula-revisions/{identity}/export')
 def export(identity:str):
-    value=require(identity,'formula');require(value['source_id'],'source')
+    value=require(identity,'formula');source=require(value['source_id'],'source')
+    _check_cross_page_crops(source)
     lines=['% Source-bound formula candidate; not independently verified.',f"% SHA256: {value['sha256']}",f"% ParseRun: {value['parse_run_id']} / PDF page: {value['page']}",f"% origin: {value['origin']}"]
     lines += [f"% Block: {b['id']} / bbox: {b['bbox']}" for b in value['blocks']]
     if value.get('region'):
         lines += [f"% Region: {value['region']}",f"% Crop SHA256: {value['image_sha256']}"]
+    if value.get('continuation'):
+        part=value['continuation']
+        lines += [f"% PDF page: {part['page']}",f"% Region: {part['region']}",f"% Crop SHA256: {part['image_sha256']}"]
     return PlainTextResponse('\n'.join(lines)+'\n\\[\n'+value['latex']+'\n\\]\n',media_type='text/plain',headers={'Content-Disposition':'attachment; filename="formula-candidate.tex"'})

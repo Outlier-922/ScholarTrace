@@ -1,5 +1,7 @@
 """Formula software guards on existing synthetic PDF fixtures; not math accuracy."""
+from hashlib import sha256
 import uuid
+import pymupdf
 import pytest
 from conftest import upload_pdf,wait_for_document
 from backend.app import formulas,formula_native,formula_ocr,model_client,store
@@ -138,6 +140,59 @@ def test_invalid_scan_recognition_preserves_crop_for_correction(client, source, 
     assert response.status_code == 502 and '未通过 LaTeX 检查' in response.json()['detail']
     assert client.get(url + '/image').status_code == 200
     assert client.get(url + '/revisions').json()['items'] == []
+
+
+def test_cross_page_formula_keeps_both_crops_and_exports_their_provenance(client, tmp_path, monkeypatch):
+    pdf = tmp_path / 'cross-page-formula.pdf'
+    with pymupdf.open() as file:
+        for text, y in [('u = x +', 690), ('y + z', 125), ('An unrelated formula v = 1', 125)]:
+            page = file.new_page(width=600, height=800)
+            page.insert_text((120, y), text, fontsize=20)
+        file.save(pdf)
+    doc = wait_for_document(client, upload_pdf(client, pdf)['id'])
+    body = {'document_id': doc['id'], 'parse_run_id': doc['parse_run_id'], 'page': 1,
+            'region': [.16,.82,.58,.89], 'continuation': [.16,.11,.58,.19]}
+    path = '/api/formula-sources'
+    assert client.post(path, json={**body, 'page': 3}).status_code == 422
+    assert client.post(path, json={**body, 'continuation': [0,0,1,1]}).status_code == 422
+    assert client.post(path, json={**body, 'region': None, 'block_ids': ['test']}).status_code == 422
+    saved = client.post(path, json=body)
+    assert saved.status_code == 200, saved.text
+    source = saved.json()
+    identity = source['id']
+    url = f'{path}/{identity}'
+    continued = source['continuation']
+    assert (source['page'], continued['page'], continued['region']) == (1, 2, body['continuation'])
+    assert client.post(path, json=body).json()['id'] == identity
+    assert client.post(path, json={**body, 'continuation': None}).json()['id'] != identity
+    for part in (source, continued):
+        crop = client.get(url + '/image', params={'page': part['page']})
+        assert crop.status_code == 200 and sha256(crop.content).hexdigest() == part['image_sha256']
+        history = client.get(f"/api/documents/{doc['id']}/formula-sources", params={
+            'parse_run_id': body['parse_run_id'], 'page': part['page']}).json()['items']
+        assert any(row['id'] == identity and row['continuation_page'] == 2 for row in history)
+    assert source['image_sha256'] != continued['image_sha256']
+    assert client.get(url + '/image', params={'page': 3}).status_code == 404
+
+    def no_guess(_):
+        raise AssertionError('Do not generate LaTeX from just the first crop')
+
+    monkeypatch.setattr(formula_ocr, 'recognize', no_guess)
+    assert client.post(url+'/recognize-scan', json={}).status_code == 422
+    entry = {'latex': 'u=x+y+z', 'note': 'Checked each page'}
+    revision = client.post(url+'/revisions', json=entry).json()
+    assert revision['continuation'] == continued and revision['origin'] == 'user_edited'
+    export = '/api/formula-revisions/'+revision['id']+'/export'
+    text = client.get(export).text
+    assert all(f"PDF page: {part['page']}" in text and part['image_sha256'] in text for part in (source, continued))
+    assert text.count('Region:') == 2
+    secondary_image = formulas.repo.image_path(identity, continued=True)
+    secondary_image.write_bytes(b'invalid')
+    assert client.get(url+'/image', params={'page':2}).status_code == 409
+    assert client.get(export).status_code == 409
+    assert client.post(url+'/revisions', json=entry).status_code == 409
+    assert client.delete(f"/api/documents/{doc['id']}").status_code == 200
+    assert not secondary_image.exists() and not formulas.repo.image_path(identity).exists()
 
 
 def test_scope_and_parent_mismatch_rejected(client,source):

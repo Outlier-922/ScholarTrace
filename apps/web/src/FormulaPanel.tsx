@@ -11,27 +11,31 @@ interface ScanLayout {
   status: 'ocr_ready' | 'needs_ocr' | 'native';
   items: { bbox: Region; hint: string; label: string | null }[];
 }
-interface Source { id: string; page: number; blocks: DocumentBlock[]; native_supported: boolean; glyphs: unknown[]; warnings: string[]; region?: Region; }
+interface Source { id: string; page: number; blocks: DocumentBlock[]; native_supported: boolean; glyphs: unknown[]; warnings: string[]; region?: Region; continuation?: { page: number; region: Region }; }
+interface SourceHistory { id: string; created_at: string; block_ids: string[]; region?: Region; continuation_page?: number | null; }
 interface Revision { id: string; latex: string; origin: string; note: string; created_at: string; }
-interface Props { documentId: string; runId: string; page: number; rotation?: number; modelConfigured: boolean; readOnly: boolean; onSource: (block: DocumentBlock) => void; onRegion: (bbox: Region) => void; }
+interface Props { documentId: string; runId: string; page: number; pageTotal: number; rotation?: number; modelConfigured: boolean; readOnly: boolean; onSource: (block: DocumentBlock) => void; onRegion: (bbox: Region, page?: number) => void; }
 const originLabel = (origin: string) => origin === 'scan_ocr_candidate' ? '扫描公式候选' : origin === 'model_candidate' ? '原生字形候选' : '手工修订';
+const canSave = (box: Region | null) => !!box && box[2]-box[0] >= .015 && box[3]-box[1] >= .008;
 
-export default function FormulaPanel({ documentId, runId, page, rotation = 0, modelConfigured, readOnly, onSource, onRegion }: Props) {
+export default function FormulaPanel({ documentId, runId, page, pageTotal, rotation = 0, modelConfigured, readOnly, onSource, onRegion }: Props) {
   const [blocks, setBlocks] = useState<(DocumentBlock & { formula_hint: boolean })[]>([]);
   const [ids, setIds] = useState<string[]>([]); const [all, setAll] = useState(false);
   const [source, setSource] = useState<Source | null>(null);
-  const [sources, setSources] = useState<{ id: string; created_at: string; block_ids: string[]; region?: Region }[]>([]);
+  const [sources, setSources] = useState<SourceHistory[]>([]);
   const [scan, setScan] = useState(false);
   const [scanReady, setScanReady] = useState(false);
   const [layout, setLayout] = useState<ScanLayout | null>(null);
   const [region, setRegion] = useState<Region | null>(null);
+  const [includeNext, setIncludeNext] = useState(false);
+  const [nextRegion, setNextRegion] = useState<Region | null>(null);
   const [revisions, setRevisions] = useState<Revision[]>([]); const [current, setCurrent] = useState<Revision | null>(null);
   const [tex, setTex] = useState(''); const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const operation = useRef<AbortController | null>(null);
   useEffect(() => {
     operation.current?.abort(); const abort = new AbortController(); operation.current = abort;
-    setBlocks([]); setSources([]); setSource(null); setRevisions([]); setCurrent(null); setTex(''); setNote(''); setIds([]); setRegion(null); setScan(false); setScanReady(false); setLayout(null); setError(''); setBusy(true);
+    setBlocks([]); setSources([]); setSource(null); setRevisions([]); setCurrent(null); setTex(''); setNote(''); setIds([]); setRegion(null); setIncludeNext(false); setNextRegion(null); setScan(false); setScanReady(false); setLayout(null); setError(''); setBusy(true);
     void Promise.all([
       request<{ items: typeof blocks; scan_ocr_ready: boolean; scan_layout: ScanLayout }>(`/documents/${documentId}/formula-blocks?page=${page}&parse_run_id=${encodeURIComponent(runId)}`, { signal: abort.signal }),
       request<{ items: typeof sources }>(`/documents/${documentId}/formula-sources?page=${page}&parse_run_id=${encodeURIComponent(runId)}`, { signal: abort.signal }),
@@ -53,10 +57,17 @@ export default function FormulaPanel({ documentId, runId, page, rotation = 0, mo
     setBusy(true); setError('');
     try {
       if (kind === 'prepare' || kind === 'load') {
-        const selection = suggested || scan ? { region: suggested ?? region } : { block_ids: ids };
+        const selection = suggested ? { region: suggested } :
+          scan ? { region, continuation: includeNext ? nextRegion : null } : { block_ids: ids };
         const next = kind === 'prepare' ? await postJSON<Source>('/formula-sources', { document_id: documentId, parse_run_id: runId, page, ...selection }, abort.signal) : await request<Source>(`/formula-sources/${identity}`, { signal: abort.signal });
         const history = await request<{ items: Revision[] }>(`/formula-sources/${next.id}/revisions`, { signal: abort.signal });
-        if (!abort.signal.aborted) { setSource(next); setIds(next.blocks.map(b => b.id)); setRegion(next.region ?? null); setScan(!!next.region); setRevisions(history.items); setCurrent(history.items[0] || null); setTex(history.items[0]?.latex || ''); setNote(''); setSources(old => old.some(s => s.id === next.id) ? old : [{ id: next.id, created_at: new Date().toISOString(), block_ids: next.blocks.map(b => b.id), region: next.region }, ...old]); }
+        if (!abort.signal.aborted) {
+          setSource(next); setIds(next.blocks.map(b => b.id)); setRegion(next.region ?? null); setScan(!!next.region);
+          setIncludeNext(!!next.continuation); setNextRegion(next.continuation?.region ?? null);
+          setRevisions(history.items); setCurrent(history.items[0] || null); setTex(history.items[0]?.latex || ''); setNote('');
+          setSources(old => old.some(s => s.id === next.id) ? old : [{ id: next.id, created_at: new Date().toISOString(),
+            block_ids: next.blocks.map(b => b.id), region: next.region, continuation_page: next.continuation?.page }, ...old]);
+        }
       } else if (source) {
         const next = kind === 'model' || kind === 'recognize'
           ? await postJSON<Revision>(`/formula-sources/${source.id}/${kind === 'recognize' ? 'recognize-scan' : 'transcribe'}`, {}, abort.signal)
@@ -69,8 +80,9 @@ export default function FormulaPanel({ documentId, runId, page, rotation = 0, mo
   function changeSelection() {
     setSource(null); setCurrent(null); setRevisions([]); setTex(''); setNote(''); setError('');
   }
-  const hasRegion = region && region[2]-region[0] >= .015 && region[3]-region[1] >= .008;
+  const hasRegion = canSave(region) && (!includeNext || canSave(nextRegion));
   const scanPage = layout && layout.status !== 'native';
+  const pageImage = (number: number) => `/api/documents/${documentId}/formula-page-image?page=${number}&parse_run_id=${encodeURIComponent(runId)}`;
   return <section className="formula-panel" aria-label="公式LaTeX候选">
     <h3>公式 LaTeX 候选</h3>
     <p>第{page}页 · {scanPage ? '查看公式裁图后，可在本机识别。' : '选择正文中的公式块，也可从原页图像框选。'}</p>
@@ -84,12 +96,18 @@ export default function FormulaPanel({ documentId, runId, page, rotation = 0, mo
     {rotation !== 0 && <p>裁图和框选预览按未旋转方向显示。回到原页时，高亮会随页面旋转。</p>}
     <label><input type="checkbox" checked={scan} disabled={busy} onChange={e => { setScan(e.target.checked); changeSelection(); }} />框选原页公式</label>
     {scan && source ? <button disabled={busy || readOnly} onClick={() => {
-      setRegion(null);
+      setRegion(null); setIncludeNext(false); setNextRegion(null);
       changeSelection();
-    }}>重新框选</button> : scan ? <><p>在原页图像上拖动，框住一条完整公式。分子、分母和上下标都应在框内。</p><RegionPicker
-      url={`/api/documents/${documentId}/formula-page-image?page=${page}&parse_run_id=${encodeURIComponent(runId)}`}
+    }}>重新框选</button> : scan ? <>
+      {page < pageTotal && <label><input type="checkbox" checked={includeNext} disabled={busy || readOnly}
+        onChange={e => { setIncludeNext(e.target.checked); setNextRegion(null); }} />公式延续到下一页</label>}
+      <p>{includeNext ? `框选第 ${page} 页上的公式片段。` : '在原页图像上拖动，框住一条完整公式。分子、分母和上下标都应在框内。'}</p><RegionPicker
+      url={pageImage(page)}
       key={`${documentId}-${runId}-${page}`} region={region} disabled={busy || readOnly} onChange={box => { changeSelection(); setRegion(box); }}
-    /></> : !scanPage && <>
+      />
+      {includeNext && <><p>框选第 {page+1} 页上的续段。</p><RegionPicker url={pageImage(page+1)}
+        key={`${documentId}-${runId}-${page+1}`} region={nextRegion} disabled={busy || readOnly} onChange={setNextRegion} /></>}
+    </> : !scanPage && <>
       <label><input type="checkbox" checked={all} onChange={e => setAll(e.target.checked)} />显示本页其他内容块</label>
       <div className="formula-blocks">{blocks.filter(b => all || b.formula_hint || ids.includes(b.id)).map(b => (
         <label key={b.id}><input type="checkbox" checked={ids.includes(b.id)}
@@ -100,17 +118,22 @@ export default function FormulaPanel({ documentId, runId, page, rotation = 0, mo
       ))}</div>
     </>}
     {((scan && !source) || (!scan && !scanPage)) && <button disabled={busy || readOnly || (scan ? !hasRegion : !ids.length)} onClick={() => void act('prepare')}>
-      {scan ? '保存选区并预览裁图' : '查看所选原图与字形（不调用模型）'}
+      {scan ? (includeNext ? '保存两页选区' : '保存选区并预览裁图') : '查看所选原图与字形（不调用模型）'}
     </button>}
-    {sources.length > 0 && <select aria-label="本页公式来源历史" value={source?.id || ''} disabled={busy} onChange={e => { if (e.target.value) void act('load',e.target.value); }}><option value="">打开已保存公式来源</option>{sources.map(s => <option key={s.id} value={s.id}>{new Date(s.created_at).toLocaleString('zh-CN')} · {s.region ? '原页选区' : s.block_ids.length + '个块'}</option>)}</select>}
+    {sources.length > 0 && <select aria-label="本页公式来源历史" value={source?.id || ''} disabled={busy} onChange={e => { if (e.target.value) void act('load',e.target.value); }}><option value="">打开已保存公式来源</option>{sources.map(s => <option key={s.id} value={s.id}>{new Date(s.created_at).toLocaleString('zh-CN')} · {s.continuation_page ? `第 ${s.continuation_page-1}–${s.continuation_page} 页` : s.region ? '原页选区' : s.block_ids.length + '个块'}</option>)}</select>}
     {error && <p role="alert" className="research-error">{error}</p>}
     {source && <>
-      <img className="formula-crop" src={`/api/formula-sources/${source.id}/image`} alt="所选公式区域的原PDF裁剪" />
-      {source.region ? <>
-        <button onClick={() => onRegion(source.region!)}>在原页定位选区</button>
+      {source.continuation && source.region ? [ {page: source.page, region: source.region}, source.continuation ].map(part =>
+        <div key={part.page}>
+          <img className="formula-crop" src={`/api/formula-sources/${source.id}/image?page=${part.page}`} alt={`第 ${part.page} 页公式裁图`} />
+          <button onClick={() => onRegion(part.region, part.page)}>定位第 {part.page} 页选区</button>
+        </div>
+      ) : <img className="formula-crop" src={`/api/formula-sources/${source.id}/image`} alt="所选公式区域的原PDF裁剪" />}
+      {source.region && !source.continuation ? <>
+        <button onClick={() => onRegion(source.region!, source.page)}>在原页定位选区</button>
         <button disabled={busy || readOnly || !scanReady} onClick={() => void act('recognize')}>识别扫描公式</button>
         <small>{scanReady ? '仅在本机处理裁图。生成后请核对原图。' : '本地公式模型尚未准备，可在下方手工录入。'}</small>
-      </> : <>
+      </> : !source.continuation && <>
         <div>{source.blocks.map((b,i) => <button key={b.id} onClick={() => onSource(b)}>原页核对 · 源块{i+1}</button>)}</div>
         <small>已读取{source.glyphs.length}个原生字形。</small>
         {source.native_supported ? <button disabled={busy || readOnly || !modelConfigured} onClick={() => void act('model')}>生成 LaTeX 候选</button>
