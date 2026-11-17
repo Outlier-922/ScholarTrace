@@ -56,6 +56,8 @@ def test_formula_block_response_selects_current_page_and_disables_unready_scans(
         block("context", "The lookup table includes the following normalization operation.", [.17,.31,.82,.326]),
         block("equation", "f(x) = x^2", [.41,.36,.56,.38]),
         block("other", "f(x) = x^3", [.41,.36,.56,.38], page=2),
+        block("rotated-context", "The lookup table includes the following normalization operation.", [.17,.31,.82,.326], page=4),
+        block("rotated-equation", "f(x) = x^4", [.41,.36,.56,.38], page=4),
     ]
     pages = [
         {"number": 1, "rotation": 0, "status": "ocr_ready"},
@@ -70,8 +72,11 @@ def test_formula_block_response_selects_current_page_and_disables_unready_scans(
     result = formulas._page_blocks("doc", 1, "run")
     assert result["scan_ocr_ready"] is False
     assert [item["hint"] for item in result["scan_layout"]["items"]] == ["f(x) = x^2"]
-    for page, status in ((2, "native"), (3, "needs_ocr"), (4, "rotated")):
+    for page, status in ((2, "native"), (3, "needs_ocr")):
         assert formulas._page_blocks("doc", page, "run")["scan_layout"] == {"status": status, "items": []}
+    rotated = formulas._page_blocks("doc", 4, "run")["scan_layout"]
+    assert rotated["status"] == "ocr_ready"
+    assert [item["hint"] for item in rotated["items"]] == ["f(x) = x^4"]
 
 
 def test_two_columns_keep_separate_formula_labels_and_join_fraction_fragments():
@@ -114,3 +119,34 @@ def test_pixel_trim_preserves_equation_and_removes_separated_printed_label(tmp_p
 def test_elementwise_product_and_tilde_accent_are_supported_latex():
     latex = r"\tilde{r}_t = W_r \cdot (\mu_r \odot x_t + (1 - \mu_r) \odot x_{t-1})"
     assert formulas.validate_tex(latex) == latex
+
+
+def test_rotated_pages_keep_cropbox_coordinates_and_source_bytes(tmp_path):
+    path = tmp_path / "rotated-cropbox.pdf"
+    rotations = [0, 90, 180, 270]
+    with pymupdf.open() as doc:
+        for angle in rotations:
+            page = doc.new_page(width=700, height=920)
+            page.insert_text((360, 375), "g(x) = x", fontsize=13)
+            page.insert_text((562, 375), "(2)", fontsize=13)
+            page.set_cropbox(pymupdf.Rect(32, 61, 632, 861))
+            page.set_rotation(angle)
+        doc.save(path)
+    digest = sha256(path.read_bytes()).hexdigest()
+    region = [.53, .371, .921, .404]
+    suggestion = {"bbox": region, "label": "(2)", "hint": "g(x) = x", "label_trim": "right"}
+    ref = formula_native.trim_equation_labels(path, digest, 1, [suggestion])
+    assert .61 < ref[0]["bbox"][2] < .86
+    region = ref[0]["bbox"]
+    preview = formula_native.render_region(path, digest, 1)
+    crop = formula_native.render_region(path, digest, 1, region)
+    glyphs = formula_native.extract(path, digest, 1, [region])
+    assert "".join(char["char"] for char in glyphs[0]["glyphs"]).strip() == "g(x) = x"
+    for n in range(2, 5):
+        assert formula_native.trim_equation_labels(path, digest, n, [suggestion]) == ref
+        assert formula_native.render_region(path, digest, n) == preview
+        assert formula_native.render_region(path, digest, n, region) == crop
+        assert formula_native.extract(path, digest, n, [region]) == glyphs
+    assert sha256(path.read_bytes()).hexdigest() == digest
+    with pymupdf.open(path) as doc:
+        assert [page.rotation for page in doc] == rotations

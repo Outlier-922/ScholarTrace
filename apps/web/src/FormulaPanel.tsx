@@ -8,15 +8,15 @@ import './formulas.css';
 
 type Region = DocumentBlock['bbox'];
 interface ScanLayout {
-  status: 'ocr_ready' | 'needs_ocr' | 'rotated' | 'native';
+  status: 'ocr_ready' | 'needs_ocr' | 'native';
   items: { bbox: Region; hint: string; label: string | null }[];
 }
 interface Source { id: string; page: number; blocks: DocumentBlock[]; native_supported: boolean; glyphs: unknown[]; warnings: string[]; region?: Region; }
 interface Revision { id: string; latex: string; origin: string; note: string; created_at: string; }
-interface Props { documentId: string; runId: string; page: number; modelConfigured: boolean; readOnly: boolean; onSource: (block: DocumentBlock) => void; onRegion: (bbox: Region) => void; }
+interface Props { documentId: string; runId: string; page: number; rotation?: number; modelConfigured: boolean; readOnly: boolean; onSource: (block: DocumentBlock) => void; onRegion: (bbox: Region) => void; }
 const originLabel = (origin: string) => origin === 'scan_ocr_candidate' ? '扫描公式候选' : origin === 'model_candidate' ? '原生字形候选' : '手工修订';
 
-export default function FormulaPanel({ documentId, runId, page, modelConfigured, readOnly, onSource, onRegion }: Props) {
+export default function FormulaPanel({ documentId, runId, page, rotation = 0, modelConfigured, readOnly, onSource, onRegion }: Props) {
   const [blocks, setBlocks] = useState<(DocumentBlock & { formula_hint: boolean })[]>([]);
   const [ids, setIds] = useState<string[]>([]); const [all, setAll] = useState(false);
   const [source, setSource] = useState<Source | null>(null);
@@ -81,8 +81,8 @@ export default function FormulaPanel({ documentId, runId, page, modelConfigured,
       </button>)}
     </div> : <p>本页未定位到可推荐的公式区域，可手工框选。</p>)}
     {layout?.status === 'needs_ocr' && <p>重新解析并启用 OCR 可定位公式，也可直接手工框选。</p>}
-    {layout?.status === 'rotated' && <p>旋转扫描页暂不支持公式裁图。</p>}
-    <label><input type="checkbox" checked={scan} disabled={busy || layout?.status === 'rotated'} onChange={e => { setScan(e.target.checked); changeSelection(); }} />框选原页公式</label>
+    {rotation !== 0 && <p>裁图和框选预览按未旋转方向显示。回到原页时，高亮会随页面旋转。</p>}
+    <label><input type="checkbox" checked={scan} disabled={busy} onChange={e => { setScan(e.target.checked); changeSelection(); }} />框选原页公式</label>
     {scan && source ? <button disabled={busy || readOnly} onClick={() => {
       setRegion(null);
       changeSelection();

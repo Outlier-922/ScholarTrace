@@ -12,12 +12,19 @@ def check_pdf(path, expected_sha):
         raise ValueError('pdf_hash_changed')
 
 
+def _source_page(pdf, page_number):
+    """Use the same unrotated CropBox space as the saved OCR and glyph coordinates."""
+    page = pdf[page_number - 1]
+    if page.rotation:
+        # The document was opened for this operation and is never saved.
+        page.set_rotation(0)
+    return page
+
+
 def render_region(path, expected_sha, page_number, region=None):
     check_pdf(path, expected_sha)
     with pymupdf.open(path) as pdf:
-        page = pdf[page_number - 1]
-        if page.rotation:
-            raise ValueError('rotated_formula_page_not_supported')
+        page = _source_page(pdf, page_number)
         width, height = page.rect.width, page.rect.height
         area = page.rect if region is None else pymupdf.Rect(
             region[0] * width, region[1] * height, region[2] * width, region[3] * height
@@ -37,9 +44,7 @@ def trim_equation_labels(path, expected_sha, page_number, suggestions):
     check_pdf(path, expected_sha)
     result = []
     with pymupdf.open(path) as pdf:
-        page = pdf[page_number - 1]
-        if page.rotation:
-            raise ValueError('rotated_formula_page_not_supported')
+        page = _source_page(pdf, page_number)
         width, height = page.rect.width, page.rect.height
         scale = min(2.0, 1800 / max(width, height))
         for item in suggestions:
@@ -76,8 +81,7 @@ def trim_equation_labels(path, expected_sha, page_number, suggestions):
 def extract(path, expected_sha, page_number, boxes):
     check_pdf(path, expected_sha)
     with pymupdf.open(path) as pdf:
-        page = pdf[page_number - 1]
-        if page.rotation: raise ValueError('rotated_formula_page_not_supported')
+        page = _source_page(pdf, page_number)
         width, height = page.rect.width, page.rect.height
         rects = [pymupdf.Rect(b[0]*width,b[1]*height,b[2]*width,b[3]*height) for b in boxes]
         crop = pymupdf.Rect(min(r.x0 for r in rects),min(r.y0 for r in rects),max(r.x1 for r in rects),max(r.y1 for r in rects))

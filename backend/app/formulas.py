@@ -118,8 +118,6 @@ def _page_blocks(identity, page, parse_run_id):
     refs = source_scope.reference_block_ids(structure)
     page_blocks = [b for b in structure['blocks'] if b['page'] == page and b['id'] not in refs]
     status = page_record['status'] if page_record['status'] in {'ocr_ready', 'needs_ocr'} else 'native'
-    if page_record['rotation'] and status != 'native':
-        status = 'rotated'
     regions = formula_scan_layout.locate(page_blocks) if status == 'ocr_ready' else []
     rows=[{**b,'formula_hint':b['type']=='formula_candidate' or bool(re.search(r'[=∑∏∫√∂∇≤≥∈]',b['text']))} for b in page_blocks if b['type'] not in {'title','heading','reference'}]
     return {'items':rows,'scan_ocr_ready':bool(formula_ocr.runtime_identity()),
@@ -167,7 +165,7 @@ async def create_source(body:SourceRequest,request:Request):
         try:
             loop=asyncio.get_running_loop()
             result,png=await loop.run_in_executor(request.app.state.parse_executor,formula_native.extract,str(path),doc['sha256'],body.page,[b['bbox'] for b in chosen])
-        except (ValueError,IndexError,RuntimeError,OSError):raise HTTPException(422,'公式原图或字形读取失败；请缩小范围，旋转页暂不支持。') from None
+        except (ValueError,IndexError,RuntimeError,OSError):raise HTTPException(422,'公式原图或字形读取失败，请检查原文或缩小范围。') from None
     identity=str(uuid.uuid4())
     value={'id':identity,'kind':'source','document_id':doc['id'],'sha256':doc['sha256'],'parse_run_id':body.parse_run_id,'page':body.page,'blocks':chosen,'source_key':key,'created_at':store.now(),**result,
            'native_supported':len(result['glyphs'])>=4 and all(b['type']!='figure' and b.get('metadata',{}).get('extraction') not in {'ocr','rapidocr'} and not b.get('metadata',{}).get('ocr_performed') for b in chosen),

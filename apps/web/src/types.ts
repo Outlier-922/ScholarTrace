@@ -56,7 +56,7 @@ export interface DocumentBlock {
 export interface DocumentStructure {
   document_id: string;
   parse_run_id?: string;
-  pages: { number: number; width: number; height: number; status: string }[];
+  pages: { number: number; width: number; height: number; status: string; rotation?: number }[];
   blocks: DocumentBlock[];
   outline: { id: string; title: string; level: number; page: number; block_id: string }[];
   references: unknown[];

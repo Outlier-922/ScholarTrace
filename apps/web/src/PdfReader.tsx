@@ -86,7 +86,8 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
   const highlightRef = useRef<HTMLButtonElement>(null);
   const pageBlocks = structure?.blocks.filter((block) => block.page === page) ?? [];
   const pageTotal = pdf?.numPages || document.page_count || 1;
-  const pageStatus = structure?.pages.find((item) => item.number === page)?.status;
+  const pageRecord = structure?.pages.find((item) => item.number === page);
+  const pageStatus = pageRecord?.status;
   const ocrBlocks = pageBlocks.filter((block) => isOcrBlock(block) && block.text.trim());
   const ocrLines = ocrBlocks.flatMap(block => {
     const lines = block.metadata?.lines?.length ? block.metadata.lines : [{ text: block.text, bbox: block.bbox }];
@@ -346,7 +347,7 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
             <ScanFigurePanel key={`${document.id}-${structure.parse_run_id}-${page}`}
               documentId={document.id} runId={structure.parse_run_id} page={page}
               onSource={(bbox, label) => { setRegionTarget({bbox, label}); setView('pdf'); }} />
-          </Suspense> : view === 'tables' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载表格工具…</p>}><TablePanel title={document.title} onUse={onUseTable} documentId={document.id} runId={structure.parse_run_id} page={page} readOnly={readOnly} onSource={(bbox,label)=>{setRegionTarget({bbox,label});setView('pdf');}} /></Suspense> : view === 'formulas' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载公式工具…</p>}><FormulaPanel documentId={document.id} runId={structure.parse_run_id} page={page} modelConfigured={modelConfigured} readOnly={readOnly} onRegion={bbox => { setRegionTarget({bbox,label:'公式选区'}); setView('pdf'); }} onSource={block => { onPage(block.page); onSelectBlock(block); setView('pdf'); }} /></Suspense>  : view === 'references' ? <div className="reference-list">
+          </Suspense> : view === 'tables' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载表格工具…</p>}><TablePanel title={document.title} onUse={onUseTable} documentId={document.id} runId={structure.parse_run_id} page={page} readOnly={readOnly} onSource={(bbox,label)=>{setRegionTarget({bbox,label});setView('pdf');}} /></Suspense> : view === 'formulas' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载公式工具…</p>}><FormulaPanel documentId={document.id} runId={structure.parse_run_id} page={page} rotation={pageRecord?.rotation} modelConfigured={modelConfigured} readOnly={readOnly} onRegion={bbox => { setRegionTarget({bbox,label:'公式选区'}); setView('pdf'); }} onSource={block => { onPage(block.page); onSelectBlock(block); setView('pdf'); }} /></Suspense>  : view === 'references' ? <div className="reference-list">
           <h3>References 原文条目</h3>
           {structure?.parse_run_id && onOpenReferenceSearch && <ReferenceDiscovery documentId={document.id} runId={structure.parse_run_id} readOnly={readOnly} onOpen={onOpenReferenceSearch} />}
           <p>点击数字引用可双向跳转。扫描条目请对照原图。</p>
