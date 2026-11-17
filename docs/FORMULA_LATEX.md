@@ -33,4 +33,4 @@ PDF 页属性设有旋转时，框选预览使用未旋转的页面方向，回�
 
 源码限制为4000字符的数学子集。服务端检查命令、括号与环境，**不完整解析TeX，也不证明数学等价**；直接通过API保存的结构合法片段仍可能渲染失败。页面用本地打包的KaTeX 0.19.1解析，错误以文本显示，并在预览失败时禁用手工保存。配置为`trust:false`、`maxSize:8`、`maxExpand:100`，每次使用新宏表；参见[KaTeX安全文档](https://katex.org/docs/security.html)和[渲染选项](https://katex.org/docs/options.html)。
 
-官方单栏扫描件的 8 个独立公式，以及双栏验收副本中的 22 个公式位置已逐个核对。90°、180°、270° 页属性旋转已验证自动选区和手工拖框。跨页公式、通栏混排和复杂公式准确率仍待验收。[旋转实测](STAGE77_TEST_REPORT.md) · [双栏实测](STAGE76_TEST_REPORT.md) · [单栏实测](STAGE75_TEST_REPORT.md)
+官方单栏扫描件已核对 8 个独立公式，双栏验收副本已核对 22 个，RWKV 混排扫描副本已核对 10 个。90°、180°、270° 页属性旋转已验证自动选区和手工拖框。更多无编号混排样本、跨页公式和复杂公式识别质量仍待验收。[混排实测](STAGE78_TEST_REPORT.md) · [旋转实测](STAGE77_TEST_REPORT.md) · [双栏实测](STAGE76_TEST_REPORT.md) · [单栏实测](STAGE75_TEST_REPORT.md)

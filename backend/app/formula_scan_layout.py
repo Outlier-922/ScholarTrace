@@ -13,11 +13,13 @@ _LABEL = re.compile(r"^\(\s*\d{1,3}(?:[.\-]\d{1,3})?[a-z]?\s*\)$", re.I)
 _SUFFIX = re.compile(r"\s+(\(\s*\d{1,3}(?:[.\-]\d{1,3})?[a-z]?\s*\))$", re.I)
 _LIMIT = re.compile(r"^[a-z]\s*=\s*\d+$", re.I)
 _CLAUSE = re.compile(r"\b(?:where|which|that|while)\s+\w+\s+\w+", re.I)
-_RELATION = re.compile(r"[=≈≃≡≤≥∝≠]")
+_RELATION = re.compile(r":=|[=≈≃≡≤≥∝≠]")
 _LHS = re.compile(r"(?:where\s+)?[\wα-ωΑ-Ω∑∏∫√][\w\d α-ωΑ-Ω∑∏∫√'.,+*/()\[\]{}_|^−\-]{0,46}$", re.I)
 _DISPLAY_SYMBOL = re.compile(r"[∑∏∫√]")
 _WORDS = re.compile(r"[a-zA-Z]{3,}")
 _HAN = re.compile(r"[\u3400-\u9fff]")
+_PROGRAM = re.compile(r"\b(?:def\s+\w+\(|(?:for|while)\b.+:|raise\s+\w+\(|"
+                      r"\w+\.\w+\(|(?:True|False|None)\s*\]|\[\]\s+\w+\s*=)")
 
 
 @dataclass(frozen=True)
@@ -38,10 +40,10 @@ class Line:
         return self.bbox[3] - self.bbox[1]
 
 
-def _math(line):
+def _math(line, max_width=.62):
     text = line.text
-    if (not 3 <= len(text) <= 125 or not .035 <= line.width <= .62
-            or "@" in text or "://" in text or len(_HAN.findall(text)) >= 5):
+    if (not 3 <= len(text) <= 125 or not .035 <= line.width <= max_width
+            or "@" in text or "://" in text or len(_HAN.findall(text)) >= 5 or _PROGRAM.search(text)):
         return False
     relation = _RELATION.search(text)
     if relation:
@@ -78,28 +80,47 @@ def _caption_bands(captions, prose):
     return bands
 
 
-def _gutter(prose):
+def _gutter(prose, captions):
     # Estimate the inner page margins from the long prose lines. Short headings
     # and columns in a single figure cannot establish a page-wide gutter.
     left = [row for row in prose if row.width >= .24 and row.bbox[2] <= .516]
     right = [row for row in prose if row.width >= .24 and row.bbox[0] >= .484]
-    if min(len(left), len(right)) < 5:
+    if len(left) >= 5 and len(right) >= 5:
+        starts = sorted(row.bbox[0] for row in right)
+        ends = sorted(row.bbox[2] for row in left)
+        inner_left = ends[(len(ends) - 1) * 3 // 4]
+        inner_right = starts[(len(starts) - 1) // 4]
+        return (inner_left + inner_right) / 2 if inner_right - inner_left >= .012 else None
+
+    if not any(row.bbox[0] < .35 and row.bbox[2] > .65 for row in prose):
         return None
-    starts = sorted(row.bbox[0] for row in right)
-    ends = sorted(row.bbox[2] for row in left)
-    inner_left = ends[(len(ends) - 1) * 3 // 4]
-    inner_right = starts[(len(starts) - 1) // 4]
-    if inner_right - inner_left < .012:
-        return None
-    return (inner_left + inner_right) / 2
+    # A narrow body column can be paired with a side figure and caption.
+    for caption in captions:
+        if caption.width < .20:
+            continue
+        if caption.bbox[0] >= .48:
+            edge = caption.bbox[0]
+            neighbors = [r.bbox[2] for r in left if edge - .10 < r.bbox[2] <= edge - .012
+                         and caption.bbox[1]-.17 <= r.center_y <= caption.bbox[3]+.035]
+        elif caption.bbox[2] <= .52:
+            edge = caption.bbox[2]
+            neighbors = [r.bbox[0] for r in right if edge + .012 <= r.bbox[0] < edge + .10
+                         and caption.bbox[1]-.17 <= r.center_y <= caption.bbox[3]+.035]
+        else:
+            continue
+        if len(neighbors) >= 5:
+            return (edge + median(neighbors)) / 2
+    return None
 
 
-def _column_regions(rows, prose, blocked, bounds, height):
-    left_edge = median(row.bbox[0] for row in prose)
+def _column_regions(rows, prose, blocked, bounds, height, roots=None):
+    left_edge = median(row.bbox[0] for row in prose) if prose else bounds[0]
     right_edges = sorted(row.bbox[2] for row in prose)
-    right_edge = right_edges[(len(right_edges) - 1) * 3 // 4]
+    right_edge = right_edges[(len(right_edges) - 1) * 3 // 4] if right_edges else bounds[1]
+    max_width = .84 if roots is not None else .62
     labels = [row for row in rows if _LABEL.fullmatch(row.text) and row.bbox[0] > right_edge - .105]
-    algebra = [row for row in rows if _RELATION.search(row.text) and row.width >= .055 and not _LIMIT.fullmatch(row.text)]
+    algebra = [row for row in rows if (roots is None or row in roots) and _RELATION.search(row.text)
+               and row.width >= .055 and not _LIMIT.fullmatch(row.text) and not _PROGRAM.search(row.text)]
     scoped = [row for row in algebra if not any(
         a <= (row.bbox[0]+row.bbox[2])/2 <= c and b <= row.center_y <= d for a,b,c,d in blocked
     )]
@@ -119,11 +140,11 @@ def _column_regions(rows, prose, blocked, bounds, height):
 
     anchors = {}
     for row in scoped:
-        suffix = _SUFFIX.search(row.text) if row.bbox[2] >= right_edge - .054 and _math(row) else None
+        suffix = _SUFFIX.search(row.text) if row.bbox[2] >= right_edge - .054 and _math(row, max_width) else None
         if row in numbers or suffix:
             anchors[row] = (numbers.get(row), suffix)
             continue
-        if not _math(row) or any(abs(root.center_y-row.center_y) < height*.75 for root in numbers):
+        if not _math(row, max_width) or any(abs(root.center_y-row.center_y) < height*.75 for root in numbers):
             continue
         before = min((row.bbox[1] - line.bbox[3] for line in prose if line.center_y < row.center_y), default=1)
         after = min((line.bbox[1] - row.bbox[3] for line in prose if line.center_y >= row.center_y), default=1)
@@ -179,28 +200,105 @@ def _column_regions(rows, prose, blocked, bounds, height):
         if bbox[2]-bbox[0] >= .028 and .009 <= bbox[3]-bbox[1] <= .105:
             hint = row.text[:suffix.start()] if suffix else row.text
             regions.append({
-                "bbox": [round(v, 6) for v in bbox], "hint": hint[:108] if _math(row) else "公式原图",
+                "bbox": [round(v, 6) for v in bbox], "hint": hint[:108] if _math(row, max_width) else "公式原图",
                 "label": label.text if label else suffix[1] if suffix else None,
                 **({"label_trim": "bottom"} if detached else {"label_trim": "right"} if suffix else {}),
             })
     return regions
 
 
-def _two_columns(rows, captions, blocked, prose, gutter, height):
-    regions = []
-    for bounds in ((0, gutter), (gutter, 1)):
-        # A few OCR polygons cross the measured gutter by a pixel. Allow that
-        # measurement error, then clamp the saved crop to its own column.
-        def inside(line):
-            return bounds[0] - .008 <= line.bbox[0] and line.bbox[2] <= bounds[1] + .008
+def _inside_column(line, bounds):
+    # Allow rounding at the gutter, then clip the saved crop to its own side.
+    return bounds[0] - .008 <= line.bbox[0] and line.bbox[2] <= bounds[1] + .008
 
-        column = [row for row in rows if inside(row)]
-        context = [row for row in prose if inside(row)]
-        column_captions = [c for c in captions if inside(c) or
+
+def _spanning_sections(rows, captions, blocked, prose, gutter, height):
+    wide_prose = [row for row in prose if row.bbox[0] < gutter-.12 and row.bbox[2] > gutter+.12]
+    side_prose = [row for row in prose if _inside_column(row, (0, gutter)) or _inside_column(row, (gutter, 1))]
+    right_edge = (median(row.bbox[2] for row in wide_prose) if wide_prose else
+                  max(row.bbox[2] for row in side_prose))
+    labels = [row for row in rows if _LABEL.fullmatch(row.text) and row.bbox[0] > right_edge-.105]
+    wide_captions = [row for row in captions if row.bbox[0] < gutter-.12 and row.bbox[2] > gutter+.12]
+    blocked = blocked + _caption_bands(wide_captions, prose)
+
+    seeds = []
+    for row in rows:
+        x0, y0, x1, y1 = row.bbox
+        if (not _RELATION.search(row.text) or not .055 <= row.width <= .84 or _LIMIT.fullmatch(row.text)
+                or _PROGRAM.search(row.text)):
+            continue
+        center = (x0+x1)/2
+        if any(a <= center <= c and b <= row.center_y <= d for a,b,c,d in blocked):
+            continue
+        if any(abs(other.center_y-row.center_y) <= height*.7 for other in side_prose):
+            continue
+        spans_gutter = x0 < gutter-.023 and x1 > gutter+.023
+        in_wide_context = any(abs(other.center_y-row.center_y) <= .19 for other in wide_prose)
+        wide_number = x0 < gutter-.020 and center >= gutter-.125 and any(
+            label.bbox[0]-x1 > .085 and abs(label.center_y-row.center_y) <= height*.72 for label in labels
+        )
+        if wide_number and not spans_gutter:
+            # The outer number may belong to a simultaneous right-column line.
+            wide_number = not any(
+                other.bbox[0] >= gutter and _RELATION.search(other.text)
+                and other.width >= .055 and abs(other.center_y-row.center_y) <= height*.75
+                for other in rows
+            )
+        if (spans_gutter and _math(row, .84)) or (in_wide_context and wide_number):
+            seeds.append(row)
+
+    # Fold nearby spanning lines together, preserving intervening column text.
+    sections = []
+    for row in sorted(seeds, key=lambda item: item.center_y):
+        if (sections and row.bbox[1]-sections[-1][-1].bbox[3] < height*2.4
+                and not any(sections[-1][-1].center_y < line.center_y < row.center_y for line in side_prose)):
+            sections[-1].append(row)
+        else:
+            sections.append([row])
+    found = []
+    for roots in sections:
+        first, last = roots[0], roots[-1]
+        top = max((row.bbox[3] for row in side_prose if row.bbox[3] <= first.bbox[1]), default=0)
+        bottom = min((row.bbox[1] for row in side_prose if row.bbox[1] >= last.bbox[3]), default=1)
+        top = max(top, first.bbox[1]-height*1.8)
+        bottom = min(bottom, last.bbox[3]+height*1.8)
+        band = [line for line in rows if top <= line.center_y <= bottom]
+        nearby_prose = [line for line in wide_prose if top-.12 <= line.center_y <= bottom+.12]
+        if not nearby_prose:
+            nearby_prose = wide_prose
+        regions = _column_regions(band, nearby_prose, blocked, (0, 1), height, set(roots))
+        if regions:
+            found.append((top, bottom, regions))
+    return found
+
+
+def _two_columns(rows, captions, blocked, prose, gutter, height):
+    spanning = _spanning_sections(rows, captions, blocked, prose, gutter, height)
+    rows = [row for row in rows if not any(top <= row.center_y <= bottom for top, bottom, _ in spanning)]
+    regions = []
+    for side, bounds in enumerate(((0, gutter), (gutter, 1))):
+        column = [row for row in rows if _inside_column(row, bounds)]
+        context = [row for row in prose if _inside_column(row, bounds)]
+        column_captions = [c for c in captions if _inside_column(c, bounds) or
                            (c.bbox[0] < gutter - .12 and c.bbox[2] > gutter + .12)]
         if context:
-            regions += _column_regions(column, context, blocked + _caption_bands(column_captions, context), bounds, height)
-    return regions[:24]
+            column_regions = _column_regions(column, context, blocked + _caption_bands(column_captions, context), bounds, height)
+            if spanning:
+                for item in column_regions:
+                    center = (item["bbox"][1] + item["bbox"][3]) / 2
+                    band = sum(bottom < center for _, bottom, _ in spanning)
+                    item["split_group"] = f"column-{side}-{band}"
+            regions.extend(column_regions)
+    # Preserve left/right reading order inside each band of columns.
+    ordered = []
+    for index, (top, _, wide) in enumerate(spanning):
+        for item in wide:
+            item["split_group"] = f"wide-{index}"
+        before = [item for item in regions if (item["bbox"][1]+item["bbox"][3])/2 < top]
+        ordered.extend(before)
+        ordered.extend(wide)
+        regions = [item for item in regions if item not in before]
+    return (ordered+regions)[:24]
 
 
 def locate(blocks):
@@ -225,7 +323,7 @@ def locate(blocks):
         return []
     height = max(.008, min(.023, median(row.height for row in rows)))
     prose = [row for row in rows if _prose(row) and not _math(row)]
-    gutter = _gutter(prose)
+    gutter = _gutter(prose, captions)
     if gutter is not None:
         return _two_columns(rows, captions, blocked, prose, gutter, height)
     blocked += _caption_bands(captions, prose)

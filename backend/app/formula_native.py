@@ -1,6 +1,7 @@
 """Read-only PDF crop and native glyph positions; executed in a parse worker."""
 import hashlib
 import math
+from collections import defaultdict
 from pathlib import Path
 import pymupdf
 
@@ -37,8 +38,32 @@ def render_region(path, expected_sha, page_number, region=None):
         return page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), clip=area, alpha=False).tobytes('png')
 
 
-def trim_equation_labels(path, expected_sha, page_number, suggestions):
-    """Trim only when the pixels separate a small trailing printed equation label."""
+def _split_neighboring_crops(page, scale, items, np):
+    """Find a visible blank row between neighboring formulas in the same lane."""
+    width, height = page.rect.width, page.rect.height
+    for upper, lower in zip(items, items[1:]):
+        a, b = upper["bbox"], lower["bbox"]
+        if not -.004 <= b[1]-a[3] <= .010:
+            continue
+        middle = (a[3]+b[1])/2
+        top = max(a[1]+.009, middle-.014)
+        bottom = min(b[3]-.009, middle+.014)
+        if bottom-top < .005:
+            continue
+        area = pymupdf.Rect(min(a[0], b[0])*width, top*height, max(a[2], b[2])*width, bottom*height)
+        pixels = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), clip=area, colorspace=pymupdf.csGRAY, alpha=False)
+        ink = np.frombuffer(pixels.samples, dtype=np.uint8).reshape((pixels.height, pixels.width)) < 190
+        occupied = np.flatnonzero(ink.any(axis=1))
+        gaps = [(int(end-start), (pixels.y+(start+end)/2)/(height*scale))
+                for start, end in zip(occupied, occupied[1:]) if end-start >= 3]
+        if gaps:
+            _, line = max(gaps, key=lambda pair: (pair[0], -abs(pair[1]-middle)))
+            if a[1]+.009 <= line <= b[3]-.009:
+                a[3] = b[1] = round(float(line), 6)
+
+
+def refine_scan_regions(path, expected_sha, page_number, suggestions):
+    """Use original pixels for neighboring cuts and trailing equation labels."""
     import numpy as np
 
     check_pdf(path, expected_sha)
@@ -47,8 +72,15 @@ def trim_equation_labels(path, expected_sha, page_number, suggestions):
         page = _source_page(pdf, page_number)
         width, height = page.rect.width, page.rect.height
         scale = min(2.0, 1800 / max(width, height))
-        for item in suggestions:
-            candidate = {**item}
+        grouped = defaultdict(list)
+        candidates = [{**item, "bbox": list(item["bbox"])} for item in suggestions]
+        for candidate in candidates:
+            group = candidate.pop("split_group", None)
+            if group is not None:
+                grouped[group].append(candidate)
+        for items in grouped.values():
+            _split_neighboring_crops(page, scale, items, np)
+        for candidate in candidates:
             direction = candidate.pop("label_trim", None)
             if direction is None:
                 result.append(candidate)

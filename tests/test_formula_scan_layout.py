@@ -110,7 +110,7 @@ def test_pixel_trim_preserves_equation_and_removes_separated_printed_label(tmp_p
         doc.save(path)
     digest = sha256(path.read_bytes()).hexdigest()
     crop = {"bbox": [.54,.36,.877,.397], "label": "(2)", "hint": "g(x) = x", "label_trim": "right"}
-    [result] = formula_native.trim_equation_labels(path, digest, 1, [crop])
+    [result] = formula_native.refine_scan_regions(path, digest, 1, [crop])
     assert .62 < result["bbox"][2] < .85
     assert "label_trim" not in result and result["label"] == "(2)"
     assert formula_native.render_region(path, digest, 1, result["bbox"]).startswith(b"\x89PNG")
@@ -135,7 +135,7 @@ def test_rotated_pages_keep_cropbox_coordinates_and_source_bytes(tmp_path):
     digest = sha256(path.read_bytes()).hexdigest()
     region = [.53, .371, .921, .404]
     suggestion = {"bbox": region, "label": "(2)", "hint": "g(x) = x", "label_trim": "right"}
-    ref = formula_native.trim_equation_labels(path, digest, 1, [suggestion])
+    ref = formula_native.refine_scan_regions(path, digest, 1, [suggestion])
     assert .61 < ref[0]["bbox"][2] < .86
     region = ref[0]["bbox"]
     preview = formula_native.render_region(path, digest, 1)
@@ -143,10 +143,60 @@ def test_rotated_pages_keep_cropbox_coordinates_and_source_bytes(tmp_path):
     glyphs = formula_native.extract(path, digest, 1, [region])
     assert "".join(char["char"] for char in glyphs[0]["glyphs"]).strip() == "g(x) = x"
     for n in range(2, 5):
-        assert formula_native.trim_equation_labels(path, digest, n, [suggestion]) == ref
+        assert formula_native.refine_scan_regions(path, digest, n, [suggestion]) == ref
         assert formula_native.render_region(path, digest, n) == preview
         assert formula_native.render_region(path, digest, n, region) == crop
         assert formula_native.extract(path, digest, n, [region]) == glyphs
     assert sha256(path.read_bytes()).hexdigest() == digest
     with pymupdf.open(path) as doc:
         assert [page.rotation for page in doc] == rotations
+
+
+def test_mixed_layout_preserves_cross_column_regions_and_independent_numbers():
+    text = "The mathematical expressions are introduced in the surrounding prose."
+    rows = [
+        block("lead", text, [.12,.23,.88,.244]),
+        block("wide-a", "F(x) = sum(alpha, beta, gamma)", [.23,.266,.75,.281]),
+        block("wide-a-id", "(3)", [.86,.266,.887,.281]),
+        block("wide-b", "q := f(x)", [.38,.288,.47,.307]),
+        block("wide-b-id", "(4)", [.86,.288,.887,.307]),
+        block("code", "sieve = [True] * (num + 1) end = int(math.sqrt(num))", [.18,.311,.75,.326]),
+    ]
+    for index, top in enumerate((.09,.115,.14,.16,.18,.35,.38,.41,.44,.47)):
+        rows.extend([
+            block(f"left-{index}", text, [.10,top,.475,top+.014]),
+            block(f"right-{index}", text, [.52,top,.89,top+.014]),
+        ])
+    rows.extend([
+        block("left-math", "x(y) = y", [.339,.207,.432,.221]),
+        block("left-id", "(1)", [.453,.207,.481,.221]),
+        block("right-math", "z(t) = t", [.60,.207,.76,.221]),
+        block("right-id", "(2)", [.85,.207,.879,.221]),
+        block("later-left", "a(t) = t", [.12,.507,.29,.523]),
+        block("later-left-id", "(5)", [.45,.507,.482,.523]),
+    ])
+    found = formula_scan_layout.locate(rows)
+    assert [item["label"] for item in found] == ["(1)", "(2)", "(3)", "(4)", "(5)"]
+    left, right, wide, _, _ = [item["bbox"] for item in found]
+    assert left[2] < .5 < right[0]
+    assert wide[0] < .3 and wide[2] > .7
+    assert found[2]["split_group"] == found[3]["split_group"]
+    assert found[0]["split_group"] != found[-1]["split_group"]
+
+
+def test_mixed_layout_cuts_neighboring_formulas_at_visible_blank_row(tmp_path):
+    path = tmp_path / "stacked.pdf"
+    with pymupdf.open() as doc:
+        page = doc.new_page(width=600, height=800)
+        page.insert_text((180, 310), "g(x) = x", fontsize=16)
+        page.insert_text((180, 332), "h(x) = x", fontsize=16)
+        doc.save(path)
+    digest = sha256(path.read_bytes()).hexdigest()
+    regions = [
+        {"bbox": [.25,.36,.6,.389], "split_group": "wide-0"},
+        {"bbox": [.23,.389,.62,.425], "split_group": "wide-0"},
+    ]
+    upper, lower = formula_native.refine_scan_regions(path, digest, 1, regions)
+    assert .39 < upper["bbox"][3] == lower["bbox"][1] < .407
+    assert regions[0]["bbox"][3] == .389
+    assert all("split_group" not in cand for cand in (upper, lower))

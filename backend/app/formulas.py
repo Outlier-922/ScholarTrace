@@ -130,12 +130,12 @@ async def blocks(identity: str, request: Request, page: int = Query(ge=1),
                  parse_run_id: str = Query(min_length=1, max_length=100)):
     response = await run_in_threadpool(_page_blocks, identity, page, parse_run_id)
     layout = response["scan_layout"]
-    if not any("label_trim" in item for item in layout["items"]):
+    if not any("label_trim" in item or "split_group" in item for item in layout["items"]):
         return response
     doc, _, path = await run_in_threadpool(page_input, identity, page, parse_run_id)
     try:
         layout["items"] = await asyncio.get_running_loop().run_in_executor(
-            request.app.state.parse_executor, formula_native.trim_equation_labels,
+            request.app.state.parse_executor, formula_native.refine_scan_regions,
             str(path), doc["sha256"], page, layout["items"],
         )
     except (ValueError, IndexError, RuntimeError, OSError, ImportError):
