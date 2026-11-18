@@ -179,6 +179,18 @@ def test_cross_page_formula_keeps_both_crops_and_exports_their_provenance(client
 
     monkeypatch.setattr(formula_ocr, 'recognize', no_guess)
     assert client.post(url+'/recognize-scan', json={}).status_code == 422
+    assert source['native_supported'] and {glyph['page'] for glyph in source['glyphs']} == {1, 2}
+    monkeypatch.setattr(formulas.model_client, 'configuration', lambda: {'ready': True})
+
+    async def transcribe_both(system, data, **_):
+        assert '先读第一页选区' in system
+        assert {glyph['page'] for glyph in data['glyphs']} == {1, 2}
+        assert not any(glyph['char'] == '1' for glyph in data['glyphs'])
+        return {'status':'candidate', 'latex':'u=x+y+z', 'uncertainties':[]}
+
+    monkeypatch.setattr(formulas.model_client, 'chat_json', transcribe_both)
+    candidate = client.post(url+'/transcribe', json={})
+    assert candidate.is_success and candidate.json()['continuation'] == continued
     entry = {'latex': 'u=x+y+z', 'note': 'Checked each page'}
     revision = client.post(url+'/revisions', json=entry).json()
     assert revision['continuation'] == continued and revision['origin'] == 'user_edited'
@@ -188,6 +200,7 @@ def test_cross_page_formula_keeps_both_crops_and_exports_their_provenance(client
     assert text.count('Region:') == 2
     secondary_image = formulas.repo.image_path(identity, continued=True)
     secondary_image.write_bytes(b'invalid')
+    assert client.post(url+'/transcribe', json={}).status_code == 409
     assert client.get(url+'/image', params={'page':2}).status_code == 409
     assert client.get(export).status_code == 409
     assert client.post(url+'/revisions', json=entry).status_code == 409
@@ -227,6 +240,22 @@ def test_model_failure_leaves_source_available(client,source,monkeypatch,failure
     if failure=='configuration':monkeypatch.setenv('LLM_API_KEY','')
     assert client.post('/api/formula-sources/'+value['id']+'/transcribe',json={}).status_code==status
     assert client.get('/api/formula-sources/'+value['id']).status_code==200
+
+
+def test_native_layout_reads_both_fraction_branches_and_script_baselines():
+    from backend.app.formula_typesetting import recover
+
+    def run(text, x, right, baseline, size=10, font='CMMI10'):
+        return {'text':text,'x':x,'right':right,'baseline':baseline,'size':size,'font':font}
+
+    first = {'horizontal_rules':[[2,10,24]],'runs':[
+        run('x',3,7,6,7), run('n',7,10,4,5), run('i',7,10,8,5),
+        run('α',9,14,16,7), run('0',14,17,17,5,'CMR5'),
+        run('=',28,34,12,font='CMR10'),
+    ]}
+    following = {'runs':[run('z',1,5,10)]}
+    assert recover([first,following]) == r'\frac{x^{n}_{i}}{\alpha _{0}}= z'
+    assert recover([first,{'runs':[run('?',1,5,10,font='UnknownFont')]}]) is None
 
 
 def test_native_hash_mismatch_rejected(source):

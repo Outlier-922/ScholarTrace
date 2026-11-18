@@ -63,6 +63,29 @@ async def future_response(system, data, **kwargs):
     return {'assessments': result}
 
 
+def test_future_sweep_keeps_source_and_finds_ready_work_without_explicit_default(client, papers, monkeypatch):
+    docs, value, _ = papers
+
+    async def unexpected(*args, **kwargs):
+        pytest.fail('source-only sweep called a model')
+
+    monkeypatch.setattr(model_client, 'chat_json', unexpected)
+    with store.connection() as connection:
+        connection.execute('DELETE FROM work_defaults WHERE work_id IN (?,?)', (docs[0]['work_id'], docs[1]['work_id']))
+    path = f"/api/graphs/{value['id']}/future-sweep"
+    response = client.post(path, json={'use_model':False})
+    assert response.status_code == 200, response.text
+    report = response.json()
+    assert report['usage']['calls'] == 0
+    assert len(report['directions']) == 1 and report['remaining'] == 1
+    item = report['directions'][0]
+    assert item['source']['document_id'] == docs[0]['id'] and item['assessment_id'] is None
+    assert docs[1]['id'] in {candidate['id'] for candidate in item['candidates']}
+    assert client.get(path + 's').json()['items'][0]['id'] == report['id']
+    export = client.get(f"/api/research-insights/{report['id']}/export")
+    assert export.json() == report
+
+
 def test_review_has_quotes_coverage_history_and_export(client, papers, monkeypatch):
     docs, value, _ = papers; calls = []
     async def fake(*args, **kwargs): calls.append(1); return await review_response(*args, **kwargs)

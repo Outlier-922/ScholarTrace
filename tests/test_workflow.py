@@ -176,17 +176,18 @@ def test_failed_model_request_still_consumes_reserved_budget(monkeypatch):
     assert budget.calls==1 and budget.reserved_output_tokens==600 and budget.unreported_usage==1
 
 
-def test_diagnostics_do_not_send_request_when_missing_and_never_expose_provider_body(client,monkeypatch):
+@pytest.mark.parametrize('status_code,error_code', [(401,'authentication_failed'), (402,'payment_required')])
+def test_diagnostics_do_not_send_request_when_missing_and_never_expose_provider_body(client,monkeypatch,status_code,error_code):
     monkeypatch.setenv('LLM_API_KEY','')
     status=client.get('/api/model/status').json();assert not status['ready'] and status['last_check'] is None
     assert client.post('/api/model/check').json()['status']=='not_ready'
     configure(monkeypatch)
     async def denied(*args,**kwargs):
-        response=httpx.Response(401,json={'secret':'synthetic-sensitive-provider-body'},request=httpx.Request('POST','https://provider.test'))
+        response=httpx.Response(status_code,json={'secret':'synthetic-sensitive-provider-body'},request=httpx.Request('POST','https://provider.test'))
         raise httpx.HTTPStatusError('synthetic-sensitive-provider-body',request=response.request,response=response)
     monkeypatch.setattr(model_client,'chat_json',denied)
     response=client.post('/api/model/check')
-    assert response.json()['error_code']=='authentication_failed'
+    assert response.json()['error_code']==error_code
     assert 'synthetic-sensitive-provider-body' not in response.text and 'synthetic-fixture-not-a-real-key' not in response.text
     assert client.get('/api/model/status').json()['last_check']['status']=='failed'
     monkeypatch.setenv('LLM_API_KEY','synthetic-key-after-rotation')

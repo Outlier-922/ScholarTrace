@@ -18,16 +18,28 @@ from urllib.parse import quote, unquote, urljoin, urlsplit
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
-from . import literature_store as repo, store, literature_handoff as handoff
+from . import literature_store as repo, store, literature_handoff as handoff, literature_code
 
 router=APIRouter(prefix='/api',tags=['literature'])
 ARXIV=re.compile(r'(?:\d{4}\.\d{4,5}|[a-z][a-z.-]+/\d{7})(?:v[1-9]\d*)?',re.I)
 DOI=re.compile(r'10\.\d{4,9}/\S+',re.I)
 NS={'a':'http://www.w3.org/2005/Atom','x':'http://arxiv.org/schemas/atom','o':'http://a9.com/-/spec/opensearch/1.1/'}
+GITHUB_CODE = re.compile(
+    r'\b(?:source\s+code|code|implementation)\s*(?:is\s+|are\s+)?'
+    r'(?:publicly\s+|openly\s+)?(?:available\s+)?(?:at\s+|from\s+|:\s*)?'
+    r'(https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9_][A-Za-z0-9_.-]*)(?=$|[\s),.;\]}])', re.I,
+)
+TOPIC_ALIASES = {
+    'low rank adaptation': 'lora',
+    'direct preference optimization': 'dpo',
+    'retrieval augmented generation': 'rag',
+    'parameter efficient fine tuning': 'peft',
+}
 _gates={'arxiv':asyncio.Lock(),'crossref':asyncio.Lock()}
 _last={'arxiv':0.,'crossref':0.}
 _blocked_until={'arxiv':0.,'crossref':0.}
 _checking=set()
+_code_lock=asyncio.Lock()
 _scheduler=None
 request_guard=ContextVar('scholartrace_metadata_request_guard',default=None)
 
@@ -62,7 +74,11 @@ def plain(value):
 
 
 def words(value):
-    return set(re.findall(r'[a-z][a-z0-9-]{2,}|[\u4e00-\u9fff]{2,}',value.casefold()))-{'the','and','for','with','from','paper','study','using','based','all','need','you'}
+    return set(re.findall(r'[a-z][a-z0-9]{2,}|[\u4e00-\u9fff]{2,}',value.casefold()))-{'the','and','for','with','from','paper','study','using','based','all','need','you'}
+
+
+def topic_phrase(value):
+    return ' '.join(re.findall(r"[^\W_]+", value.casefold()))
 
 
 def safe_url(value):
@@ -70,6 +86,11 @@ def safe_url(value):
         parsed=urlsplit(value or '')
         return value if parsed.scheme=='https' and parsed.hostname and not parsed.username and not parsed.password and not parsed.fragment else None
     except ValueError: return None
+
+
+def github_code_link(text):
+    match = GITHUB_CODE.search(text)
+    return match[1].rstrip('.').removesuffix('.git') if match else None
 
 
 async def _fetch(provider,params=None,doi=None):
@@ -112,10 +133,12 @@ def parse_arxiv(body):
         if not re.search(r'v\d+$',identity): continue  # Freeze a specific revision for imports.
         title=plain(entry.findtext('a:title','',NS))
         if not title or title.casefold()=='error': continue
+        abstract=plain(entry.findtext('a:summary','',NS))[:15000]
+        code_url=github_code_link(plain(entry.findtext('x:comment','',NS))) or github_code_link(abstract)
         records.append({'key':'arxiv:'+identity,'root_key':'arxiv:'+re.sub(r'v\d+$','',identity),'provider':'arxiv','identifier':identity,
             'title':title,'authors':[plain(author.findtext('a:name','',NS)) for author in entry.findall('a:author',NS)],
             'published':entry.findtext('a:published','',NS),'updated':entry.findtext('a:updated','',NS),
-            'year':int(entry.findtext('a:published','0000',NS)[:4]),'abstract':plain(entry.findtext('a:summary','',NS))[:15000],
+            'year':int(entry.findtext('a:published','0000',NS)[:4]),'abstract':abstract,'code_url':code_url,
             'doi':plain(entry.findtext('x:doi','',NS)) or None,'venue':plain(entry.findtext('x:journal_ref','',NS)) or 'arXiv preprint',
             'landing_url':'https://arxiv.org/abs/'+identity,'pdf_url':'https://arxiv.org/pdf/'+identity,
             'fulltext_status':'arxiv_pdf_available','identity_status':'registry_record','retrieved_at':store.now(),
@@ -169,22 +192,54 @@ async def search_provider(provider,query,mode,limit,*,fresh=False,latest=False,c
     return result
 
 
-def decorate(items,request):
-    preferences=repo.feedback()
+def decorate(items,request,*,library=(),profile_id='default'):
+    preferences=repo.feedback(profile_id)
     liked=[repo.get_record(key) for key,value in preferences.items() if value==1]
     interest=set().union(*(words(item['title']) for item in liked if item)) if liked else set()
+    library_titles = {doc['title']: words(doc['title']) for doc in library if doc.get('title') and doc['status']=='ready'}
+    topic = words(request.query)
+    phrase = topic_phrase(request.query) if request.mode == 'topic' and len(topic) >= 2 else ''
+    topic_names = [name for name in (phrase, TOPIC_ALIASES.get(phrase)) if name]
     output=[]
     for index,raw in enumerate(items):
-        item=dict(raw); topic=words(request.query); terms=words(item['title']+' '+item.get('abstract',''))
+        item=dict(raw); terms=words(item['title']+' '+item.get('abstract',''))
         shared=sorted(topic & terms); personal=sorted(interest & terms)
+        title_match = next((name for name in topic_names if f' {name} ' in f" {topic_phrase(item['title'])} "), None)
+        abstract_match = next((name for name in topic_names if f' {name} ' in f" {topic_phrase(item.get('abstract',''))} "), None)
+        match = title_match or abstract_match
+        if match:
+            match_reason = f"{'题名' if title_match else '摘要'}匹配主题：{match}"
+        elif shared:
+            match_reason = f"查询关键词匹配：{', '.join(shared[:6])}"
+        else:
+            match_reason = '由书目服务返回的候选，需核对标题与作者'
+        relevance = 1 + (.6 if title_match else .2) if match else len(shared)/max(1,len(topic))
+        local_title, local = max(((title, tokens & terms) for title, tokens in library_titles.items()),
+                                 key=lambda match: len(match[1]), default=('', set()))
         value=preferences.get(item['key'],0)
         if value==-1 and not request.include_disliked: continue
+        code_url = item.get('code_url') or (github_code_link(item.get('abstract','')) if item['provider']=='arxiv' else None)
+        verification = literature_code.cached(code_url) if code_url else None
+        code_reasons = ['arXiv 书目信息声明了 GitHub 代码链接'] if code_url else []
+        code_weight = .08 if code_url else 0
+        if verification and verification['status'] == 'open_license_reported':
+            code_weight = .18
+            code_reasons.append(f"GitHub 仓库标注许可证 {verification['license_id']}")
+        elif verification and verification['status'] == 'not_found':
+            code_weight = 0
+            code_reasons.append('GitHub 暂未找到该公开仓库')
+        elif verification and verification['status'] == 'public_license_unconfirmed':
+            code_reasons.append('仓库可公开访问，开源许可证待核对')
         checks={'identifier_exact': bool(identify(request.query)), 'author_match':request.author.casefold() in ' '.join(item['authors']).casefold() if request.author else None,
                 'year_match':item['year']==request.year if request.year else None}
-        item.update(feedback=value,identity_checks=checks,reasons=([f"查询关键词匹配：{', '.join(shared[:6])}"] if shared else ['由书目服务返回的候选，需核对标题与作者'])+
+        item.update(feedback=value,identity_checks=checks,code_url=code_url,code_verification=verification,topic_phrase_match=bool(match),
+                    reasons=[match_reason]+
                     ([f"与你点赞文献共享词：{', '.join(personal[:5])}"] if personal else [])+
+                    ([f"与本地《{local_title}》共享词：{', '.join(sorted(local)[:5])}"] if local else [])+
+                    code_reasons+
                     ['arXiv 可获取原版 PDF' if item['pdf_url'] else '当前只有书目元数据，不能用于原文问答'],
-                    _rank=len(shared)/max(1,len(topic))+.15*min(len(personal),3)/3+.05*value-index*.0001)
+                    _rank=relevance+.15*min(len(personal),3)/3+.2*min(len(local),4)/4
+                    +code_weight+.05*value-index*.0001)
         output.append(item)
     output.sort(key=lambda item:item['_rank'],reverse=True)
     for item in output: item.pop('_rank')
@@ -206,7 +261,7 @@ async def search(request:SearchRequest):
         except (httpx.HTTPError,ValueError,TypeError,KeyError,ET.ParseError): statuses.append({'provider':provider,'status':'failed'})
     items=list({item['key']:item for item in items}.values())
     payload={'items':decorate(items,request),'providers':statuses,'query':request.query,'created_at':store.now(),
-             'warnings':['书目命中不代表论文身份已人工确认；标题、作者、年份和版本需一起核对。元数据不是全文。','未核验代码、实验复现或引用价值；排序仅依据关键词和显式赞踩。']}
+             'warnings':['书目命中后请核对标题、作者、年份和版本，再获取全文。','排序依据关键词、显式赞踩和代码仓库线索。许可证为 GitHub 公开元数据，复现情况需另行核对。']}
     payload['search_id']=repo.save_search(request.model_dump(),payload)
     return payload
 
@@ -294,6 +349,10 @@ async def _download_pdf(identity):
 
 @router.post('/literature/import')
 async def import_paper(body:ImportRequest,request:Request):
+    return await fetch_paper(body, request, identity_basis='user_confirmed')
+
+
+async def fetch_paper(body:handoff.Context,request:Request,*,identity_basis:str):
     item=handoff.metadata(body)
     if item['provider']!='arxiv' or not item.get('pdf_url'): raise HTTPException(422,'当前只有元数据；请到出版方核对开放全文后手动导入')
     try:
@@ -310,7 +369,7 @@ async def import_paper(body:ImportRequest,request:Request):
     provenance={'key':item['key'],'identifier':item['identifier'],'metadata_title':item['title'],'authors':item['authors'],
                 'download_url':url,'metadata_source':item['source_url'],'fetched_at':store.now(),'sha256':document['sha256'],'document_id':document['id']}
     repo.bind_import(document,item['key'],provenance)
-    receipt=handoff.capture(body,item,document,'downloaded_pdf')
+    receipt=handoff.capture(body,item,document,'downloaded_pdf',identity_basis=identity_basis)
     return {'document':document,'provenance':provenance,'handoff':handoff.resolve(receipt)}
 
 
@@ -323,13 +382,32 @@ def provenance(document_id:str):
 class FeedbackRequest(BaseModel):
     key:str=Field(max_length=250)
     value:Literal[-1,0,1]
+    profile_id:str=Field(default='default',max_length=36)
 
 
 @router.post('/literature/feedback')
 def feedback(body:FeedbackRequest):
     if not repo.get_record(body.key): raise HTTPException(404,'记录不存在')
-    repo.set_feedback(body.key,body.value)
+    if not repo.profile_exists(body.profile_id): raise HTTPException(404,'偏好档案不存在')
+    repo.set_feedback(body.key,body.value,body.profile_id)
     return {'key':body.key,'value':body.value}
+
+
+class ProfileRequest(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    name:str=Field(min_length=1,max_length=60)
+
+
+@router.get('/literature/profiles')
+def recommendation_profiles():
+    return {'items':repo.profiles()}
+
+
+@router.post('/literature/profiles')
+def create_profile(body:ProfileRequest):
+    name = ' '.join(body.name.split())
+    if not name: raise HTTPException(422,'请输入偏好档案名称')
+    return repo.save_profile(name)
 
 
 class SubscriptionRequest(BaseModel):
@@ -373,9 +451,50 @@ async def check(identity:str): return await check_subscription(identity)
 
 
 @router.get('/literature/subscriptions/{identity}/checks')
-def checks(identity:str):
-    if not repo.subscription(identity): raise HTTPException(404,'主题不存在')
-    return {'items':repo.checks(identity)}
+def checks(identity:str, include_disliked:bool=False, profile_id:str='default'):
+    subscription = repo.subscription(identity)
+    if not subscription: raise HTTPException(404,'主题不存在')
+    if not repo.profile_exists(profile_id): raise HTTPException(404,'偏好档案不存在')
+    history = repo.checks(identity)
+    window = next((check for check in history if 'window_items' in check), None) or repo.latest_checked_window(identity)
+    recommendations = None
+    if window is not None:
+        ranked = decorate(window['window_items'], SearchRequest(query=subscription['query'], mode='topic',
+                                                                include_disliked=True),
+                          library=store.list_documents(), profile_id=profile_id)
+        focused = [paper for paper in ranked if paper['topic_phrase_match']]
+        visible = [paper for paper in (focused or ranked) if paper['feedback'] != -1]
+        recommendations = {'checked_at': window['created_at'], 'items': ranked if include_disliked else visible[:6]}
+    return {'items': [{k:v for k,v in check.items() if k!='window_items'} for check in history],
+            'recommendations': recommendations}
+
+
+@router.post('/literature/subscriptions/{identity}/verify-code')
+async def verify_topic_code(identity:str):
+    if not repo.subscription(identity):
+        raise HTTPException(404,'主题不存在')
+    window = repo.latest_checked_window(identity)
+    if window is None:
+        raise HTTPException(422,'请先成功检查一次 arXiv 主题。')
+    candidates = {}
+    for paper in window['window_items']:
+        url = paper.get('code_url') or github_code_link(paper.get('abstract',''))
+        if key := literature_code.repository(url):
+            candidates.setdefault(key, url)
+    results = []
+    remaining_requests = 4
+    async with _code_lock:
+        for url in candidates.values():
+            result = literature_code.cached(url)
+            if result is None:
+                if not remaining_requests:
+                    continue
+                remaining_requests -= 1
+                result = await literature_code.verify(url)
+            results.append({'code_url':url, **result})
+            if result['status'] == 'rate_limited':
+                break
+    return {'items':results,'remaining':len(candidates)-len(results)}
 
 
 async def tracking_loop():

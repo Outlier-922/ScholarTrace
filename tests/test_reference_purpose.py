@@ -7,6 +7,7 @@ from backend.app.reference_purpose import suggest
     ('The residual step is followed by layer\nnormalization [1].', '[1]', 'method'),
     ('The model is evaluated on the Example dataset [ABC+19].', '[ABC+19]', 'data'),
     ('We report a comparison with baseline A [2].', '[2]', 'comparison'),
+    ('For further reading, see [4].', '[4]', 'background'),
 ])
 def test_hint_points_to_literal_span_with_citation(text, marker, purpose):
     block = {'text': text, 'type': 'paragraph'}
@@ -23,6 +24,7 @@ def test_hint_points_to_literal_span_with_citation(text, marker, purpose):
     ('This is not followed by layer normalization [1].', '[1]', 'paragraph', {}),
     ('followed by layer normalization [1]', '[1]', 'paragraph', {'extraction': 'rapidocr'}),
     ('followed by layer normalization [1]. followed by layer normalization [1].', '[1]', 'paragraph', {}),
+    ('For further reading, see [1,2].', '[1,2]', 'paragraph', {}),
 ])
 def test_ambiguous_or_unreliable_positions_abstain(text, marker, kind, metadata):
     assert suggest({'text': text, 'type': kind, 'metadata': metadata},

@@ -13,8 +13,9 @@ from . import ocr
 from .formula_native import check_pdf
 from .table_refine_native import lines
 
-VERSION = 'scan-ocr-grid-v1'
+VERSION = 'scan-ocr-grid-v2'
 NUMBER = re.compile(r'[+\-−]?\d+(?:[.,]\d+)?%?')
+METRIC = re.compile(r'[+\-−]?\d+(?:[.,]\d+)?(?:[%KMB])?', re.I)
 
 
 def _center(item, axis):
@@ -67,7 +68,49 @@ def _column(box, cuts):
     return None
 
 
-def build(words, bbox, header_bottom, cuts, aspect):
+def _body_gutters(body, cuts, height, aspect):
+    """Split crowded numeric columns only when both alignments recur."""
+    body_rows = lines(body, height * .37)
+    tolerance = max(.003, height * aspect * .27)
+    added = []
+    for index, (x0, x1) in enumerate(zip(cuts, cuts[1:])):
+        candidates = [[w for w in row if _column(w['bbox'], cuts) == index and METRIC.fullmatch(w['text'])]
+                      for row in body_rows]
+        full = max(candidates, key=len)
+        if len(full) < 2:
+            continue
+        recurring = [w for w in full if sum(
+            any(abs(_center(w, 0) - _center(other, 0)) <= tolerance for other in row)
+            for row in candidates
+        ) >= 2]
+        for a, b in zip(recurring, recurring[1:]):
+            left, right = a['bbox'][2], b['bbox'][0]
+            if right - left < tolerance or not x0 + .006 < (left + right) / 2 < x1 - .006:
+                continue
+            cut = _gutter(left, right, body)
+            # Never derive a new boundary through intact OCR text.
+            if not any(w['bbox'][0] + .001 < cut < w['bbox'][2] - .001 for w in body):
+                added.append(cut)
+    return added
+
+
+def _row_groups(body, cuts, horizontal, vertical, height):
+    spans = []
+    if not any(abs(cuts[1] - line) < .002 for line in vertical):
+        return body, spans
+    for top, bottom in zip(horizontal, horizontal[1:]):
+        band = [w for w in body if top < _center(w, 1) < bottom]
+        labels = [w for w in band if _column(w['bbox'], cuts) == 0]
+        if len(labels) != 1 or not re.fullmatch(r'\([A-Za-z0-9]+\)', labels[0]['text']):
+            continue
+        others = [w for w in band if w is not labels[0]]
+        if len(lines(others, height * .37)) >= 2:
+            spans.append((top, bottom, labels[0]))
+    excluded = {w['id'] for _, _, w in spans}
+    return [w for w in body if w['id'] not in excluded], spans
+
+
+def build(words, bbox, header_bottom, cuts, aspect, horizontal=(), vertical=()):
     if not words:
         raise ValueError('scan_no_text')
     heading = [w for w in words if _center(w, 1) < header_bottom]
@@ -85,6 +128,16 @@ def build(words, bbox, header_bottom, cuts, aspect):
                     anchors.append(b)
         anchors.sort()
         cuts = [bbox[0], *[_gutter(a[2], b[0], body) for a, b in zip(anchors, anchors[1:])], bbox[2]]
+        # A mostly borderless table can still have a few geometric separators.
+        for rule in vertical:
+            if min(abs(rule - cut) for cut in cuts) > .006:
+                left = any(w['bbox'][2] < rule for w in body)
+                right = any(w['bbox'][0] > rule for w in body)
+                if left and right and not any(w['bbox'][0] + .001 < rule < w['bbox'][2] - .001 for w in body):
+                    cuts.append(rule)
+        cuts.sort()
+        if len(anchors) >= 5:
+            cuts = sorted([*cuts, *_body_gutters(body, cuts, height, aspect)])
     if not 3 <= len(cuts) <= 41 or any(b - a < .002 for a, b in zip(cuts, cuts[1:])):
         raise ValueError('scan_column_geometry_ambiguous')
 
@@ -92,6 +145,15 @@ def build(words, bbox, header_bottom, cuts, aspect):
     columns = [{'label': '', 'word_ids': []} for _ in range(count)]
     warnings = ['本机 OCR 候选，尚未核验。未识别的格子保持为空；公式、上下标和数字请对照原图。']
     for row in headers:
+        if vertical:
+            split = []
+            for group in row:
+                locations = {_column(w['bbox'], cuts) for w in group}
+                if len(locations) > 1 and None not in locations:
+                    split.extend([[w for w in group if _column(w['bbox'], cuts) == j] for j in sorted(locations)])
+                else:
+                    split.append(group)
+            row = split
         for group in row:
             b = _union(group)
             column = _column(b, cuts)
@@ -116,6 +178,7 @@ def build(words, bbox, header_bottom, cuts, aspect):
         if not value['label']:
             value['label'] = f'未命名列{j+1}'
 
+    body, merged = _row_groups(body, cuts, horizontal, vertical, height)
     row_words = lines(body, height * .37)
     if len(row_words) > 150 or len(row_words) * count > 2000:
         raise ValueError('scan_grid_limit')
@@ -150,12 +213,35 @@ def build(words, bbox, header_bottom, cuts, aspect):
                 'row_span': 1, 'covered_by': None, 'ocr_confidence': confidence,
             })
         rows.append(values)
+    for top, bottom, label in merged:
+        covered = [i for i, center in enumerate(centers) if top < center < bottom]
+        first = covered[0]
+        rows[first][0] = label['text']
+        cells[first * count].update(text=label['text'], word_ids=[label['id']], bbox=label['bbox'],
+                                    ocr_confidence=label['confidence'], row_span=len(covered))
+        for i in covered[1:]:
+            cells[i * count]['covered_by'] = [first, 0]
     if not any(v for row in rows for v in row):
         raise ValueError('scan_no_assigned_text')
     if unassigned:
-        warnings.append('归列不明的文字另列待核对。没有推断合并格，也不向相邻空格传播值。')
+        warnings.append('归列不明的文字另列待核对；空格保持原样。')
     return {'status': 'candidate', 'columns': columns, 'rows': rows, 'cells': cells,
             'unassigned': unassigned, 'cuts': cuts, 'row_edges': edges, 'warnings': warnings}
+
+
+def _rules(rgb, pix, scale, width, height):
+    import numpy as np
+
+    dark = rgb.max(axis=2) < 135
+
+    def positions(density, threshold):
+        hits = np.flatnonzero(density >= threshold)
+        groups = np.split(hits, np.flatnonzero(np.diff(hits) > 1) + 1)
+        return [float(group.mean()) for group in groups if 0 < len(group) <= 8]
+
+    horizontal = [(pix.y + y + .5) / scale / height for y in positions(dark.mean(axis=1), .83)]
+    vertical = [(pix.x + x + .5) / scale / width for x in positions(dark.mean(axis=0), .76)]
+    return horizontal, vertical
 
 
 def extract(path, sha, page_number, bbox, header_bottom, cuts):
@@ -194,7 +280,8 @@ def extract(path, sha, page_number, bbox, header_bottom, cuts):
                     raise ValueError('scan_word_limit')
                 words.append({'id': f'ocr{len(words)}', 'text': text, 'bbox': b,
                               'confidence': round(confidence, 4)})
-        grid = build(words, bbox, header_bottom, cuts, height / width)
+        horizontal, vertical = _rules(rgb, pix, scale, width, height)
+        grid = build(words, bbox, header_bottom, cuts, height / width, horizontal, vertical)
         png = pix.tobytes('png')
         crop_bbox = [pix.x / scale / width, pix.y / scale / height,
                      (pix.x + pix.width) / scale / width, (pix.y + pix.height) / scale / height]

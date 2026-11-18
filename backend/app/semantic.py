@@ -12,6 +12,7 @@ import os
 import sqlite3
 import sys
 import threading
+from collections import Counter
 from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -104,6 +105,7 @@ def _connection():
         chunk_id TEXT NOT NULL, model TEXT NOT NULL, document_id TEXT NOT NULL,
         parse_run_id TEXT NOT NULL, block_id TEXT NOT NULL, vector BLOB NOT NULL,
         PRIMARY KEY(chunk_id,model))""")
+    connection.execute("CREATE INDEX IF NOT EXISTS vector_scope ON vectors(document_id,parse_run_id,model)")
     try:
         yield connection
         connection.commit()
@@ -151,7 +153,7 @@ def _chunks(sources: list[dict[str, Any]], tokenizer) -> list[dict[str, Any]]:
             if len(part) < 12:
                 continue
             identity = hashlib.sha256((source["document_id"] + source.get("parse_run_id", "") + source["block_id"] + str(start) + part).encode()).hexdigest()
-            result.append({**source, "chunk_id": identity, "chunk_text": part})
+            result.append({**source, "chunk_id": identity, "chunk_text": part, "token_count": token_end - token_start})
             if token_end >= len(offsets):
                 break
     return result
@@ -172,15 +174,21 @@ def search(question: str, sources: list[dict[str, Any]], *, limit: int = 30,
     vectors: dict[str, Any] = {}
     cache_model = _cache_model_id()
     with _connection() as connection:
-        for document_id in {item["document_id"] for item in chunks}:
-            for identity, blob in connection.execute("SELECT chunk_id,vector FROM vectors WHERE document_id=? AND model=?", (document_id, cache_model)):
+        for document_id, run in {(item["document_id"], item.get("parse_run_id", "")) for item in chunks}:
+            for identity, blob in connection.execute(
+                "SELECT chunk_id,vector FROM vectors WHERE document_id=? AND parse_run_id=? AND model=?",
+                (document_id, run, cache_model),
+            ):
                 vector = np.frombuffer(blob, dtype=np.float32)
                 if vector.size == 384:
                     vectors[identity] = vector
     missing = [item for item in chunks if item["chunk_id"] not in vectors]
     details["missing_chunks"] = len(missing)
-    details['index_required']=[{'document_id':identity,'parse_run_id':run,'missing_chunks':sum(item['document_id']==identity and item.get('parse_run_id')==run for item in missing)}
-                               for identity,run in sorted({(item['document_id'],item.get('parse_run_id','')) for item in missing})]
+    missing_per_run = Counter((item["document_id"], item.get("parse_run_id", "")) for item in missing)
+    details["index_required"] = [
+        {"document_id": identity, "parse_run_id": run, "missing_chunks": count}
+        for (identity, run), count in sorted(missing_per_run.items())
+    ]
     if progress:progress(len(chunks)-len(missing),len(chunks))
     maximum = int(os.getenv("SCHOLARTRACE_MAX_INLINE_EMBED_CHUNKS", "384"))
     if len(missing) > maximum and not force_index:
@@ -188,24 +196,31 @@ def search(question: str, sources: list[dict[str, Any]], *, limit: int = 30,
         return [], details
     with _lock:
         model = _load_model()
+        # The model pads each batch to its longest sequence. Keep lengths close
+        # without changing chunk keys, chunk boundaries or final ranking order.
+        missing.sort(key=lambda item: item["token_count"])
         for offset in range(0, len(missing), 24):
             batch = missing[offset:offset + 24]
             embeddings = list(model.embed([item["chunk_text"] for item in batch], batch_size=24, parallel=None))
+            document_ids = {item["document_id"] for item in batch}
+            surviving = {identity for identity in document_ids if store.get_document(identity)}
+            writes = []
+            for item, vector in zip(batch, embeddings, strict=True):
+                if item["document_id"] not in surviving:
+                    continue
+                vector = np.asarray(vector, dtype=np.float32)
+                norm = np.linalg.norm(vector)
+                if not np.isfinite(norm) or norm <= 0 or vector.size != 384:
+                    raise RuntimeError("invalid_embedding_vector")
+                vector /= norm
+                vectors[item["chunk_id"]] = vector
+                writes.append((item["chunk_id"], cache_model, item["document_id"], item.get("parse_run_id", ""),
+                               item["block_id"], vector.tobytes()))
             with _connection() as connection:
-                for item, vector in zip(batch, embeddings):
-                    if not store.get_document(item["document_id"]):
-                        continue
-                    vector = np.asarray(vector, dtype=np.float32)
-                    norm = np.linalg.norm(vector)
-                    if not np.isfinite(norm) or norm <= 0 or vector.size != 384:
-                        raise RuntimeError("invalid_embedding_vector")
-                    vector = vector / norm
-                    vectors[item["chunk_id"]] = vector
-                    connection.execute("INSERT OR REPLACE INTO vectors VALUES (?,?,?,?,?,?)",
-                                       (item["chunk_id"], cache_model, item["document_id"], item.get("parse_run_id", ""), item["block_id"], vector.tobytes()))
+                connection.executemany("INSERT OR REPLACE INTO vectors VALUES (?,?,?,?,?,?)", writes)
             # Compensate across CLI/API processes: deletion can commit in the
             # source DB between the pre-insert check and this separate cache DB.
-            for document_id in {item["document_id"] for item in batch}:
+            for document_id in surviving:
                 if not store.get_document(document_id):
                     purge_document(document_id)
             if progress:progress(min(len(chunks),len(chunks)-len(missing)+offset+len(batch)),len(chunks))

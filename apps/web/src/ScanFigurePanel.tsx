@@ -11,6 +11,8 @@ interface Figure {
   text: string;
   caption_bbox: Bbox;
   figure_bbox: Bbox | null;
+  figure_page?: number | null;
+  figure_relation?: 'above_caption' | 'below_caption' | 'previous_page' | null;
 }
 
 interface PageFigures {
@@ -22,7 +24,7 @@ interface Props {
   documentId: string;
   runId: string;
   page: number;
-  onSource: (bbox: Bbox, label: string) => void;
+  onSource: (bbox: Bbox, label: string, page: number) => void;
 }
 
 export default function ScanFigurePanel({ documentId, runId, page, onSource }: Props) {
@@ -54,13 +56,13 @@ export default function ScanFigurePanel({ documentId, runId, page, onSource }: P
         return <figure key={figure.id}>
           {image && <img src={preview} alt={`图 ${figure.number} 的 PDF 原图裁剪`} loading="lazy" />}
           <figcaption>{figure.text}</figcaption>
-          <small>{image ? '自动配对候选 · 核对时请查看原页' : '图注已识别，附近图像区域待确认。'}</small>
+          <small>{image ? `原图候选 · PDF 第 ${figure.figure_page ?? page} 页，请核对原页` : '图注已识别，附近图像区域待确认。'}</small>
           <div className="scan-figure-actions">
             {image && <>
-              <button onClick={() => onSource(image, `图 ${figure.number} 原图区域`)}>定位原图</button>
-              <a href={preview} download={`figure-${page}-${figure.number}.png`}>下载原图裁剪</a>
+              <button onClick={() => onSource(image, `图 ${figure.number} 原图区域`, figure.figure_page ?? page)}>定位原图</button>
+              <a href={preview} download={`figure-${figure.figure_page ?? page}-${figure.number}.png`}>下载原图裁剪</a>
             </>}
-            <button onClick={() => onSource(figure.caption_bbox, `图 ${figure.number} 图注`)}>定位图注</button>
+            <button onClick={() => onSource(figure.caption_bbox, `图 ${figure.number} 图注`, page)}>定位图注</button>
           </div>
         </figure>;
       })}

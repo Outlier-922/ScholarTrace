@@ -2,7 +2,7 @@
 from __future__ import annotations
 import re
 
-SCOPED_FIELDS = {'parameter_updates', 'reference_policy'}
+SCOPED_FIELDS = {'parameter_updates', 'reference_policy', 'component_presence'}
 
 # No paper identities or expected experimental values occur in this registry.
 FIELDS={
@@ -23,8 +23,8 @@ FIELDS={
  'queries':('数据收集查询数',r'多少.{0,8}(?:查询|queries)|number of queries',
             'data collection number search queries', [r'\bqueries\b',r'\b\d[\d,]*\s+queries\b']),
  'objective':('训练目标/损失组成',r'损失|训练目标|loss|objective',
-              'training objective loss distillation masked modeling contrastive symmetric cross entropy cosine',
-              [r'loss|objective',r'cross.?entropy',r'distill|contrastive',r'cosine|masked.{0,25}model']),
+              'training objective loss distillation contrastive symmetric cross entropy cosine masked language modeling next sentence prediction log likelihood label smoothing',
+              [r'loss|objective',r'cross.?entropy|log likelihood|label smoothing',r'distill|contrastive',r'cosine|masked.{0,25}model']),
  'parameter_updates':('训练与冻结的参数或模型',
                       r'冻结|哪些参数.{0,6}(?:训练|更新)|优化哪(?:个|一种|一个)?模型|参数更新范围|\b(?:frozen|freeze|trainable weights|trainable parameters)\b|which (?:model|policy|weights) (?:is|are) (?:optimized|updated)',
                       'fine tuning trainable parameters frozen pretrained model weights adapters optimize language model policy',
@@ -38,16 +38,25 @@ FIELDS={
            'model architecture number layers reduced depth', [r'\blayers?\b',r'reduced|factor|depth']),
  'hidden_size':('隐藏/输出维度',r'd_?model|hidden size|hidden dimension|embedding dimension|(?:隐藏|输出|嵌入).{0,8}维度',
                 'model architecture hidden size dimension dmodel embedding outputs', [r'd_?model|hidden|dimension|embedding']),
- 'attention_heads':('注意力头数',r'注意力.{0,8}(?:头数|多少个?头)|多少个?头|number of (?:attention )?heads|how many.{0,12}heads',
+ 'attention_heads':('注意力头数',r'注意力.{0,8}(?:头数|多少个?头)|多少个?(?:并行)?(?:注意力)?头|number of (?:attention )?heads|how many.{0,20}heads',
                     'multi head attention number parallel heads', [r'heads?|parallel attention']),
  'parameter_count':('模型参数量',r'参数量|参数规模|多少.{0,5}参数|number of parameters|parameter count|model size',
                     'model size total parameters number million billion largest', [r'parameters?|model size',r'million|billion|\b[MB]\b']),
  'bleu':('BLEU及任务条件',r'(?<![A-Za-z])BLEU(?![A-Za-z])',
          'translation results BLEU WMT English German French base big', [r'BLEU|WMT|English|German|French']),
- 'architecture':('模型结构',r'架构|模型结构|architecture',
-                 'model architecture encoder decoder structure', [r'architecture|encoder|decoder']),
+ 'architecture':('模型结构',r'架构|模型结构|层结构|(?:编码器|解码器)(?:的)?结构|architecture',
+                 'model architecture encoder decoder layer structure self-attention feed-forward',
+                 [r'architecture|(?:^|\n)\s*encoder:',r'sub.?layers?|feed.?forward|multi.?layer']),
+ 'attention_visibility':('注意力可见范围',
+                         r'注意力.{0,8}(?:可见|可访问|掩码|范围)|(?:能|可以|允许).{0,5}(?:看到|关注).{0,10}(?:位置|词元)|attention (?:visibility|mask(?:ing)?)',
+                         'encoder self-attention attend all positions bidirectional left right context decoder subsequent masking',
+                         [r'self.?attention|attention mask',r'all positions|every position|bidirec-?\s*tional|left and right context|subsequent positions']),
+ 'model_input':('模型输入形式',
+                r'输入(?:的)?(?:形式|格式|表示|构成)|input (?:format|representation|structure)',
+                'input representation input sequence source tokens sentence pair embeddings position segment',
+                [r'input representation|input sequence|input embeddings',r'sentence pair|pair of sentences|token sequence|symbol representations|segment embeddings']),
  'component_presence':('所问组件是否存在（区分未说明）',
-                       r'是否.{0,20}(?:包含|含有|具有|具备|使用|采用|存在|保留)|有无.{0,20}(?:组件|编码器|解码器|注意力|层)|(?:does?|do)\b.{0,60}\b(?:include|contain|use|have|retain)\b',
+                       r'是否.{0,20}(?:包含|含有|具有|具备|使用|采用|存在|保留)|是否.{0,10}沿用.{0,18}(?:编码器|解码器|注意力|\bencoder\b|\bdecoder\b)|有无.{0,20}(?:组件|编码器|解码器|注意力|层)|(?:does?|do)\b.{0,60}\b(?:include|contain|use|have|retain)\b',
                        'model architecture component includes contains uses encoder decoder attention',
                        [r'encoder|decoder|attention|component',r'include|contain|use|without|no |not |only']),
  'normalization_position':('LayerNorm位置及残差顺序',r'LayerNorm|layer\s*norm|(?:Pre|Post)[- ]?LN|层归一化',
@@ -65,8 +74,8 @@ FIELDS={
  'vocabulary_shared':('输入输出词表共享',r'(?:输入|input).{0,25}(?:输出|output).{0,15}(?:共享|shar)|(?:共享|shared).{0,15}(?:词表|vocab)',
                       'vocabulary shared input output embeddings', [r'\bshared\b',r'input.{0,30}output']),
  'batch_size':('批量大小',r'batch|批量|批大小','training batch size sequences minibatch', [r'batch|mini.?batch',r'sequences']),
- 'sequence_length':('最大序列/上下文长度',r'序列长度|sequence length|上下文长度|context (?:window|length)',
-                     'maximum sequence length context window tokens', [r'sequence length|context|maximum',r'tokens']),
+ 'sequence_length':('最大序列/上下文长度',r'序列长度|sequence length|上下文(?:长度|窗口|容量|大小)|context (?:window|length|size)',
+                     'maximum sequence length context size window tokens positional embeddings', [r'sequence length|context|maximum',r'tokens']),
  'training_steps':('训练步数',r'训练.{0,12}(?:步|steps)|步数|training steps',
                     'pre-training number steps iterations', [r'\bsteps?\b',r'iterations']),
  'epochs':('训练轮数',r'训练轮数|epochs|多少轮','training number epochs', [r'\bepochs?\b']),
@@ -78,6 +87,10 @@ FIELDS={
 # Evidence-selection hints only. These match reported quantities, not particular
 # papers or expected values, and do not establish semantic correctness.
 VALUE_PATTERNS={
+    'architecture':r'model architec-?\s*ture\s+is|encoder:\s+the encoder|(?:has|composed of|uses)\s+(?:a\s+)?(?:stack|.{0,30}sub.?layers)',
+    'attention_visibility':r'attend to all positions|attend to all the positions|masking out.{0,45}subsequent|conditioning on both\s+left and right context',
+    'model_input':r'input representation (?:is able|is constructed)|input sequence of symbol representations|pair of sentences',
+    'objective':r'(?:masked language model|next sentence prediction|label smoothing (?:of|during)|(?:train|optimi[sz]e)\w* (?:our|the|a) .{0,65}(?:loss|objective|likelihood))',
     'layers':r'\bN\s*=\s*\d+|\b\d+[- ](?:layer|layers)\b',
     'hidden_size':r'(?:d_?model|hidden size|dimension)\s*(?:=|of|is)?\s*\d+',
     'attention_heads':r'\bh\s*=\s*\d+|\b\d+\s+(?:attention )?heads\b',
@@ -90,6 +103,11 @@ VALUE_PATTERNS={
 
 
 def value_score(key,text):
+    if key == 'sequence_length' and re.search(
+        r'\b(?:nctx\s*=\s*\d+|context (?:size|length) (?:from \d+ to |of |is )\d+|'
+        r'\d+[- ]tokens? context window|maximum (?:context|sequence)(?: length| size)? of \d+)\b', text, re.I,
+    ):
+        return 4
     return min(3,len(re.findall(VALUE_PATTERNS[key],text,re.I))) if key in VALUE_PATTERNS else 0
 
 
@@ -137,7 +155,12 @@ def requested_items(question, sources):
     sentences = [intent_text(sentence) for sentence in re.split(r'[。！？!?；;\n]', question)]
     items = {}
     for key in keys:
-        relevant = [sentence for sentence in sentences if re.search(FIELDS[key][1], sentence, re.I)]
+        parts = sentences
+        # intent_text normalizes separators, so use the original component clause
+        # to avoid assigning a decoder question to an unrelated paper mentioned nearby.
+        if key == 'component_presence':
+            parts = [intent_text(part) for part in re.split(r'[，,。！？!?；;\n]', question)]
+        relevant = [part for part in parts if re.search(FIELDS[key][1], part, re.I)]
         by_subject = {identity: [] for identity in titles}
         for sentence in relevant:
             subjects = {next(iter(identities)) for alias, identities in aliases.items() if len(identities) == 1
@@ -180,6 +203,32 @@ def formula_fragment(text):
     return text.count('{')!=text.count('}')
 
 
+def encoder_definition(document, evidence, question):
+    """Return a literal whole-model definition for a decoder question."""
+    if not re.search(r'解码器|\bdecoder\b', question, re.I):
+        return None
+    name = document['title'].split(':', 1)[0].strip()
+    if not re.fullmatch(r'[A-Za-z][\w-]{1,32}', name):
+        return None
+    pattern = re.compile(
+        rf"\b{re.escape(name)}['’]s\s+model\s+architec(?:-\s*)?ture\s+(?:is|consists of)\s+"
+        r"[\w\s-]{1,100}?\bTransformer\s+en(?:-\s*)?coder\b", re.I,
+    )
+    matches = {}
+    identity = document.get('document_id', document.get('id'))
+    for source in evidence:
+        if source['document_id'] != identity or not (match := pattern.search(source['text'])):
+            continue
+        rest = source['text'][match.end():].lstrip()
+        if rest and not re.match(r'(?:[.,;]|based\s+on\b|built\s+on\b)', rest, re.I):
+            continue
+        if re.search(r'\bdecoder\b', source['text'][match.start():match.end() + 140], re.I):
+            continue
+        quote = match.group()
+        matches.setdefault(re.sub(r'-\s*\n\s*', '', quote), (quote, source['id']))
+    return next(iter(matches.values())) if len(matches) == 1 else None
+
+
 def interpret(payload,question,evidence,validate,*,validate_audit=None,documents=None):
     """Compile only allowlisted document/field rows; legacy callers still work."""
     keys=requested(question)
@@ -188,7 +237,7 @@ def interpret(payload,question,evidence,validate,*,validate_audit=None,documents
     if not isinstance(incoming,list):raise ValueError('invalid_field_answers')
     by_id={item['id']:item for item in evidence}
     sources = evidence if documents is None else documents
-    targets = requested_pairs(question, sources)
+    targets = requested_items(question, sources)
     allowed = set(targets)
     groups={};rejected=0;decisions=[]
     for index,item in enumerate(incoming[:20]):
@@ -236,6 +285,16 @@ def interpret(payload,question,evidence,validate,*,validate_audit=None,documents
                 if not result:invalid=True;rejected+=1;continue
                 claim={**result[0],'document_id':document,'field':field}
                 if claim not in accepted:accepted.append(claim)
+            if field == 'component_presence' and not accepted and not invalid:
+                definition = encoder_definition(first, evidence, targets[document, field])
+                if definition:
+                    quote, anchor = definition
+                    text = f'论文把所问模型定义为 Transformer 编码器，给出的主架构未列入原解码器。原文定义「{quote}」。'
+                    supported = validate({'claims':[{'text':text, 'evidence_ids':[anchor]}]}, evidence)
+                    if supported:
+                        accepted.append({**supported[0], 'document_id':document, 'field':field})
+                        decisions.append({'document_id':document,'field':field,'status':'accepted',
+                                          'reason':'encoder_architecture_definition','evidence_ids':[anchor]})
             claims.extend(accepted)
             status='needs_review' if invalid or len(states)>1 or len(accepted)>1 else 'has_candidate_answer' if accepted else 'missing_in_evidence' if states=={'missing'} else 'not_assessed'
             coverage.append({'document_id':document,'title':title,'field':field,'label':FIELDS[field][0],

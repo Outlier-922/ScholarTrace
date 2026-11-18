@@ -11,6 +11,10 @@ from .table_refine_scan import VERSION as SCAN_ALGORITHM
 VERSION='pinned-native-table-qa-v1'
 
 
+def is_scan(source):
+    return source.get('method') == 'scan_ocr' or source.get('algorithm') in {'scan-ocr-grid-v1', SCAN_ALGORITHM}
+
+
 class Selection(BaseModel):
     model_config=ConfigDict(extra='forbid')
     source_id:str=Field(min_length=36,max_length=36)
@@ -25,7 +29,7 @@ def resolve(selections,documents,parse_runs):
         seen.add(selection.source_id)
         source=repo.get(selection.source_id)
         if not source or source['kind']!='source':raise HTTPException(404,'所选表格来源不可用。')
-        if source.get('algorithm')==SCAN_ALGORITHM:raise HTTPException(422,'扫描表格候选仅供原图核对，暂不能加入问答。')
+        if is_scan(source):raise HTTPException(422,'扫描表格候选仅供原图核对，暂不能加入问答。')
         identity=source['document_id'];run=source['parse_run_id']
         if identity not in ids:raise HTTPException(422,'表格不属于本次所选文献。')
         if identity in runs and runs[identity]!=run:raise HTTPException(422,'同一文献的表格和问答必须使用同一个解析版本。')
@@ -50,6 +54,8 @@ def row_context(source,row):
         cell=grid['cells'][row*columns+col]
         if cell['covered_by']:
             i,j=cell['covered_by'];cell=grid['cells'][i*columns+j]
+        if cell.get('col_span', 1) > 1:
+            continue
         value=cell['text']
         if value and any(c.isalpha() for c in value):
             parts.append(grid['columns'][col]['label']+' = '+value)
@@ -57,14 +63,27 @@ def row_context(source,row):
     return '; '.join(parts) or '未识别行标识（只使用所选格子的原生值）',anchors
 
 
-def cell_evidence(source,document,row,column):
-    if source.get('algorithm')==SCAN_ALGORITHM:return None
+def cell_evidence(source,document,row,column,*,allow_shared=False):
+    if is_scan(source):return None
     grid=source['grid'];count=len(grid['columns']);cell=grid['cells'][row*count+column]
     if cell['covered_by'] or cell['text'] in (None,'') or not cell['word_ids']:return None
-    label=grid['columns'][column]['label'];context,anchors=row_context(source,row)
-    text=f"原生表格候选（未核验）。行上下文：{context}。列：{label}。单元格值：{cell['text']}。"
+    span = cell.get('col_span', 1)
+    header = grid['columns'][column]
+    if span > 1:
+        if not allow_shared:return None
+        parents = [item for item in grid.get('header_spans', [])
+                   if item['first_column'] == column and item['col_span'] == span and item['word_ids']]
+        if len(parents) != 1:return None
+        header = {**parents[0], 'label':parents[0]['text']}
+    label=header['label'];context,anchors=row_context(source,row)
+    scope = '共享表头' if span > 1 else '列'
+    text=f"原生表格候选（未核验）。行上下文：{context}。{scope}：{label}。单元格值：{cell['text']}。"
+    if span > 1:
+        text += f"原表横跨 {span} 列，未给出各分列的独立值。"
     if len(text)>3000:return None
-    content={'text':text,'bbox':cell['bbox'],'word_ids':cell['word_ids'],'context_anchors':anchors,'header_word_ids':grid['columns'][column]['word_ids']}
+    content={'text':text,'bbox':cell['bbox'],'word_ids':cell['word_ids'],'context_anchors':anchors,'header_word_ids':header['word_ids']}
+    if span > 1:
+        content['col_span'] = span
     key=digest(content)
     return {'id':'ev_tbl_'+digest([source['id'],row,column,key])[:20],
         'document_id':source['document_id'],'title':document['title'],'version_label':document.get('version_label'),
@@ -122,7 +141,7 @@ def retrieve(question,resolved,documents,limit,tokenize):
         grid=source['grid'];document=by_id[source['document_id']]
         for row in selected_rows if selected_rows is not None else range(len(grid['rows'])):
             for col in range(len(grid['columns'])):
-                cell=cell_evidence(source,document,row,col)
+                cell=cell_evidence(source,document,row,col,allow_shared=True)
                 if cell:cells.append(cell)
         drafts.extend(v for v in draft_rows(source,revision,document) if selected_rows is None or v['table_draft']['row'] in selected_rows)
     # Deduplicate source cells even when an upstream consumer sends repeated refs.
@@ -140,7 +159,7 @@ def valid_evidence(evidence):
     source=repo.get(reference.get('source_id',''));doc=store.get_document(evidence['document_id'])
     if not source or source.get('kind')!='source' or not doc or source['document_id']!=doc['id']:return False
     try:
-        if kind=='table_cell':fresh=cell_evidence(source,doc,reference['row'],reference['column'])
+        if kind=='table_cell':fresh=cell_evidence(source,doc,reference['row'],reference['column'],allow_shared=True)
         else:
             revision=repo.get(reference.get('revision_id',''))
             if not revision or revision.get('kind')!='revision' or revision['source_id']!=source['id']:return False

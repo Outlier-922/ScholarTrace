@@ -13,7 +13,7 @@ from .formulas import page_input
 from .store import get_structure
 
 router = APIRouter(prefix="/api", tags=["scan-figures"])
-VERSION = "scan-caption-layout-v1"
+VERSION = "scan-caption-layout-v3"
 CAPTION = re.compile(r"^(?:figure|fig\.?|图)\s*(\d{1,4}[a-z]?)\s*[:：.．]\s*\S", re.I)
 SENTENCE_END = re.compile(r"[.!?。！？][\x22'”’)]*\s*$")
 
@@ -150,22 +150,75 @@ def _figure_bbox(rgb, bounds):
             min(bounds[3], (y0 + end) / height + pad)]
 
 
-def analyze(path, sha, page_number, blocks, preview=None):
+def _flip(box):
+    return [box[0], 1 - box[3], box[2], 1 - box[1]]
+
+
+def _find_below(rgb, caption, reverse_blocks):
+    flipped_caption = {**caption, "caption_bbox": _flip(caption["caption_bbox"])}
+    bounds = _search_bounds(flipped_caption, reverse_blocks)
+    box = _figure_bbox(rgb[::-1], bounds)
+    if box is None:
+        return None
+    original = _flip(box)
+    # Keep a tighter gap for the less common caption-before-figure case.
+    if original[1] - caption["caption_bbox"][3] > .042:
+        return None
+    if _overlap(original, caption["caption_bbox"][0], caption["caption_bbox"][2]) < .6 * min(
+        original[2] - original[0], caption["caption_bbox"][2] - caption["caption_bbox"][0]
+    ):
+        return None
+    return original
+
+
+def _scan_pixels(page):
     import numpy as np
 
+    if page.rotation:
+        raise ValueError("rotated_scan_figure")
+    scale = min(2.0, 1500 / max(page.rect.width, page.rect.height))
+    bitmap = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), colorspace=pymupdf.csRGB, alpha=False)
+    return np.frombuffer(bitmap.samples, dtype=np.uint8).reshape(bitmap.height, bitmap.width, 3), scale
+
+
+def _previous_figure(page, blocks, captions):
+    # Only one unmatched caption at the start of the following page can
+    # claim this bottom-of-page band.
+    near_top = [item for item in captions if item["figure_bbox"] is None
+                and item["caption_bbox"][1] <= .21]
+    if len(near_top) != 1:
+        return
+    item = near_top[0]
+    x0, _, x1, _ = item["caption_bbox"]
+    reference = {**item, "caption_bbox":[x0, .955, x1, .955]}
+    left, top, right, bottom = _search_bounds(reference, blocks)
+    rgb, _ = _scan_pixels(page)
+    box = _figure_bbox(rgb, (left, max(.55, top), right, bottom))
+    if box is None or box[3] < .83 or _overlap(box, x0, x1) < .6 * min(box[2] - box[0], x1 - x0):
+        return
+    reverse_blocks = [{**block, "bbox": _flip(block["bbox"])} for block in blocks]
+    for caption in _caption_sources(blocks):
+        existing = _figure_bbox(rgb, _search_bounds(caption, blocks)) or _find_below(rgb, caption, reverse_blocks)
+        if existing and _overlap(box, existing[0], existing[2]) > 0 and min(box[3], existing[3]) > max(box[1], existing[1]):
+            return
+    item.update(figure_bbox=box, figure_page=page.number+1, figure_relation="previous_page")
+
+
+def analyze(path, sha, page_number, blocks, preview=None, previous_blocks=None):
     captions = _caption_sources(blocks)
     if not captions or len(captions) > 16:
         return [] if preview is None else None
     check_pdf(path, sha)
     with pymupdf.open(path) as pdf:
         page = pdf[page_number - 1]
-        if page.rotation:
-            raise ValueError("rotated_scan_figure")
-        scale = min(2.0, 1500 / max(page.rect.width, page.rect.height))
-        bitmap = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), colorspace=pymupdf.csRGB, alpha=False)
-        rgb = np.frombuffer(bitmap.samples, dtype=np.uint8).reshape(bitmap.height, bitmap.width, 3)
+        rgb, scale = _scan_pixels(page)
+        reverse_blocks = [{**block, "bbox": _flip(block["bbox"])} for block in blocks]
         for item in captions:
-            item["figure_bbox"] = _figure_bbox(rgb, _search_bounds(item, blocks))
+            above = _figure_bbox(rgb, _search_bounds(item, blocks))
+            below = None if above is not None else _find_below(rgb, item, reverse_blocks)
+            item["figure_bbox"] = above or below
+            item["figure_relation"] = "above_caption" if above else "below_caption" if below else None
+            item["figure_page"] = page_number if above or below else None
         ambiguous = set()
         for index, first in enumerate(captions):
             a = first["figure_bbox"]
@@ -178,13 +231,21 @@ def analyze(path, sha, page_number, blocks, preview=None):
         for item in captions:
             if item["id"] in ambiguous:
                 item["figure_bbox"] = None
+                item["figure_relation"] = None
+                item["figure_page"] = None
+        if previous_blocks and page_number > 1:
+            _previous_figure(pdf[page_number - 2], previous_blocks,
+                             [item for item in captions if item["id"] not in ambiguous])
         if preview is None:
             return captions
-        selected = next((item["figure_bbox"] for item in captions if item["id"] == preview), None)
-        if selected is None:
+        selected = next((item for item in captions if item["id"] == preview), None)
+        if not selected or selected["figure_bbox"] is None:
             return None
+        if selected["figure_page"] != page_number:
+            page = pdf[selected["figure_page"] - 1]
+            scale = min(2.0, 1500 / max(page.rect.width, page.rect.height))
         crop = pymupdf.Rect(*(v * size for v, size in zip(
-            selected, (page.rect.width, page.rect.height) * 2
+            selected["figure_bbox"], (page.rect.width, page.rect.height) * 2
         )))
         return page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), clip=crop, alpha=False).tobytes("png")
 
@@ -197,9 +258,15 @@ async def _read(identity, request, page, parse_run_id, preview=None):
     state = next(p["status"] for p in structure["pages"] if p["number"] == page)
     if state != "ocr_ready":
         return "needs_ocr", []
+    previous_blocks = None
+    if page > 1 and any(item["caption_bbox"][1] <= .21 for item in _caption_sources(blocks)):
+        previous = get_structure(identity, page=page-1, parse_run_id=parse_run_id)
+        if (previous and any(p["number"] == page-1 and p["status"] == "ocr_ready" and not p["rotation"]
+                             for p in previous["pages"]) and is_scan(previous["blocks"])):
+            previous_blocks = previous["blocks"]
     try:
         result = await asyncio.get_running_loop().run_in_executor(
-            request.app.state.parse_executor, analyze, str(path), doc["sha256"], page, blocks, preview
+            request.app.state.parse_executor, analyze, str(path), doc["sha256"], page, blocks, preview, previous_blocks
         )
     except (ValueError, IndexError, RuntimeError, OSError, ImportError):
         raise HTTPException(422, "暂时无法定位本页图像，请检查原 PDF 和页面方向。") from None

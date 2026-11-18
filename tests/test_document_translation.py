@@ -168,6 +168,14 @@ def test_layout_keeps_cells_and_bibliography_but_translates_numeric_prose_and_ap
     assert units[cell]['translation'] is units[reference]['translation'] is None
 
 
+def test_formula_candidates_keep_equations_but_translate_their_prose_introduction():
+    intro = {"id":"intro", "type":"formula_candidate",
+             "text":"We used a synthetic optimizer with α = 0.1. The learning rate was determined by the following formula:"}
+    equation = {"id":"fragment", "type":"paragraph", "text":"power · min(step_num−0.5, step_num · warmup_steps−1.5)\n(3)"}
+    assert full.preserve_reason(intro,set(),{}) is None
+    assert full.preserve_reason(equation,set(),{}) == '独立公式片段原样保留'
+
+
 @pytest.mark.parametrize('status_code',[None,402])
 def test_failed_request_never_retries_automatically_and_budget_is_retained(client,papers,monkeypatch,status_code):
     calls=provider(monkeypatch,fail=status_code is None,status_code=status_code);job=plan(client,papers[0],2);result=run(client,job,allow_model=True)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import asyncio
 import json
 import os
 import re
@@ -13,6 +14,7 @@ from urllib.parse import urlsplit
 import httpx
 
 _budget=ContextVar('scholartrace_model_budget',default=None)
+_stream_observer = ContextVar('scholartrace_stream_observer', default=None)
 
 
 @dataclass
@@ -49,6 +51,20 @@ def metered(budget):
     token=_budget.set(budget)
     try:yield budget
     finally:_budget.reset(token)
+
+
+@contextmanager
+def stream_progress(observer):
+    token = _stream_observer.set(observer)
+    try:
+        yield
+    finally:
+        _stream_observer.reset(token)
+
+
+def report_progress(phase, **fields):
+    if observer := _stream_observer.get():
+        observer({'type':'progress', 'phase':phase, **fields})
 
 
 def configuration():
@@ -104,18 +120,69 @@ async def chat_json(system: str, payload: dict, *, max_tokens: int = 2000) -> di
     if (budget:=_budget.get()) is not None:budget.reserve(max_tokens)
     from .demo_access import reserve_model
     reserve_model(max_tokens)
+    headers = {"Authorization": "Bearer " + os.getenv("LLM_API_KEY", "").strip()}
     async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10), follow_redirects=False) as client:
-        response = await client.post(url, headers={"Authorization": "Bearer " + os.getenv("LLM_API_KEY", "").strip()}, json=body)
-        response.raise_for_status()
-        output=response.json()
-        if budget is not None:budget.record(output.get('usage'))
-        choice = output["choices"][0]
-        if choice.get("finish_reason") in {"length", "content_filter"}:
-            raise ValueError("incomplete_model_output")
-        raw = choice["message"]["content"]
+        if _stream_observer.get() is not None:
+            async with asyncio.timeout(85):
+                raw = await _read_stream(client, url, headers, body, budget)
+        else:
+            response = await client.post(url, headers=headers, json=body)
+            response.raise_for_status()
+            raw = _raw_choice(response.json(), budget)
     if not isinstance(raw, str) or len(raw) > 100000:
         raise ValueError("invalid_model_output")
     result = json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip()))
     if not isinstance(result, dict):
         raise ValueError("invalid_model_output")
     return result
+
+
+def _raw_choice(output, budget):
+    if budget is not None:
+        budget.record(output.get('usage'))
+    choice = output["choices"][0]
+    if choice.get("finish_reason") in {"length", "content_filter"}:
+        raise ValueError("incomplete_model_output")
+    return choice["message"]["content"]
+
+
+async def _read_stream(client, url, headers, body, budget):
+    report_progress('generating', fragments=0)
+    async with client.stream('POST', url, headers=headers, json={**body, 'stream':True}) as response:
+        response.raise_for_status()
+        if 'text/event-stream' not in response.headers.get('content-type', ''):
+            await response.aread()
+            return _raw_choice(response.json(), budget)
+        parts = []
+        size = 0
+        finished = False
+        async for line in response.aiter_lines():
+            if not line.startswith('data:'):
+                continue
+            wire = line[5:].strip()
+            if wire == '[DONE]':
+                break
+            if len(wire) > 120000:
+                raise ValueError('model_stream_frame_limit')
+            frame = json.loads(wire)
+            if budget is not None and frame.get('usage'):
+                budget.record(frame['usage'])
+            for choice in frame.get('choices', []):
+                if choice.get('index', 0) != 0:
+                    continue
+                finish = choice.get('finish_reason')
+                if finish and finish != 'stop':
+                    raise ValueError('incomplete_model_output')
+                finished = finished or finish == 'stop'
+                piece = (choice.get('delta') or {}).get('content')
+                if isinstance(piece, str) and piece:
+                    if size + len(piece) > 100000 or len(parts) >= 20000:
+                        raise ValueError('invalid_model_output')
+                    parts.append(piece)
+                    size += len(piece)
+                    if len(parts) == 1 or len(parts) % 12 == 0:
+                        report_progress('generating', fragments=len(parts))
+        if not finished:
+            raise ValueError('incomplete_model_output')
+    report_progress('generating', fragments=len(parts))
+    return ''.join(parts)

@@ -82,3 +82,18 @@ def test_too_few_suggested_columns_leave_separate_numeric_fragments_unassigned()
     grid = scan.build(words, [.1,.1,.9,.6], .2, None, 1.3)
     assert grid['rows'] == [['Model A',None]]
     assert grid['unassigned'][0]['word_ids'] == ['3','4']
+
+
+def test_ruled_scan_keeps_group_label_as_one_original_cell():
+    words = [
+        {'id': str(i), 'text': text, 'bbox': [x, y, x + .035, y + .02], 'confidence': .95}
+        for i, (text, x, y) in enumerate([
+            ('Group', .14, .12), ('Score', .55, .12),
+            ('(A)', .14, .31), ('2.7', .56, .27), ('3.1', .56, .36), ('4.2', .56, .48),
+        ])
+    ]
+    grid = scan.build(words, [.1,.1,.9,.6], .2, [.1,.4,.9], 1.3,
+                      horizontal=[.21,.43,.53], vertical=[.4])
+    assert grid['rows'] == [['(A)','2.7'],[None,'3.1'],[None,'4.2']]
+    assert grid['cells'][0]['row_span'] == 2 and grid['cells'][0]['word_ids'] == ['2']
+    assert grid['cells'][2]['covered_by'] == [0,0] and grid['cells'][2]['text'] is None

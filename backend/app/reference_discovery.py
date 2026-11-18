@@ -18,6 +18,7 @@ class Request(BaseModel):
     network:Literal['cache_only','allow']='cache_only'
     max_requests:int=Field(default=0,ge=0,le=3)
     queries:dict[str,Annotated[str,Field(min_length=2,max_length=500)]]=Field(default_factory=dict,max_length=5)
+    filter_background: bool=False
 
 def source(document_id,run):
     doc=store.get_document(document_id)
@@ -64,11 +65,13 @@ def local_result(document_id:str,body:Request):
 
 @router.post('/documents/{document_id}/reference-discovery')
 async def discover(document_id:str,body:Request):
+    from .reference_screening import apply_background_filter
     if not set(body.queries)<=set(body.unit_ids):raise HTTPException(422,'检索词不属于本次所选书目')
     if body.network=='allow' and body.max_requests<1 or body.network=='cache_only' and (body.max_requests or body.queries):
         raise HTTPException(422,'联网需明确设置1—3次请求预算；本地模式不接受联网参数')
     result=local_result(document_id,body)
-    if body.network=='cache_only':return result
+    if body.network=='cache_only':
+        return apply_background_filter(result) if body.filter_background else result
     original_id=result.pop('search_id');trace=result['reference_discovery'];trace['local_snapshot_id']=original_id
     trace['max_requests']=body.max_requests;trace['network_mode']='allow';count=0
     selected={i['key']:i for i in result['items']}
@@ -118,4 +121,4 @@ async def discover(document_id:str,body:Request):
     result['providers']+=list(by_provider.values())
     result['warnings']+=['仅对无缓存或明确改词的所选条目联网，每条至多返回3个候选；失败不自动重试。','无标识符时使用原文条目或明确改词查询Crossref；返回结果只是候选，不自动确认身份。']
     result['created_at']=store.now();result['search_id']=repo.save_search(request.model_dump(),result)
-    return result
+    return apply_background_filter(result) if body.filter_background else result

@@ -41,6 +41,16 @@ def test_component_question_is_independent_from_architecture():
     assert any(c['field']=='component_presence' and c['status']=='not_assessed' for c in result['answer_coverage'])
 
 
+def test_encoder_comparison_keeps_input_and_visibility_and_scopes_decoder_question():
+    docs = [{'id': 'first', 'title': 'Fictional Attention Model'}, {'id': 'second', 'title': 'TEST: Fictional Pretraining'}]
+    question = ('说明 TEST 与 Fictional Attention Model 在注意力可见范围和层结构上的关系，'
+                'TEST 是否沿用原论文的 decoder，以及两篇各自训练目标与输入形式有什么区别？')
+    fields = {'objective', 'architecture', 'attention_visibility', 'model_input'}
+    assert set(answer_fields.requested_pairs(question, docs)) == {
+        *((doc['id'], field) for doc in docs for field in fields), ('second', 'component_presence'),
+    }
+
+
 @pytest.mark.parametrize('verdict,quote,accepted',[
     ('absent','The model uses an encoder.',False),
     ('absent','The model has no decoder.',False),
@@ -64,6 +74,19 @@ def test_unreported_component_remains_missing_instead_of_absent():
     result=interpret([row('a','component_presence',status='missing')],
                      [source('e','a','The model uses an encoder.')],'是否包含解码器？')
     assert not result['claims'] and result['answer_coverage'][0]['status']=='missing_in_evidence'
+
+
+def test_decoder_question_can_use_a_whole_model_definition_but_not_a_local_encoder_description():
+    item = {**source('e','a','EXAMPLE’s model architec-\nture is a multi-layer Transformer en-\ncoder based on the original design.'),
+            'title':'EXAMPLE: A fictional model'}
+    missing = [row('a','component_presence',status='missing')]
+    result = interpret(missing,[item],'EXAMPLE 是否沿用原模型的解码器？')
+    assert result['claims'][0]['evidence_ids'] == ['e']
+    assert result['answer_coverage'][0]['status'] == 'has_candidate_answer'
+    for text in ('EXAMPLE contains a multi-layer Transformer encoder.',
+                 'EXAMPLE’s model architecture is a Transformer encoder with an additional decoder.'):
+        rejected = interpret(missing,[{**item,'text':text}],'EXAMPLE 是否沿用原模型的解码器？')
+        assert not rejected['claims']
 
 
 def test_absence_quote_accepts_only_whitespace_normalization():
@@ -277,3 +300,15 @@ def test_reference_evidence_retains_loss_calculation_beyond_baseline_description
     monkeypatch.setattr(qa, '_collect_sources', lambda docs: [])
     hits = qa._retrieve_question('参考模型如何参与计算？', docs, 2)
     assert 'usage' in {hit['id'] for hit in hits}
+
+
+def test_parameter_table_context_includes_caption_and_same_page_row_identity():
+    from backend.app.qa import _parameter_table_context
+
+    context = {'document_id':'doc','page':4,'extraction':'native_pdf'}
+    table = {**context,'block_type':'table_candidate','bbox':[.5,.1,.85,.18],'text':'40M 12 80M 24'}
+    caption = {**context,'block_type':'table_caption','bbox':[.5,.19,.85,.21],'text':'Table 2. Hyperparameters for the model sizes.'}
+    prose = {**context,'block_type':'paragraph','bbox':[.5,.4,.85,.5],'text':'Table 2 lists the models. The smallest model corresponds to the original system.'}
+    unrelated = {**prose,'document_id':'other'}
+    assert _parameter_table_context([table,caption,unrelated,prose]) == [caption,table,prose]
+    assert _parameter_table_context([table,caption,unrelated]) == []

@@ -5,7 +5,7 @@ interface IdentityClues { identifier: string; source_identifiers: string[]; cand
 interface Row { unit: { id: string; text: string }; candidate_keys: string[]; body_citations: Citation[]; identity_clues?: Record<string, IdentityClues>; }
 interface Candidate { key: string; title: string; }
 interface Decision { key: string; unit_id: string; identity: string; decision: string; purpose: string; reason: string; citation_id: string | null; quote: string; }
-interface Context { document_id: string; rows: Row[]; items: Candidate[]; notice: string; }
+interface Context { document_id: string; rows: Row[]; items: Candidate[]; notice: string; suggestions: Decision[]; }
 const identifierLabels: Record<string,string>={matched:'原文标识符有对应',multiple_literals:'有对应，但原文含多个标识符或版本线索',revision_differs:'同一 arXiv 作品，明确版本未对应',not_aligned:'可比标识符未对应',unavailable:'没有可直接比较的标识符'};
 const purposeLabels: Record<string, string> = { unknown: '未确定', method: '方法依据', data: '数据来源', comparison: '比较对象', background: '研究背景' };
 function IdentityHints({value}:{value:IdentityClues}) {
@@ -30,6 +30,18 @@ export default function ReferenceScreening({ searchId, onSaved }: { searchId: st
     return () => c.abort();
   }, [searchId]);
   function patch(key: string, value: Partial<Decision>) { setDecisions(d => ({ ...d, [key]: { ...d[key], ...value } })); }
+  function applySuggestions() {
+    setDecisions(current => {
+      const byKey = new Map(context?.suggestions?.map(item => [item.key, item]));
+      const next = { ...current };
+      for (const [key, previous] of Object.entries(current)) {
+        if (previous.identity === 'uncertain' && previous.decision === 'hold' && !previous.citation_id && !previous.reason.trim()) {
+          next[key] = byKey.get(key) ?? { ...previous, reason: '当前没有足够明确的引用用途线索，保留待查。' };
+        }
+      }
+      return next;
+    });
+  }
   async function save() {
     setBusy(true); setError('');
     try { const v = await postJSON<{ search_id: string }>(`/literature/searches/${searchId}/screen`, { goal, decisions: Object.values(decisions) }); onSaved(v.search_id); }
@@ -38,6 +50,10 @@ export default function ReferenceScreening({ searchId, onSaved }: { searchId: st
   return <details className="discovery-guidance"><summary>对照正文，筛选本研究要采用的候选</summary><p>填写研究目标，逐项区分身份核对与引用用途。采用需选择真实引用位置和原句；没有正文证据时保留待查。不调用模型或外网。</p>
     {history.length > 0 && <label>打开已保存筛选<select value="" onChange={e => {if(e.target.value) onSaved(e.target.value);}}><option value="">选择历史记录</option>{history.map(h => <option key={h.id} value={h.id}>{new Date(h.created_at).toLocaleString('zh-CN')} · {h.goal}</option>)}</select></label>}
     <label>本次研究目标<input style={{ width: '95%' }} maxLength={800} value={goal} onChange={e => setGoal(e.target.value)} /></label>
+    {!!context?.items.length && <div>
+      <button type="button" className="secondary-button" disabled={busy} onClick={applySuggestions}>自动填写引用筛选草稿</button>
+      <p>系统标出有原句依据的用途，并建议排除仅明确指向背景导读的条目。请按本次研究目标复核。</p>
+    </div>}
     {context?.items.map(item => {
       const d = decisions[item.key]; if (!d) return null;
       const rows = context.rows.filter(r => r.candidate_keys.includes(item.key)); const row = rows.find(r => r.unit.id === d.unit_id);

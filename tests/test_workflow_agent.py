@@ -63,6 +63,18 @@ def test_loop_chooses_order_from_real_observations_and_exports(client, papers, m
     assert exported['sources'] == task['sources']
 
 
+def test_review_reuses_exact_graph_step_in_source_only_mode(client, papers, monkeypatch):
+    seen = provider(monkeypatch, [call('graph'), call('review'), FINISH])
+    task = planned(client, papers, goal='构建引用图谱，再展示综述原文提纲', planner='agent', actions=['graph', 'review'])
+    start(client, task)
+    result = wait(client, task['id'])
+    first, second = [step['result'] for step in result['steps']]
+    assert second['graph_id'] == first['id']
+    assert second['mode'] == 'evidence_only' and second['evidence']
+    assert client.get('/api/graphs').json()['items'][0]['id'] == first['id']
+    assert len(seen) == 3
+
+
 @pytest.mark.parametrize('bad', [call('shell'), call('graph', 'forbidden'),
     {'action': 'call', 'tool': 'evidence', 'arguments': {'query': 'x y', 'document_ids': ['foreign']}, 'reason': 'bad'},
     {'action': 'finish', 'reason': 'done', 'answer': 'fabricated'}])
@@ -92,6 +104,18 @@ def test_shared_budget_stops_and_resume_does_not_repeat_tool(client, papers, mon
     assert finished['status'] == 'completed_with_gaps'
     assert len(seen) == 2 and finished['usage']['tool_calls'] == 1
     assert finished['steps'][0]['result'] == exhausted['steps'][0]['result']
+
+
+def test_last_allowed_tool_can_complete_required_scope(client, papers, monkeypatch):
+    seen = provider(monkeypatch, [call('evidence', 'model architecture')])
+    task = planned(client, papers, goal='检索模型架构原文', planner='agent',
+                   actions=['evidence'], max_tool_calls=1)
+    start(client, task)
+    result = wait(client, task['id'])
+    assert result['status'] == 'completed_with_gaps'
+    assert result['steps'][0]['status'] == 'completed'
+    assert result['usage']['tool_calls'] == len(seen) == 1
+    assert not any('evidence' in gap for gap in result['gaps'])
 
 
 def test_early_finish_records_unfulfilled_goal(client, papers, monkeypatch):

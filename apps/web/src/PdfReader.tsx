@@ -42,7 +42,7 @@ interface Props {
 
 export default function PdfReader({ document, structure, page, onPage, selectedBlock, onSelectBlock, ocrReady = false, onRequestReprocess, modelConfigured = false, readOnly = false, onFindReference, onOpenReferenceSearch, sourceEvidence, onUseTable }: Props) {
   const [regionTarget,setRegionTarget]=useState<{bbox:DocumentBlock['bbox'];label:string}|null>(null);
-  const [formulaTarget,setFormulaTarget]=useState<{bbox:DocumentBlock['bbox'];page:number;documentId:string;runId:string|undefined}|null>(null);
+  const [pageRegionTarget,setPageRegionTarget]=useState<{bbox:DocumentBlock['bbox'];label:string;page:number;documentId:string;runId:string|undefined}|null>(null);
   useEffect(()=>setRegionTarget(null),[document.id,structure?.parse_run_id,page,selectedBlock]);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState('');
@@ -75,12 +75,14 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
   const focusedRegion = citationFocus && citationFocus.source.line_bbox && citationFocus.run === structure?.parse_run_id &&
     citationFocus.source.page === page && citationFocus.source.block_id === selectedBlock
       ? { bbox: citationFocus.source.line_bbox, label: citationFocus.label } : null;
-  const formulaRegion = formulaTarget?.documentId === document.id && formulaTarget.runId === structure?.parse_run_id &&
-    formulaTarget.page === page ? { bbox:formulaTarget.bbox, label:'公式选区' } : null;
-  const visibleRegion = focusedRegion || regionTarget || formulaRegion;
+  const pageRegion = pageRegionTarget?.documentId === document.id && pageRegionTarget.runId === structure?.parse_run_id &&
+    pageRegionTarget.page === page ? pageRegionTarget : null;
+  const visibleRegion = focusedRegion || regionTarget || pageRegion;
   const [linked, setLinked] = useState(true);
   const translationRef = useRef<TranslationHandle>(null);
   const suppressUntil = useRef(0);
+  const readingColumn = useRef<number | null>(null);
+  useEffect(() => { readingColumn.current = null; }, [document.id, structure?.parse_run_id, page]);
   const [ocrSelection, setOcrSelection] = useState(true);
   const [pageInput, setPageInput] = useState(String(page));
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -201,7 +203,7 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
     if (!loading && (selectedBlock || visibleRegion) && (view === 'pdf' || view === 'parallel')) {
       highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
     }
-  }, [selectedBlock, regionTarget, citationFocus, formulaTarget, page, loading, view]);
+  }, [selectedBlock, regionTarget, citationFocus, pageRegionTarget, page, loading, view]);
 
   useEffect(() => {
     if (loading || !citations || (view !== 'pdf' && view !== 'parallel')) { setHotspots([]); return; }
@@ -271,11 +273,37 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
   function syncFromPdf() {
     if (view !== 'parallel' || !linked || performance.now() < suppressUntil.current || !scrollRef.current || !pageSize.height) return;
     const root = scrollRef.current; const paperTop = (canvasRef.current?.parentElement?.getBoundingClientRect().top || root.getBoundingClientRect().top) - root.getBoundingClientRect().top + root.scrollTop; const position = root.scrollTop + root.clientHeight * .25 - paperTop;
-    const blocks = pageBlocks.filter(block => block.text.trim()).map(block => ({ block, bounds: displayBounds(block.bbox) })).sort((a, b) => parseFloat(a.bounds.top) - parseFloat(b.bounds.top));
-    const item = blocks.find(item => (parseFloat(item.bounds.top) + parseFloat(item.bounds.height)) / 100 * pageSize.height >= position) || blocks.at(-1);
-    if (item) translationRef.current?.scrollToBlock(item.block.id, Math.max(0, Math.min(1, (position - parseFloat(item.bounds.top) / 100 * pageSize.height) / Math.max(1, parseFloat(item.bounds.height) / 100 * pageSize.height))));
+    const blocks = pageBlocks.filter(block => block.text.trim()).map(block => {
+      const box = displayBounds(block.bbox);
+      return { block, left: parseFloat(box.left), right: parseFloat(box.left) + parseFloat(box.width),
+        top: parseFloat(box.top) / 100 * pageSize.height, height: parseFloat(box.height) / 100 * pageSize.height };
+    }).sort((a, b) => a.top - b.top);
+    const x = readingColumn.current;
+    const column = x === null ? [] : blocks.filter(block => block.left - 1.5 <= x && x <= block.right + 1.5);
+    const candidates = column.length ? column : blocks;
+    const item = candidates.find(block => block.top + block.height >= position) || candidates.at(-1);
+    if (item) translationRef.current?.scrollToBlock(item.block.id, Math.max(0, Math.min(1, (position - item.top) / Math.max(1, item.height))));
   }
-  function syncFromTranslation(id: string, ratio: number) { const block = pageBlocks.find(item => item.id === id); if (!block || !scrollRef.current) return; const bounds = displayBounds(block.bbox); const paperTop = (canvasRef.current?.parentElement?.getBoundingClientRect().top || scrollRef.current.getBoundingClientRect().top) - scrollRef.current.getBoundingClientRect().top + scrollRef.current.scrollTop; suppressUntil.current = performance.now() + 250; scrollRef.current.scrollTo({ top: paperTop + (parseFloat(bounds.top) + parseFloat(bounds.height) * ratio) / 100 * pageSize.height - scrollRef.current.clientHeight * .25, behavior: 'auto' }); }
+  function syncFromTranslation(id: string, ratio: number) {
+    const block = pageBlocks.find(item => item.id === id), root = scrollRef.current;
+    if (!block || !root || !pageSize.height) return;
+    const bounds = displayBounds(block.bbox);
+    const paperTop = (canvasRef.current?.parentElement?.getBoundingClientRect().top || root.getBoundingClientRect().top)
+      - root.getBoundingClientRect().top + root.scrollTop;
+    readingColumn.current = parseFloat(bounds.left) + parseFloat(bounds.width) / 2;
+    suppressUntil.current = performance.now() + 250;
+    root.scrollTo({ top: paperTop + (parseFloat(bounds.top) + parseFloat(bounds.height) * ratio) / 100 * pageSize.height
+      - root.clientHeight * .25, behavior: 'auto' });
+  }
+
+  function rememberPdfColumn(clientX: number) {
+    suppressUntil.current = 0;
+    if (view !== 'parallel') return;
+    const paper = canvasRef.current?.parentElement?.getBoundingClientRect();
+    if (paper?.width && paper.left <= clientX && clientX <= paper.right) {
+      readingColumn.current = (clientX - paper.left) * 100 / paper.width;
+    }
+  }
 
   function submitPage() {
     const value = Number(pageInput);
@@ -344,20 +372,25 @@ export default function PdfReader({ document, structure, page, onPage, selectedB
       {activeCitation && <div className="citation-picker" role="group" aria-label="选择组合引用中的条目"><span>{activeCitation.marker_text} · 选择条目</span>{citations?.references.filter(item => activeCitation.reference_ids.includes(item.id)).map(item => <button key={item.id} title={item.text} onClick={() => jumpReference(activeCitation, item.id)}>[{item.marker}] {item.text.replace(/^\[\d+\]\s*/, '').slice(0, 55)}…</button>)}<button onClick={() => setActiveCitation(null)}>关闭</button></div>}
       {view === 'parallel' && <div className="parallel-options"><label><input type="checkbox" checked={linked} onChange={event => setLinked(event.target.checked)} />按段落联动滚动</label><span>公式和代码保留原文；自动翻译请核验。</span></div>}
       {ocrBlocks.length > 0 && <div className="ocr-reader-bar"><span><ScanLine size={13} />本页含 OCR 文字 · {ocrBlocks.length} 个区域</span><button className={ocrSelection ? 'active' : ''} onClick={() => setOcrSelection(!ocrSelection)} aria-pressed={ocrSelection}><TextSelect size={13} />{ocrSelection ? '文字选择已开启' : '开启文字选择'}</button></div>}
-      <div className={`reader-split ${view === 'parallel' ? 'is-parallel' : ''}`}><div className="pdf-scroll" ref={scrollRef} onScroll={syncFromPdf} onWheel={() => { suppressUntil.current = 0; }} onPointerDown={() => { suppressUntil.current = 0; }}>
+      <div className={`reader-split ${view === 'parallel' ? 'is-parallel' : ''}`}><div className="pdf-scroll" ref={scrollRef} onScroll={syncFromPdf} onWheel={event => rememberPdfColumn(event.clientX)} onPointerDown={event => rememberPdfColumn(event.clientX)}>
         {view === 'figures' && structure?.parse_run_id ?
           <Suspense fallback={<p>正在加载图注…</p>}>
             <ScanFigurePanel key={`${document.id}-${structure.parse_run_id}-${page}`}
               documentId={document.id} runId={structure.parse_run_id} page={page}
-              onSource={(bbox, label) => { setRegionTarget({bbox, label}); setView('pdf'); }} />
+              onSource={(bbox, label, sourcePage) => {
+                setRegionTarget(null); setCitationFocus(null);
+                setPageRegionTarget({bbox, label, page: sourcePage, documentId: document.id, runId: structure?.parse_run_id});
+                if (sourcePage !== page) onPage(sourcePage);
+                setView('pdf');
+              }} />
           </Suspense> : view === 'tables' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载表格工具…</p>}><TablePanel title={document.title} onUse={onUseTable} documentId={document.id} runId={structure.parse_run_id} page={page} readOnly={readOnly} onSource={(bbox,label)=>{setRegionTarget({bbox,label});setView('pdf');}} /></Suspense> : view === 'formulas' && structure?.parse_run_id ? <Suspense fallback={<p>正在加载公式工具…</p>}><FormulaPanel documentId={document.id} runId={structure.parse_run_id} page={page} pageTotal={pageTotal} rotation={pageRecord?.rotation} modelConfigured={modelConfigured} readOnly={readOnly}
               onRegion={(bbox, sourcePage = page) => {
                 setRegionTarget(null); setCitationFocus(null);
-                setFormulaTarget({bbox, page: sourcePage, documentId: document.id, runId: structure?.parse_run_id});
+                setPageRegionTarget({bbox, label: '公式选区', page: sourcePage, documentId: document.id, runId: structure?.parse_run_id});
                 if (sourcePage !== page) onPage(sourcePage);
                 setView('pdf');
               }}
-              onSource={block => { setFormulaTarget(null); onPage(block.page); onSelectBlock(block); setView('pdf'); }} /></Suspense>  : view === 'references' ? <div className="reference-list">
+              onSource={block => { setPageRegionTarget(null); onPage(block.page); onSelectBlock(block); setView('pdf'); }} /></Suspense>  : view === 'references' ? <div className="reference-list">
           <h3>References 原文条目</h3>
           {structure?.parse_run_id && onOpenReferenceSearch && <ReferenceDiscovery documentId={document.id} runId={structure.parse_run_id} readOnly={readOnly} onOpen={onOpenReferenceSearch} />}
           <p>点击数字引用可双向跳转。扫描条目请对照原图。</p>

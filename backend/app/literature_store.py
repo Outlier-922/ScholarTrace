@@ -13,6 +13,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS literature_cache(key TEXT PRIMARY KEY,payload TEXT NOT NULL,expires_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_searches(id TEXT PRIMARY KEY,request TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_feedback(key TEXT PRIMARY KEY,value INTEGER NOT NULL,updated_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS literature_profiles(id TEXT PRIMARY KEY,name TEXT NOT NULL,name_key TEXT NOT NULL UNIQUE);
+        CREATE TABLE IF NOT EXISTS literature_profile_feedback(profile_id TEXT NOT NULL REFERENCES literature_profiles(id),key TEXT NOT NULL,value INTEGER NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(profile_id,key));
         CREATE TABLE IF NOT EXISTS literature_imports(document_id TEXT NOT NULL,key TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(document_id,key));
         CREATE TABLE IF NOT EXISTS literature_handoffs(id TEXT PRIMARY KEY,payload TEXT NOT NULL,created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS literature_batches(id TEXT PRIMARY KEY,revision INTEGER NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
@@ -67,14 +69,42 @@ def get_search(identity):
         return {'request':json.loads(row['request']),'result':{**json.loads(row['payload']),'search_id':identity}} if row else None
 
 
-def feedback():
+def profiles():
     with store.connection() as conn:
-        return {row['key']:row['value'] for row in conn.execute('SELECT key,value FROM literature_feedback')}
+        named = [dict(row) for row in conn.execute('SELECT id,name FROM literature_profiles ORDER BY name_key')]
+    return [{'id':'default', 'name':'默认偏好'}, *named]
 
 
-def set_feedback(key,value):
+def profile_exists(identity):
+    if identity == 'default':
+        return True
     with store.connection() as conn:
-        conn.execute('INSERT OR REPLACE INTO literature_feedback VALUES(?,?,?)',(key,value,store.now()))
+        return conn.execute('SELECT 1 FROM literature_profiles WHERE id=?', (identity,)).fetchone() is not None
+
+
+def save_profile(name):
+    key = name.casefold()
+    with store.connection() as conn:
+        conn.execute('INSERT OR IGNORE INTO literature_profiles VALUES(?,?,?)', (str(uuid.uuid4()), name, key))
+        return dict(conn.execute('SELECT id,name FROM literature_profiles WHERE name_key=?', (key,)).fetchone())
+
+
+def feedback(profile_id='default'):
+    with store.connection() as conn:
+        if profile_id == 'default':
+            rows = conn.execute('SELECT key,value FROM literature_feedback')
+        else:
+            rows = conn.execute('SELECT key,value FROM literature_profile_feedback WHERE profile_id=?', (profile_id,))
+        return {row['key']:row['value'] for row in rows}
+
+
+def set_feedback(key,value,profile_id='default'):
+    with store.connection() as conn:
+        if profile_id == 'default':
+            conn.execute('INSERT OR REPLACE INTO literature_feedback VALUES(?,?,?)',(key,value,store.now()))
+        else:
+            conn.execute('INSERT OR REPLACE INTO literature_profile_feedback VALUES(?,?,?,?)',
+                         (profile_id,key,value,store.now()))
 
 
 def bind_import(document,key,provenance):
@@ -177,12 +207,22 @@ def record_check(identity,result,error=None):
             item['last_success_at']=now
         check={'id':str(uuid.uuid4()),'subscription_id':identity,'created_at':now,'status':error or ('baseline' if baseline else 'updated' if additions else 'no_change'),
                'items':additions,'warnings':result.get('warnings',[]),'window':'最近更新的至多20条；非完整收割'}
+        if error is None:
+            check['window_items'] = result['items']
         item.update(last_checked_at=now,last_status=check['status'],next_check_at=(datetime.now(timezone.utc)+timedelta(hours=1 if error else 24)).isoformat())
         conn.execute('UPDATE literature_subscriptions SET payload=? WHERE id=?',(json.dumps(item,ensure_ascii=False),identity))
         conn.execute('INSERT INTO literature_checks VALUES(?,?,?,?)',(check['id'],identity,json.dumps(check,ensure_ascii=False),now))
-        return check
+        return {k: v for k, v in check.items() if k != 'window_items'}
 
 
 def checks(identity):
     with store.connection() as conn:
         return [json.loads(row['payload']) for row in conn.execute('SELECT payload FROM literature_checks WHERE subscription_id=? ORDER BY created_at DESC LIMIT 20',(identity,))]
+
+
+def latest_checked_window(identity):
+    with store.connection() as conn:
+        row = conn.execute("""SELECT payload FROM literature_checks
+                          WHERE subscription_id=? AND json_type(payload,'$.window_items')='array'
+                          ORDER BY created_at DESC LIMIT 1""", (identity,)).fetchone()
+        return json.loads(row['payload']) if row else None

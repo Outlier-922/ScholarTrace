@@ -36,7 +36,9 @@ def status():
 def error_code(error):
     if isinstance(error,httpx.HTTPStatusError):
         code=error.response.status_code
-        return 'authentication_failed' if code in {401,403} else 'rate_limited' if code==429 else 'provider_error'
+        if code in {401,403}:
+            return 'authentication_failed'
+        return {402:'payment_required',429:'rate_limited'}.get(code,'provider_error')
     if isinstance(error,httpx.TimeoutException):return 'timeout'
     if isinstance(error,httpx.HTTPError):return 'network_error'
     return 'invalid_output_or_configuration'

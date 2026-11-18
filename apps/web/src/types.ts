@@ -80,7 +80,7 @@ export interface Evidence extends SourceLocation {
   extraction?: string;
   confidence?: number;
   source_kind?: 'table_cell' | 'table_draft';
-  table_cell?: {source_id:string; revision_id:null; row:number; column:number; column_label:string; value:string; origin:string};
+  table_cell?: {source_id:string; revision_id:null; row:number; column:number; column_label:string; value:string; origin:string; col_span?:number};
 }
 
 export interface TableReference { source_id:string; revision_id:string|null; document_id:string; parse_run_id:string; title:string; page:number; row_indices:number[]|null; }

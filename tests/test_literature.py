@@ -155,7 +155,11 @@ def test_tracking_baseline_versions_nochange_and_failures_do_not_advance_success
     route=f"/api/literature/subscriptions/{item['id']}"
     baseline=client.post(route+'/check').json()
     assert baseline['status']=='baseline' and baseline['items'][0]['change']=='baseline'
+    assert 'window_items' not in baseline
     assert client.post(route+'/check').json()['status']=='no_change'
+    latest=client.get(route+'/checks').json()
+    assert latest['items'][0]['items']==[]
+    assert latest['recommendations']['items'][0]['identifier']=='2603.12345v1'
     version[0]='v2'
     updated=client.post(route+'/check').json()
     assert updated['status']=='updated' and updated['items'][0]['change']=='new_version'
@@ -163,7 +167,135 @@ def test_tracking_baseline_versions_nochange_and_failures_do_not_advance_success
     version[0]='fail'
     assert client.post(route+'/check').json()['status']=='failed'
     assert literature_store.subscription(item['id'])['last_success_at']==success
-    assert len(client.get(route+'/checks').json()['items'])==4
+    latest=client.get(route+'/checks').json()
+    assert len(latest['items'])==4
+    assert latest['recommendations']['checked_at']==success
+
+
+def test_tracking_ranks_local_topics_and_declared_code_and_reapplies_feedback(client,monkeypatch):
+    from backend.app import literature, literature_store
+    records = [
+        literature.parse_arxiv(atom('2605.10001v1','Graph Evidence Baseline'))['items'][0],
+        literature.parse_arxiv(atom('2605.10002v1','Graph Evidence Quantization Kernels').replace(
+            b'</summary>', b' Code is available at https://github.com/example/fixture.</summary>'
+        ))['items'][0],
+    ]
+    literature_store.save_records(records)
+
+    async def injected(*args, **kwargs):
+        return {'items': records}
+
+    monkeypatch.setattr(literature, 'search_provider', injected)
+    monkeypatch.setattr(literature.store, 'list_documents', lambda: [
+        {'status': 'ready', 'title': 'Quantization Kernels'},
+        {'status': 'failed', 'title': 'Graph Evidence Baseline'},
+    ])
+    topic = client.post('/api/literature/subscriptions', json={'query': 'graph evidence ' + uuid.uuid4().hex}).json()
+    path = f"/api/literature/subscriptions/{topic['id']}"
+    assert client.post(path+'/check').json()['status'] == 'baseline'
+    ranked = client.get(path+'/checks').json()['recommendations']['items']
+    preferred = ranked[0]
+    assert preferred['key'] == records[1]['key']
+    assert preferred['code_url'] == 'https://github.com/example/fixture'
+    assert any('Quantization Kernels' in reason for reason in preferred['reasons'])
+    try:
+        assert client.post('/api/literature/feedback', json={'key':preferred['key'],'value':-1}).status_code == 200
+        assert [item['key'] for item in client.get(path+'/checks').json()['recommendations']['items']] == [records[0]['key']]
+        complete = client.get(path+'/checks?include_disliked=true').json()
+        assert len(complete['items'][0]['items']) == 2
+        assert next(item for item in complete['recommendations']['items'] if item['key']==preferred['key'])['feedback'] == -1
+    finally:
+        literature_store.set_feedback(preferred['key'],0)
+
+
+@pytest.mark.parametrize('text', [
+    'Background resources https://github.com/example/fixture',
+    'Code is available at https://github.com.evil.test/example/fixture',
+    'Code is available at https://github.com/example/fixture/issues',
+])
+def test_code_signal_requires_an_explicit_repository_link(text):
+    from backend.app.literature import github_code_link
+    assert github_code_link(text) is None
+
+
+def test_tracking_code_verification_uses_public_registry_and_changes_ranking(client,monkeypatch):
+    from backend.app import literature, literature_code
+    github_names = ['missing-fixture-repo', 'licensed-fixture-repo']
+    records = []
+    for i,name in enumerate(github_names):
+        seed=atom(f'2607.1000{i}v1','Synthetic Graph Evidence')
+        records.extend(literature.parse_arxiv(seed.replace(
+            b'</summary>', f' Code is available at https://github.com/scholartrace-fixture/{name}.</summary>'.encode()
+        ))['items'])
+
+    async def topic_results(*args,**kwargs):
+        return {'items':records}
+
+    fetched = []
+    async def github_metadata(url):
+        fetched.append(url)
+        if url.endswith(github_names[0]):
+            return 'not_found', None
+        return 'public', {'full_name':'scholartrace-fixture/'+github_names[1],
+                          'private':False,'license':{'spdx_id':'MIT'}}
+
+    monkeypatch.setattr(literature,'search_provider',topic_results)
+    monkeypatch.setattr(literature_code,'_fetch',github_metadata)
+    topic=client.post('/api/literature/subscriptions',json={'query':'graph evidence '+uuid.uuid4().hex}).json()
+    route=f"/api/literature/subscriptions/{topic['id']}"
+    assert client.post(route+'/check').status_code == 200
+    assert client.get(route+'/checks').json()['recommendations']['items'][0]['key'] == records[0]['key']
+    checked=client.post(route+'/verify-code').json()
+    assert [record['status'] for record in checked['items']] == ['not_found','open_license_reported']
+    assert all(url.startswith('https://api.github.com/repos/scholartrace-fixture/') for url in fetched)
+    updated=client.get(route+'/checks').json()['recommendations']['items']
+    assert updated[0]['key'] == records[1]['key'] and updated[0]['code_verification']['license_id'] == 'MIT'
+    assert client.post(route+'/verify-code').json() == checked and len(fetched) == 2
+
+
+def test_tracking_feedback_is_independent_per_profile_and_preserves_default(client,monkeypatch):
+    from backend.app import literature,literature_store
+    record=literature.parse_arxiv(atom('2608.10001v1','Synthetic Graph Evidence'))['items'][0]
+    literature_store.save_records([record])
+
+    async def topic_results(*args,**kwargs):
+        return {'items':[record]}
+
+    monkeypatch.setattr(literature,'search_provider',topic_results)
+    topic=client.post('/api/literature/subscriptions',json={'query':'graph '+uuid.uuid4().hex}).json()
+    path=f"/api/literature/subscriptions/{topic['id']}"
+    assert client.post(path+'/check').status_code == 200
+    name='Synthetic profile '+uuid.uuid4().hex
+    left=client.post('/api/literature/profiles',json={'name':name}).json()
+    right=client.post('/api/literature/profiles',json={'name':name+' second'}).json()
+    assert client.post('/api/literature/profiles',json={'name':name.upper()}).json() == left
+    assert client.post('/api/literature/feedback',json={'key':record['key'],'value':-1,'profile_id':left['id']}).status_code==200
+    assert client.post('/api/literature/feedback',json={'key':record['key'],'value':1,'profile_id':right['id']}).status_code==200
+    assert client.get(path+'/checks',params={'profile_id':left['id']}).json()['recommendations']['items']==[]
+    right_rank=client.get(path+'/checks',params={'profile_id':right['id']}).json()['recommendations']['items']
+    assert right_rank[0]['feedback']==1
+    assert client.get(path+'/checks').json()['recommendations']['items'][0]['feedback']==0
+    assert client.get(path+'/checks',params={'profile_id':'unregistered'}).status_code==404
+
+
+def test_tracking_budget_window_can_show_results_outside_the_exact_topic(client,monkeypatch):
+    from backend.app import literature
+    papers = [
+        literature.parse_arxiv(atom('2609.12345v1','Low rank methods for adaptation of transport systems'))['items'][0],
+        literature.parse_arxiv(atom('2609.12346v1','Low-rank adaptation for language models'))['items'][0],
+        literature.parse_arxiv(atom('2609.12347v1','Dynamic LoRA for language models'))['items'][0],
+    ]
+    async def topic_results(*args,**kwargs):
+        return {'items':papers}
+
+    monkeypatch.setattr(literature,'search_provider',topic_results)
+    topic=client.post('/api/literature/subscriptions',json={'query':'low rank adaptation'}).json()
+    path=f"/api/literature/subscriptions/{topic['id']}"
+    assert client.post(path+'/check').status_code == 200
+    filtered=client.get(path+'/checks').json()['recommendations']['items']
+    assert [paper['key'] for paper in filtered] == [papers[1]['key'],papers[2]['key']]
+    full=client.get(path+'/checks',params={'include_disliked':True}).json()['recommendations']['items']
+    assert [paper['key'] for paper in full] == [papers[1]['key'],papers[2]['key'],papers[0]['key']]
 
 
 def test_feedback_reasons_use_real_shared_terms_not_invented_code_signals(client):

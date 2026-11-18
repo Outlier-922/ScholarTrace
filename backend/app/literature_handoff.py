@@ -59,16 +59,18 @@ def candidates(item):
     return [document for document in store.list_documents() if matches(item,document)][:20]
 
 
-def capture(context,item,document,origin):
+def capture(context,item,document,origin,*,identity_basis='user_confirmed'):
     from .reference_screening import handoff_summary
     screening=handoff_summary(context.search_id,context.key) if context.search_id else None
     key=[context.key,context.search_id,context.parent_task_id,document['id'],document['sha256'],document['parse_run_id']]
     key.append(hashlib.sha256(json.dumps(item,sort_keys=True,ensure_ascii=False).encode()).hexdigest())
     if screening:key.append(screening['snapshot_sha256'])
+    if identity_basis != 'user_confirmed':
+        key.append(identity_basis)
     payload={'id':str(uuid.uuid5(uuid.NAMESPACE_URL,json.dumps(key))), 'created_at':store.now(),
              'key':context.key,'search_id':context.search_id,'parent_task_id':context.parent_task_id,
              'metadata':item,'source':{name:document[name] for name in ('id','title','filename','sha256','parse_run_id')},
-             'origin':origin,'identity_basis':'user_confirmed','semantic_verified':False}
+             'origin':origin,'identity_basis':identity_basis,'semantic_verified':False}
     if screening:payload['screening']=screening
     return repo.save_handoff(payload)
 

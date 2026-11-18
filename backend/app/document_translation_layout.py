@@ -82,7 +82,7 @@ def visual_blocks(path, blocks):
 
 def is_prose(text):
     plain = ' '.join(text.split())
-    return (bool(re.search(r'[.!?。！？][\s\]\)"”’]*$', plain))
+    return (bool(re.search(r'[.!?:。！？：][\s\]\)"”’]*$', plain))
             and (len(re.findall(r'\b[A-Za-z]{2,}\b', plain)) >= 12
                  or len(re.findall(r'[\u4e00-\u9fff]', plain)) >= 24))
 
@@ -90,4 +90,5 @@ def is_prose(text):
 def is_display_math(text):
     plain = ' '.join(text.split())
     return (len(re.findall(r'\b[A-Za-z]{2,}\b', plain)) <= 5
-            and (re.search(r'[=∑∏√∂∇∈×]', plain) or re.fullmatch(r'[)\]]+[A-Za-z\W\d]{1,18}', plain)))
+            and (re.search(r'[=∑∏√∂∇∈×]|·\s*(?:min|max|log)\s*\(', plain)
+                 or re.fullmatch(r'[)\]]+[A-Za-z\W\d]{1,18}', plain)))

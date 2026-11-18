@@ -25,6 +25,9 @@ AUTHOR_KEY = re.compile(rf'(?m)^[ \t]*(?P<key>\[{AUTHOR_KEY_TEXT}\])(?=\s|$)')
 AUTHOR_CITATION = re.compile(rf'\[\s*{AUTHOR_KEY_TEXT}(?:\s*[,;]\s*{AUTHOR_KEY_TEXT})*\s*\]')
 REFERENCE_HEADING = re.compile(r'\s*(?:\d+\.?\s*)?(?:references|bibliography|参考文献)\s*', re.I)
 LETTERED_SECTION = re.compile(r'^[A-Z](?:\.\d+)*[.)]?[ \t]*\r?\n[ \t]*[A-Z]\w{2}')
+REFERENCE_YEAR = re.compile(r'(?<![\d.])(?:19|20)\d{2}[a-z]?\b(?!\.\d)', re.I)
+LEGACY_REFERENCE_YEAR = re.compile(r'\b(?:19|20)\d{2}\b')
+CHECKLIST_HEADING = re.compile(r'(?:(?:neurips|paper|reproducibility)\s+)?checklist', re.I)
 
 
 def norm(value):
@@ -59,10 +62,11 @@ def choose_sources(documents,selected_versions=None):
     return chosen
 
 
-def bibliography_units(structure):
+def bibliography_units(structure, *, repair_bibliography=True):
     """Join continuation fragments, retaining every source block; never alter the PDF."""
     blocks={block['id']:block for block in structure['blocks']}
     bounded=set();inside=False
+    year = REFERENCE_YEAR if repair_bibliography else LEGACY_REFERENCE_YEAR
     for block in structure['blocks']:
         text=re.sub(r'\s+',' ',block['text']).strip()
         if block['type']=='heading' and REFERENCE_HEADING.fullmatch(text):
@@ -71,6 +75,7 @@ def bibliography_units(structure):
         if inside and block['type']=='heading' and (
             re.match(r'(?i:appendix|附录|attention visualizations|acknowledg)|[A-Z](?:\.\d+)?\s+(?:Additional|Details|Experiments)',text)
             or LETTERED_SECTION.match(block['text'].strip())
+            or (repair_bibliography and CHECKLIST_HEADING.fullmatch(text))
         ):
             inside=False
         if inside:bounded.add(block['id'])
@@ -78,6 +83,24 @@ def bibliography_units(structure):
     for reference in structure['references']:
         block=blocks.get(reference['block_id'])
         if not block or reference['block_id'] not in bounded:continue
+        if reference.get('source_spans'):
+            anchors = []
+            for span in reference['source_spans']:
+                original = blocks.get(span['block_id'])
+                start, end = span['start'], span['end']
+                if (not original or original['id'] not in bounded or original['page'] != span['page']
+                        or original['text'][start:end] != span['text']):
+                    break
+                anchors.append({'block_id':original['id'], 'page':original['page'], 'bbox':original['bbox'],
+                                'text':original['text'], 'line_bbox':span['bbox'],
+                                'reference_span':{'start':start,'end':end},
+                                'extraction':'rapidocr', 'confidence':original.get('metadata', {}).get('confidence')})
+            if len(anchors) == len(reference['source_spans']):
+                current={'id':'bib_'+reference['id'],'marker':reference.get('marker'),'text':reference['text'],
+                         'reference_ids':[reference['id']],'sources':anchors}
+                items.append(current)
+                labelled = labelled or bool(reference.get('marker'))
+                continue
         recovered=(block['type']=='table_candidate' and (block.get('metadata') or {}).get('extraction')=='native_pdf'
                    and current is not None and current.get('marker') and not reference.get('marker')
                    and re.match(r'^(?:[A-Z]\.\s*){1,3}[A-Z][a-zA-ZÀ-Ž-]+',reference['text'].strip())
@@ -101,7 +124,7 @@ def bibliography_units(structure):
             author_start = bool(re.match(r'^[A-ZÀ-Ž][^\d]{2,100}(?:,|\band\b)', fragment)
                                 and not re.match(r'^(?:In |Proceedings|Advances|International|Conference|Journal|URL )', fragment))
             if marker or author_key or current is None or (
-                not labelled and author_start and re.search(r'\b(?:19|20)\d{2}\b', current['text'])
+                not labelled and author_start and year.search(current['text'])
             ):
                 suffix = f'_key_{left}' if author_key else ''
                 current = {'id': 'bib_'+reference['id']+suffix, 'marker': marker, 'text': '', 'reference_ids': [], 'sources': []}
@@ -120,6 +143,9 @@ def bibliography_units(structure):
                     start = raw.index(fragment, raw_start + left)
                     anchor['reference_span'] = {'start': start, 'end': start + len(fragment)}
                 current['sources'].append(anchor)
+    if repair_bibliography:
+        from .reference_author_year import repair_date_units
+        return repair_date_units(items)
     return items
 
 
@@ -439,7 +465,10 @@ def outline_payload(payload):
         structure=store.get_structure(source['document_id'],parse_run_id=source['parse_run_id'])
         if not structure:raise HTTPException(404,'图谱来源已删除')
         for block in structure['blocks']:
-            if not qa._is_reference(block) and re.search(r'\bfuture work\b|\bwe (?:plan|intend)\b|\bwill (?:investigate|explore)\b|\bremains? to be\b|未来工作|后续研究',re.sub(r'\s+',' ',block['text']),re.I):
+            text = re.sub(r'\s+', ' ', block['text'])
+            planned = re.search(r'\bfuture work\b|\bwe (?:plan|intend)\b|\bwill (?:investigate|explore)\b|\bremains? to be\b|未来工作|后续研究', text, re.I)
+            challenge = re.search(r'\b(?:challenges|questions) remain[.!]\s+(?:one|another) is to\b', text, re.I)
+            if (planned or challenge) and not qa._is_reference(block):
                 future.append({**source_evidence(source,block),'verification_status':'not_checked'})
     return {'graph_id':payload['id'],'mode':'evidence_outline','topic':payload['topic'],'sections':sections,'future_work':future[:20],
             'shared_ancestors':payload['metrics']['shared_ancestors'],'warnings':['这是来源摘录与写作提纲，不是模型生成的学术综述。元数据摘要不参与原文结论。','未来工作仅提取原文方向，尚未证明有无后续解决方案；检索候选不能证明创新或研究空白。']}

@@ -11,10 +11,10 @@ from fastapi import APIRouter,HTTPException,Query,Request
 from fastapi.responses import FileResponse,PlainTextResponse,Response
 from pydantic import BaseModel,ConfigDict,Field,field_validator,model_validator
 from starlette.concurrency import run_in_threadpool
-from . import formula_native,formula_ocr,formula_scan_layout,formula_store as repo,insights,model_client,source_scope,store
+from . import formula_continuation,formula_native,formula_ocr,formula_scan_layout,formula_typesetting,formula_store as repo,insights,model_client,source_scope,store
 
 router=APIRouter(prefix='/api',tags=['formula-latex'])
-VERSION='native-glyph-formula-v1'
+VERSION='native-glyph-formula-v3'
 _locks=weakref.WeakValueDictionary()
 _scan_slot=asyncio.Lock()
 COMMANDS=set(('frac dfrac tfrac sqrt sum prod int iint lim min max log ln exp sin cos tan softmax left right cdot times div odot pm mp le leq ge geq ne neq approx sim equiv in notin subset subseteq cup cap to mapsto infty partial nabla alpha beta gamma delta epsilon varepsilon theta lambda mu nu pi rho sigma tau phi varphi omega Gamma Delta Theta Lambda Sigma Phi Omega mathrm mathbf mathbb mathcal mathit operatorname text overline underline hat bar vec dot ddot tilde prime top perp forall exists lVert rVert vert Vert langle rangle lbrace rbrace quad qquad thinspace begin end aligned matrix pmatrix bmatrix cases limits nolimits displaystyle textstyle substack tag').split())
@@ -127,8 +127,14 @@ def _page_blocks(identity, page, parse_run_id):
     page_blocks = [b for b in structure['blocks'] if b['page'] == page and b['id'] not in refs]
     status = page_record['status'] if page_record['status'] in {'ocr_ready', 'needs_ocr'} else 'native'
     regions = formula_scan_layout.locate(page_blocks) if status == 'ocr_ready' else []
+    next_page = next((record for record in structure['pages'] if record['number'] == page + 1), None)
+    continuation = None
+    if status == 'native' and next_page and next_page['status'] not in {'ocr_ready', 'needs_ocr'}:
+        next_blocks = [b for b in structure['blocks'] if b['page'] == page + 1 and b['id'] not in refs]
+        continuation = formula_continuation.suggest(page_blocks, next_blocks)
     rows=[{**b,'formula_hint':b['type']=='formula_candidate' or bool(re.search(r'[=∑∏∫√∂∇≤≥∈]',b['text']))} for b in page_blocks if b['type'] not in {'title','heading','reference'}]
     return {'items':rows,'scan_ocr_ready':bool(formula_ocr.runtime_identity()),
+            'continuation_candidate': continuation,
             'scan_layout': {'status': status, 'items': regions},
             'notice':'标记只是公式候选线索，可能漏检或误检；可展开其他内容块补选。'}
 
@@ -165,7 +171,7 @@ async def create_source(body:SourceRequest,request:Request):
     if body.continuation is not None:
         if not any(p['number']==body.page+1 for p in structure['pages']):
             raise HTTPException(422,'当前解析版本中没有下一页。')
-        binding.extend(['next-page',body.continuation])
+        binding.extend(['next-page-glyphs-v3',body.continuation])
     key=hashlib.sha256(json.dumps(binding,sort_keys=True).encode()).hexdigest()
     async with _locks.setdefault('source:'+key,asyncio.Lock()):
         return await _save_source(request,body,doc,path,chosen,key)
@@ -175,12 +181,26 @@ async def _save_source(request,body,doc,path,chosen,key):
     for old in repo.history(doc['id'],'source'):
         if old['source_key']==key:return old
     continued_png=None
+    native_continuation=False
     if body.region is not None:
-        png=await render_region(request,doc,path,body.page,body.region)
-        result={'glyphs':[],'region':list(body.region),'crop_bbox':list(body.region),
-                'image_sha256':hashlib.sha256(png).hexdigest()}
         if body.continuation is not None:
-            continued_png=await render_region(request,doc,path,body.page+1,body.continuation)
+            try:
+                loop=asyncio.get_running_loop()
+                (first,png,first_layout),(second,continued_png,second_layout)=await loop.run_in_executor(
+                    request.app.state.parse_executor,formula_native.extract_continuation,
+                    str(path),doc['sha256'],body.page,body.region,body.continuation)
+            except (ValueError,IndexError,RuntimeError,OSError):
+                raise HTTPException(422,'两页公式选区读取失败，请检查原文件并重新框选。') from None
+            native_continuation=all(sum(not glyph['char'].isspace() for glyph in part) >= 3
+                                    and all('\ufffd' not in glyph['char'] for glyph in part)
+                                    for part in (first,second)) and len(first)+len(second)<=800
+        else:
+            png=await render_region(request,doc,path,body.page,body.region)
+        result={'glyphs':first+second if native_continuation else [],'region':list(body.region),'crop_bbox':list(body.region),
+                'image_sha256':hashlib.sha256(png).hexdigest()}
+        if continued_png is not None:
+            if native_continuation:
+                result['native_layout']=[first_layout,second_layout]
             result['continuation']={'page':body.page+1,'region':list(body.continuation),
                                     'image_sha256':hashlib.sha256(continued_png).hexdigest()}
     else:
@@ -193,7 +213,10 @@ async def _save_source(request,body,doc,path,chosen,key):
            'native_supported':len(result['glyphs'])>=4 and all(b['type']!='figure' and b.get('metadata',{}).get('extraction') not in {'ocr','rapidocr'} and not b.get('metadata',{}).get('ocr_performed') for b in chosen),
            'warnings':['请核对选区是否包含完整公式，并避开题注与编号。'] if body.region else ['文字模型只接收原生字形和坐标。','公式可能跨多个块，请补选分母和上下标。']}
     if continued_png is not None:
-        value['warnings']=['请对照两页原图录入或校订同一条公式。']
+        value['native_supported']=native_continuation
+        value['warnings']=['请对照两页原图核对同一条公式。' if native_continuation else '两页中有选区缺少可靠原生字形，可对照原图手工录入。']
+    if value['native_supported'] and (layout := value.get('native_layout')):
+        value['native_layout_recoverable'] = bool(formula_typesetting.recover(layout if isinstance(layout, list) else [layout]))
     images=[(repo.image_path(identity),png)]
     if continued_png is not None:
         images.append((repo.image_path(identity,continued=True),continued_png))
@@ -264,16 +287,48 @@ async def transcribe(identity:str):
     async with lock:
         value=require(identity,'source')
         if not value['native_supported']:raise HTTPException(422,'当前缺少可靠原生字形。扫描公式可框选区域后使用本地公式识别。')
-        for old in repo.history(value['document_id'],'formula'):
+        if value.get('continuation'):
+            await run_in_threadpool(_check_cross_page_crops,value)
+        history = repo.history(value['document_id'],'formula')
+        layout = value.get('native_layout')
+        if layout and (recovered := formula_typesetting.recover(layout if isinstance(layout, list) else [layout])):
+            try:
+                latex = validate_tex(recovered)
+            except ValueError:
+                pass
+            else:
+                existing = next((old for old in history if old['source_id'] == identity
+                                 and old['origin'] == 'native_layout_candidate' and old['latex'] == latex), None)
+                return existing or save_revision(value,latex,'native_layout_candidate','由原 PDF 字形基线与分数线恢复。请对照原页复核公式。')
+        for old in history:
             if old['source_id']==identity and old.get('prompt_version')==VERSION and old.get('model_identity')==model_client.identity():return old
-        proposed=await insights.generate(SYSTEM,{'blocks':[{'text':b['text'],'bbox':b['bbox']} for b in value['blocks']],'glyphs':value['glyphs']},1600)
+        system=SYSTEM
+        inputs={'blocks':[{'text':b['text'],'bbox':b['bbox']} for b in value['blocks']],'glyphs':value['glyphs']}
+        if layout and (isinstance(layout, list) or layout.get('horizontal_rules')):
+            inputs['native_layout']=layout
+            system+=('native_layout 给出选区内 PDF 点坐标：每组字形记录 x、右边界、基线、字号和字体。'
+                     'horizontal_rules 每项是 [左端x, y, 右端x]，用同横向范围、规则线上下的字形划分分子分母。'
+                     '同一主符号后的较小字形，基线较高为上标、基线较低为下标，按横向范围归属并保留标号顺序。'
+                     '注意 TeX 数学字体的字符编码：CMSY 大写书写体用 mathcal，MSBM 用 mathbb，CMBX 为粗体；'
+                     'CMEX 行间大定界符依实际编码：h 与 i 成对时是方括号，不是字母或下标。')
+        if continuation:=value.get('continuation'):
+            system+=('所选公式跨两页，glyphs中的page为来源页。先读第一页选区，再接下一页选区；'
+                     'page_parts的text是按PDF读取顺序简列的原生字形，分数和上下标应以坐标为准。'
+                     '如果上一页以等号或运算符结束、下一页承接表达式，应合成一条公式；'
+                     '原文被框入后续普通句子时不转写该句。承接不明或关键字形缺失才返回insufficient。')
+            inputs['page_parts']=[
+                {'page':number, 'region':region,
+                 'text':''.join(g['char'] for g in value['glyphs'] if g['page']==number)}
+                for number,region in ((value['page'],value['region']),(continuation['page'],continuation['region']))
+            ]
+        proposed=await insights.generate(system,inputs,1600)
         if proposed.get('status')!='candidate':raise HTTPException(422,'模型无法确定公式，未保存猜测；可对照原图手工录入。')
         try:
             latex=validate_tex(proposed.get('latex'))
             groups=[];group='';previous=None
             for glyph in value['glyphs']:
                 if glyph['char'].isdigit() or glyph['char']=='.' and group:
-                    if previous and (glyph['size']!=previous['size'] or abs(glyph['bbox'][1]-previous['bbox'][1])>.003):groups.append(group);group=''
+                    if previous and (glyph.get('page')!=previous.get('page') or glyph['size']!=previous['size'] or abs(glyph['bbox'][1]-previous['bbox'][1])>.003):groups.append(group);group=''
                     group+=glyph['char'];previous=glyph
                 else:
                     if group:groups.append(group)
@@ -285,6 +340,8 @@ async def transcribe(identity:str):
             if not isinstance(notes,list) or len(notes)>8 or any(not isinstance(n,str) or len(n)>300 for n in notes):raise ValueError('invalid_formula_notes')
         except ValueError:raise HTTPException(502,'公式源码、数字或输出检查失败，未保存候选。') from None
         require(identity,'source')
+        if value.get('continuation'):
+            await run_in_threadpool(_check_cross_page_crops,value)
         return save_revision(value,latex,'model_candidate','；'.join(notes) or '模型未报告不确定处，不代表公式正确。',extra={'prompt_version':VERSION,'model_identity':model_client.identity()})
 
 

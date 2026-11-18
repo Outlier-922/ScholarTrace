@@ -165,3 +165,18 @@ def test_table_caption_preserves_sparse_categorical_table():
         tables = extract_tables(document[0])
     assert len(tables) == 1
     assert tables[0]["metadata"]["structural_signals"]["nearby_table_caption"] is True
+
+
+def test_adjacent_figure_caption_excludes_sparse_grid_of_numeric_axis_labels():
+    rows = [[""] * 8 for _ in range(6)]
+    rows[0][0] = "50"
+    rows[2][0] = "0"
+    with _matrix_document(rows, caption="Figure 4: Accuracy is shown on the y-axis.") as document:
+        page = document[0]
+        assert len(extract_tables(page, filter_suspected_figures=False)) == 1
+        rejected = []
+        assert extract_tables(page, diagnostics=rejected) == []
+        assert rejected[0]["structural_signals"]["numeric_cell_ratio"] == 1
+        assert rejected[0]["structural_signals"]["figure_caption_mentions_axis"] is True
+        page.insert_text((140, 248), "Table 2: Sparse samples", fontsize=10)
+        assert len(extract_tables(page)) == 1

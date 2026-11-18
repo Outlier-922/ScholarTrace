@@ -471,6 +471,8 @@ from . import selection_translation
 app.include_router(selection_translation.router)
 from . import insights, insight_store
 app.include_router(insights.router)
+from . import future_sweep
+app.include_router(future_sweep.router)
 from . import claim_checks
 app.include_router(claim_checks.router)
 from . import evidence_repairs

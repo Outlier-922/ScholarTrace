@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter,HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel,ConfigDict,Field
-from . import graph,reading,reference_discovery,reference_identity,reference_purpose,literature_store as repo,store
+from . import graph,reading,reference_author_year,reference_discovery,reference_identity,reference_purpose,literature_store as repo,store
 
 router=APIRouter(prefix='/api/literature/searches',tags=['reference-screening'])
 
@@ -27,6 +27,37 @@ class ScreenRequest(BaseModel):
     goal:str=Field(min_length=4,max_length=800)
     decisions:list[Decision]=Field(min_length=1,max_length=20)
 
+
+def suggest_decisions(rows, items):
+    """Suggest exclusion only when every located use is explicitly background."""
+    suggestions = []
+    for item in items:
+        key = item['key']
+        candidates = [row for row in rows if key in row['candidate_keys']]
+        if len(candidates) != 1 or len(candidates[0]['candidate_keys']) != 1:
+            continue
+        row = candidates[0]
+        identity = row['identity_clues'][key]
+        if identity['identifier'] not in {'matched', 'unavailable'} or not (
+            identity['title_literal_match'] is True and identity['first_author_surname_match'] is True
+        ):
+            continue
+        links = row['body_citations']
+        known = [link for link in links if link['purpose_hint']]
+        if len({link['purpose_hint']['purpose'] for link in known}) != 1:
+            continue
+        link = known[0]
+        hint = link['purpose_hint']
+        background = hint['purpose'] == 'background' and len(known) == len(links)
+        suggestions.append({
+            'key': key, 'unit_id': row['unit']['id'], 'identity': 'uncertain',
+            'decision': 'exclude' if background else 'hold', 'purpose': hint['purpose'],
+            'reason': '当前定位到的正文引用均明确指向背景导读，建议先从下钻列表排除。' if background else '正文有可核查的用途线索，待确认身份及与本次研究目标的关系。',
+            'citation_id': link['id'], 'quote': hint['quote'],
+        })
+    return suggestions
+
+
 def context(identity):
     saved=repo.get_search(identity)
     if not saved:raise HTTPException(404,'检索快照不存在')
@@ -44,16 +75,66 @@ def context(identity):
     backlinks={r['id']:r['backlinks'] for r in numeric['references']}
     authors=graph.author_key_backlinks(structure,list(units.values()),trace['parse_run_id'])
     blocks={b['id']:b for b in structure['blocks']};rows=[];items={i['key']:i for i in value['items']}
+    legacy_units = None
     for row in trace['rows']:
         unit=units.get(row['unit']['id'])
+        if unit != row['unit']:
+            if legacy_units is None:
+                legacy_units = {u['id']:u for u in graph.bibliography_units(structure, repair_bibliography=False)}
+            unit = legacy_units.get(row['unit']['id'])
         if unit!=row['unit']:raise HTTPException(409,'书目原块与保存快照不一致')
+        clues = {key:reference_identity.clues(unit['text'],items[key]) for key in row['candidate_keys'] if key in items}
+        rows.append({**row, 'identity_clues': clues})
+    selected = [
+        (row['unit']['id'], clue['first_author_surname'])
+        for row in rows if len(row['candidate_keys']) == 1
+        for key, clue in row['identity_clues'].items()
+        if clue['title_literal_match'] is True and clue['first_author_surname_match'] is True
+    ]
+    dated = reference_author_year.backlinks(structure, list(units.values()), selected) if selected else {}
+    for row in rows:
+        unit = row['unit']
         links={l['id']:l for rid in unit['reference_ids'] for l in backlinks.get(rid,[])}
         links.update({l['id']:l for l in authors.get(unit['id'],[])})
-        rows.append({**row,'identity_clues':{key:reference_identity.clues(unit['text'],items[key]) for key in row['candidate_keys'] if key in items},
-            'body_citations':[{**l,'text':blocks[l['block_id']]['text'],'block_type':blocks[l['block_id']]['type'],
-                'purpose_hint':reference_purpose.suggest(blocks[l['block_id']],l)} for l in links.values()]})
+        links.update({l['id']:l for l in dated.get(unit['id'],[])})
+        row['body_citations'] = [{**l,'text':blocks[l['block_id']]['text'],'block_type':blocks[l['block_id']]['type'],
+            'purpose_hint':reference_purpose.suggest(blocks[l['block_id']],l)} for l in links.values()]
     return saved,{'document_id':doc['id'],'parse_run_id':trace['parse_run_id'],'rows':rows,'items':value['items'],
+        'suggestions':suggest_decisions(rows, value['items']),
+        'native_pages_complete':len(structure['pages']) == doc['page_count'] and all(
+            page['status'] in {'ready', 'empty'} for page in structure['pages']),
         'notice':'正文位置仅说明源论文在此引用，不证明候选身份正确或适合你的研究。没有解析到正文位置时保留待查。'}
+
+
+def apply_background_filter(result):
+    if not result['items']:
+        return result
+    identity = result['search_id']
+    saved, ctx = context(identity)
+    if not ctx['native_pages_complete']:
+        return result
+    suggestions = {d['key']: d for d in ctx['suggestions'] if d['decision'] == 'exclude'}
+    if not suggestions:
+        return result
+    rows = {row['unit']['id']: row for row in ctx['rows']}
+    exclusions = []
+    for item in result['items']:
+        decision = suggestions.get(item['key'])
+        if not decision:
+            continue
+        row = rows[decision['unit_id']]
+        exclusions.append({'key':item['key'], 'title':item['title'], 'unit_id':decision['unit_id'],
+            'identity_clues':row['identity_clues'][item['key']],
+            'anchors':[{key:link[key] for key in ('id','page','block_id','bbox','parse_run_id','marker_text')}
+                       | link['purpose_hint'] for link in row['body_citations']]})
+    filtered = copy.deepcopy(result)
+    filtered.pop('search_id')
+    filtered['items'] = [item for item in result['items'] if item['key'] not in suggestions]
+    filtered['background_filter'] = {'origin_search_id':identity, 'excluded':exclusions,
+        'basis':'explicit_background_citations', 'semantic_verified':False}
+    filtered['warnings'].append('仅将可定位的明确背景导读项移出本次下钻，仍可复查原句和完整候选。')
+    filtered['search_id'] = repo.save_search(saved['request'], filtered)
+    return filtered
 
 @router.get('/{identity}/screening-context')
 def detail(identity:str):return context(identity)[1]

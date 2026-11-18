@@ -24,7 +24,7 @@ TOOLS={
     'discovery':{'label':'查找候选文献','role':'文献发现','hint':'只查询明确条件；记录书目来源，核对入库后再作原文分析'},
     'evidence':{'label':'检索原文证据','role':'证据检索','hint':'每篇独立检索，保留页码和解析版本'},
     'hybrid_retrieval':{'label':'混合召回原文','role':'证据检索','hint':'使用已准备的语义索引与 BM25；缺少索引时明确降级'},
-    'table_qa':{'label':'表格原文问答','role':'表格核验','hint':'仅使用固定版本的表格内容块；不推测缺失单元格'},
+    'table_qa':{'label':'表格原文问答','role':'表格核验','hint':'固定版本内优先检索已重建的原生单元格，保留行列及原页坐标'},
     'translation':{'label':'翻译指定段落','role':'阅读翻译','hint':'仅翻译计划中明确选定的原文段落，保留数字、术语与原页'},
     'comparison':{'label':'构建多文对比','role':'分析核验','hint':'逐篇逐维保留证据，不跨条件排名'},
     'graph':{'label':'构建引用网络','role':'文献关系','hint':'只用本地书目与已缓存注册记录'},
@@ -293,10 +293,12 @@ async def retrieve(payload,supplement=False):
     question=payload.get('agent_query',payload['goal'])+(' '+ ' '.join(comparison.DIMENSIONS[key]['query'] for key in payload['dimensions']) if use_dimension_queries else '')
     retrieval={}
     kind = payload.get('retrieval_kind')
+    separate_table = 'table_qa' in (payload.get('agent') or {}).get('required_tools', [])
+    model_question = question if kind == 'table_qa' or separate_table and kind in workflow_agent.DOCUMENT_RETRIEVAL else payload['goal']
     if kind == 'table_qa':
         evidence,retrieval=await run_in_threadpool(workflow_agent.table_retrieve,question,documents)
     elif kind in workflow_agent.DOCUMENT_RETRIEVAL:
-        evidence = await run_in_threadpool(qa._retrieve_question, payload['goal'], documents, 12,
+        evidence = await run_in_threadpool(qa._retrieve_question, model_question, documents, 12,
                                            retrieval, initial_query=question, sparse_only=kind=='evidence')
         evidence, carried = workflow_agent.combine_evidence(payload['steps'], evidence, documents, 12)
         retrieval['carried_evidence_count'] = carried
@@ -314,9 +316,9 @@ async def retrieve(payload,supplement=False):
             'retrieval':retrieval,'answer':'原文候选证据，尚未形成语义核验后的回答。'}
     if payload['use_model'] and evidence:
         try:
-            requested = qa.answer_fields.requested(payload['goal'])
+            requested = qa.answer_fields.requested(model_question)
             options = {'documents': documents} if qa.answer_fields.SCOPED_FIELDS.intersection(requested) else {}
-            proposed = await qa._generate(payload['goal'], evidence, **options)
+            proposed = await qa._generate(model_question, evidence, **options)
         except (httpx.HTTPError,ValueError) as error:
             if not isinstance(error,ValueError) or str(error)!='model_budget_exhausted':
                 raise policy.ModelStepFailure(result,error) from error
@@ -347,8 +349,13 @@ async def execute(payload,step):
     if step['tool']=='graph':
         return await graph.execute_graph(graph.GraphRequest(document_ids=ids,parse_runs=runs,topic=payload['goal'][:200],resolve_metadata=False),step['artifact_id'])
     if step['tool']=='review':
-        source_graph_id=str(uuid.uuid5(uuid.UUID(payload['id']),'review-source-graph'))
-        source_graph=await graph.execute_graph(graph.GraphRequest(document_ids=ids,parse_runs=runs,topic=payload['goal'][:200],resolve_metadata=False),source_graph_id)
+        previous = next((item for item in reversed(payload['steps'])
+                         if item['tool'] == 'graph' and item['status'] == 'completed' and item.get('result')), None)
+        if previous:
+            source_graph = await run_in_threadpool(graph.graph, previous['result']['id'])
+        else:
+            source_graph_id = str(uuid.uuid5(uuid.UUID(payload['id']), 'review-source-graph'))
+            source_graph = await graph.execute_graph(graph.GraphRequest(document_ids=ids,parse_runs=runs,topic=payload['goal'][:200],resolve_metadata=False),source_graph_id)
         model_failures=[]
         if payload['use_model']:
             try:
@@ -383,6 +390,10 @@ def validate_result(payload,result):
     indexes={}
     for item in evidence:
         if sources.get(item['document_id'])!=item.get('parse_run_id'):raise ValueError('source_scope_changed')
+        if item.get('source_kind') == 'table_cell':
+            if not qa.table_qa.valid_evidence(item):
+                raise ValueError('anchor_mismatch')
+            continue
         key=(item['document_id'],item['parse_run_id'])
         if key not in indexes:
             structure=store.get_structure(item['document_id'],parse_run_id=item['parse_run_id'])

@@ -75,10 +75,10 @@ def _rows(spans: list[dict[str, Any]]) -> list[Row]:
             + _column_rows([part for part in spans if part["bbox"][0] >= gutter]))
 
 
-def _continues(start: Row, previous: Row, current: Row) -> bool:
+def _continues(start: Row, previous: Row, current: Row, next_start: Row | None = None) -> bool:
     left, top, _, bottom = current.bbox
     _, old_top, _, old_bottom = previous.bbox
-    indent = left - start.bbox[0]
+    indent = left - (next_start or start).bbox[0]
     if not -.008 <= indent <= .18:
         return False
     if current.page == previous.page:
@@ -98,13 +98,23 @@ def numbered_scan_entries(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     entries: list[tuple[str, list[Row]]] = []
     for page in sorted(by_page):
-        for row in _rows(by_page[page]):
+        rows_on_page = _rows(by_page[page])
+        first_numbered = next(((part, marker) for part in rows_on_page if (marker := _MARKER.match(part.text))), None)
+        for row in rows_on_page:
             marker = _MARKER.match(row.text)
             if marker and len(row.text[marker.end():].strip()) >= 3:
                 entries.append((str(int(marker[1])), [row]))
             elif entries:
-                rows = entries[-1][1]
-                if _continues(rows[0], rows[-1], row):
+                prior_marker, rows = entries[-1]
+                # The column can reset at the next page. A nearby sequential
+                # label witnesses the new hanging-indent origin.
+                next_start = None
+                if (row.page == rows[-1].page + 1 and first_numbered
+                        and int(first_numbered[1][1]) == int(prior_marker) + 1
+                        and row.bbox[1] < first_numbered[0].bbox[1]
+                        and row.bbox[3] >= first_numbered[0].bbox[1] - .12):
+                    next_start = first_numbered[0]
+                if _continues(rows[0], rows[-1], row, next_start):
                     rows.append(row)
 
     result = []

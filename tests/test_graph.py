@@ -74,6 +74,26 @@ def test_pagerank_uses_incoming_direction_deduplicates_pairs_and_handles_danglin
     assert pagerank(['A','B'],[])[0]=={'A':.5,'B':.5}
 
 
+def test_author_year_suffixes_split_cross_page_entries_and_stop_at_checklist():
+    from backend.app.graph import bibliography_units
+    specifications = [
+        ('heading', 'References', 3),
+        ('paragraph', 'Fake Author, Test Writer. A separately printed title. 2023a.', 3),
+        ('paragraph', 'Fake Author, Test Writer. Another result from a different experiment.', 3),
+        ('paragraph', 'arXiv preprint arXiv:2307.12345, 2023b.', 4),
+        ('heading', 'Checklist', 5),
+        ('paragraph', 'Synthetic validation roster.', 5),
+    ]
+    blocks = [{'id':str(i),'type':kind,'text':text,'page':page,'bbox':[.1,.2,.9,.25],
+               'metadata':{'extraction':'native_pdf'}} for i,(kind,text,page) in enumerate(specifications)]
+    references = [{'id':'r'+block['id'],'block_id':block['id'],'text':block['text']}
+                  for block in blocks if block['type']=='paragraph']
+    items = bibliography_units({'blocks':blocks,'references':references})
+    assert len(items) == 2
+    assert [p['page'] for p in items[1]['sources']] == [3,4]
+    assert '2307.12345' in items[1]['text'] and 'Checklist' not in items[1]['text']
+
+
 def test_local_roles_ignore_unresolved_edges_and_external_nodes():
     from backend.app import graph
 

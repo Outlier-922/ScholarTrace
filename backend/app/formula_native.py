@@ -110,23 +110,61 @@ def refine_scan_regions(path, expected_sha, page_number, suggestions):
     return result
 
 
-def extract(path, expected_sha, page_number, boxes):
+def extract(path, expected_sha, page_number, boxes, padding=8):
     check_pdf(path, expected_sha)
     with pymupdf.open(path) as pdf:
         page = _source_page(pdf, page_number)
         width, height = page.rect.width, page.rect.height
         rects = [pymupdf.Rect(b[0]*width,b[1]*height,b[2]*width,b[3]*height) for b in boxes]
         crop = pymupdf.Rect(min(r.x0 for r in rects),min(r.y0 for r in rects),max(r.x1 for r in rects),max(r.y1 for r in rects))
-        crop = (crop + (-8,-8,8,8)) & page.rect
+        crop = (crop + (-padding, -padding, padding, padding)) & page.rect
         glyphs = []
+        runs = []
         for block in page.get_text('rawdict', clip=crop).get('blocks', []):
             for line in block.get('lines', []):
                 for span in line.get('spans', []):
+                    letters = []
                     for char in span.get('chars', []):
                         b = char['bbox']; center = pymupdf.Point((b[0]+b[2])/2,(b[1]+b[3])/2)
                         if not any(center in r for r in rects): continue
                         glyphs.append({'char':char['c'],'bbox':[round(b[0]/width,6),round(b[1]/height,6),round(b[2]/width,6),round(b[3]/height,6)],'size':round(span['size'],2),'font':span['font'],'flags':span['flags']})
+                        letters.append(char)
                         if len(glyphs)>800: raise ValueError('formula_glyph_limit')
+                    if letters:
+                        x, baseline = letters[0]['origin']
+                        runs.append({'text': ''.join(c['c'] for c in letters), 'font': span['font'],
+                                     'size': round(span['size'], 2), 'x': round(x - crop.x0, 2),
+                                     'baseline': round(baseline - crop.y0, 2),
+                                     'right': round(max(c['bbox'][2] for c in letters) - crop.x0, 2)})
+        rules = []
+        for drawing in page.get_drawings():
+            for item in drawing['items']:
+                if item[0] != 'l':
+                    continue
+                a, b = item[1:]
+                left, right = sorted((a.x, b.x))
+                if (abs(a.y - b.y) <= .35 and right - left >= 3 and crop.y0 <= a.y <= crop.y1
+                        and crop.x0 <= left < right <= crop.x1):
+                    rules.append([round(left - crop.x0, 2), round(a.y - crop.y0, 2), round(right - crop.x0, 2)])
         scale = min(2.0,math.sqrt(3_000_000/max(1,crop.width*crop.height)))
         png = page.get_pixmap(matrix=pymupdf.Matrix(scale,scale),clip=crop,alpha=False).tobytes('png')
-        return {'glyphs':glyphs,'crop_bbox':[crop.x0/width,crop.y0/height,crop.x1/width,crop.y1/height],'image_sha256':hashlib.sha256(png).hexdigest()},png
+        return {'glyphs':glyphs,'native_layout':{'runs':runs, 'horizontal_rules':rules[:80]},
+                'crop_bbox':[crop.x0/width,crop.y0/height,crop.x1/width,crop.y1/height],
+                'image_sha256':hashlib.sha256(png).hexdigest()},png
+
+
+def extract_continuation(path, expected_sha, page_number, region, continuation):
+    parts = []
+    for number, bounds in ((page_number, region), (page_number + 1, continuation)):
+        try:
+            value, png = extract(path, expected_sha, number, [bounds], padding=0)
+            glyphs = [{**glyph, 'page': number} for glyph in value['glyphs']]
+            layout = value['native_layout']
+        except ValueError as error:
+            if str(error) != 'formula_glyph_limit':
+                raise
+            png = render_region(path, expected_sha, number, bounds)
+            glyphs = []
+            layout = {}
+        parts.append((glyphs, png, {'page':number, **layout}))
+    return parts

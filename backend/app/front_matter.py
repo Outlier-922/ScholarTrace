@@ -11,7 +11,7 @@ from .graph_identity import author_name, native, norm
 Block = dict[str, Any]
 NAME_WORD = r"[^\W\d_]+(?:['’\-][^\W\d_]+)*\.?"
 NAME_LINE = re.compile(rf"(?P<name>{NAME_WORD}(?: +{NAME_WORD}){{1,5}})(?P<marks>[ *∗†‡\d,]*)")
-EMAIL_LINE = re.compile(r"(?:[\w.+\-]+|\{[^{}\s]{1,180}\})@[\w.\-]+\.[a-z]{2,}", re.I)
+EMAIL_LINE = re.compile(r"(?:[\w.+\-]+|\{\s*[\w.+\-]+(?:\s*,\s*[\w.+\-]+)*\s*\})@[\w.\-]+\.[a-z]{2,}", re.I)
 INSTITUTION = re.compile(
     r"\b(?:universit\w*|institut\w*|department|labs?|laborator\w*|research|"
     r"college|academy|school|centre|center|brain|ai language)\b|大学|学院|实验室|研究[院所]", re.I,
@@ -24,6 +24,7 @@ NAME_PARTICLE = re.compile(r"(?<= )(?:da|de|del|di|dos|la|van|von) +")
 FOOTNOTE_CUE = re.compile(r"equal contribution|correspon(?:-\s*)?dence to:", re.I)
 FOOTNOTE_NUMBER = re.compile(r"(?<!\w)([1-9]\d?)(?=[A-Z])")
 FOOTNOTE_END = re.compile(r"\s+(?:work per(?:-|formed)|correspon(?:-\s*)?dence to:)", re.I)
+CONTRIBUTION_NOTE = re.compile(r"(?:^|,\s*)([∗*†‡])\s*(?=equal\b|co-first\b|corresponding\b)[^,]+", re.I)
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,74 @@ def _marked_names(block: Block) -> list[tuple[Line, list[str]]]:
             return []
         raw_offset += len(row) - end + 1
     return names
+
+
+def _shared_byline(header: list[Block]) -> list[dict[str, Any]]:
+    """A centered comma-separated byline followed by one printed institution."""
+    candidates = []
+    for block in header:
+        lines = _lines(block)
+        institutions = [line for line in lines if INSTITUTION.search(line.text)]
+        contacts = [line for line in lines if EMAIL_LINE.fullmatch(line.text)]
+        if len(lines) == 2 and len(institutions) == len(contacts) == 1 and lines[0] == institutions[0]:
+            candidates.append(institutions[0])
+    if len(candidates) != 1:
+        return []
+    institution = candidates[0]
+    # Read upward through the compact centered byline. A different column or
+    # intervening prose ends the group instead of supplying guessed authors.
+    preceding = sorted((b for b in header if b['bbox'][3] <= institution.block['bbox'][1] + .002),
+                       key=lambda b: b['bbox'][3], reverse=True)
+    following = institution.block['bbox']
+    rows = []
+    notes = {}
+    byline_found = False
+    for block in preceding:
+        left, top, right, bottom = block['bbox']
+        if not -.002 <= following[1] - bottom <= .027 or abs(left + right - following[0] - following[2]) > .09:
+            break
+        block_rows = []
+        note_block = False
+        for line in _lines(block):
+            if not byline_found and not block_rows and (matches := list(CONTRIBUTION_NOTE.finditer(line.text))):
+                for match in matches:
+                    start = match.start(1)
+                    notes[match[1].replace('*', '∗')] = line.source(start, match.end())
+                note_block = True
+                continue
+            # The delimiter includes whitespace so a marker list such as ∗,†
+            # stays attached to the preceding author's name.
+            parts = list(re.finditer(r'(?:^|,\s+)([^,]+(?:,\s*[∗*†‡])*)', line.text))
+            if not parts or line.text[parts[-1].end():].strip() not in {'', ','}:
+                block_rows = []
+                break
+            authors = []
+            consumed = 0
+            for part in parts:
+                if part.start() != consumed:
+                    break
+                match = NAME_LINE.fullmatch(part[1].strip())
+                if not match or not author_name(NAME_PARTICLE.sub('', match['name'])) or INSTITUTION.search(match['name']):
+                    break
+                start = part.start(1) + len(part[1]) - len(part[1].lstrip())
+                authors.append((line.source(start, start + len(match['name'])), match['marks']))
+                consumed = part.end()
+            if len(authors) != len(parts):
+                block_rows = []
+                break
+            block_rows.extend(authors)
+        if not block_rows and not note_block:
+            break
+        if block_rows:
+            rows.insert(0, block_rows)
+            byline_found = True
+        following = block['bbox']
+    if not rows or max(map(len, rows)) < 2:
+        return []
+    return [{'source': source,
+             'affiliations': [{'source': institution.source(), 'method': 'shared_byline'}],
+             'work_notes': [note for mark, note in notes.items() if mark in marks.replace('*', '∗')]}
+            for row in rows for source, marks in row]
 
 
 def _numbered_footnotes(blocks: list[Block]) -> dict[str, list[dict[str, Any]]]:
@@ -323,4 +392,6 @@ def extract(document: dict[str, Any], structure: dict[str, Any]) -> dict[str, An
     result['authors'] = sorted(authors.values(), key=lambda item: item['_order'])
     for item in result['authors']:
         item.pop('_order')
+    if not result['authors']:
+        result['authors'] = _shared_byline(header)
     return result

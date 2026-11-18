@@ -20,6 +20,8 @@ MAX_PATH_ITEMS = 30000
 MAX_PAGE_EDGE = 20000
 MAX_CELLS = 5000
 MAX_TEXT_CHARACTERS = 500000
+FIGURE_CAPTION = re.compile(r"^(?:Figure|Fig\.?|图)\s*\d+(?:[.-]\d+)?[a-z]?\s*[:.：．]\s*\S", re.I)
+AXIS_DESCRIPTION = re.compile(r"\b[xy][ -]a(?:xis|xes)\b|[横纵][坐]?轴", re.I)
 
 
 class TableExtractionError(RuntimeError):
@@ -81,15 +83,22 @@ def _structural_signals(rows: list[list[str | None]], names: list[str | None], p
     short = sum(len(re.sub(r"\s+", "", value)) <= 2 for value in filled)
     numerical = sum(bool(re.fullmatch(r"[-+−]?\d+(?:[.,]\d+)?(?:[eE][-+]?\d+)?%?", value)) for value in filled)
     figure_caption_on_page, nearby_table_caption = False, False
+    figure_caption_below, figure_caption_mentions_axis, table_caption_below = False, False, False
     table_rect = pymupdf.Rect(bbox)
     for block in page.get_text("blocks"):
         text = str(block[4]).strip()
-        if re.match(r"^(?:Figure|Fig\.?|图)\s*\d", text, re.I):
-            figure_caption_on_page = True
-        if not re.match(r"^(?:Table|表)\s*[\d一二三四五六七八九十]", text, re.I):
-            continue
         caption = pymupdf.Rect(block[:4])
         overlap = min(caption.x1, table_rect.x1) - max(caption.x0, table_rect.x0)
+        collinear = overlap > min(caption.width, table_rect.width) * .65
+        directly_below = collinear and -2 <= caption.y0 - table_rect.y1 <= 50
+        if re.match(r"^(?:Figure|Fig\.?|图)\s*\d", text, re.I):
+            figure_caption_on_page = True
+            if directly_below and FIGURE_CAPTION.match(text):
+                figure_caption_below = True
+                figure_caption_mentions_axis |= bool(AXIS_DESCRIPTION.search(text))
+        if not re.match(r"^(?:Table|表)\s*[\d一二三四五六七八九十]", text, re.I):
+            continue
+        table_caption_below |= directly_below
         vertical_gap = min(abs(caption.y1 - table_rect.y0), abs(caption.y0 - table_rect.y1))
         if overlap > min(caption.width, table_rect.width) * .25 and vertical_gap <= 80:
             nearby_table_caption = True
@@ -98,10 +107,19 @@ def _structural_signals(rows: list[list[str | None]], names: list[str | None], p
             "short_fragment_ratio": round(short / max(len(filled), 1), 4),
             "numeric_cell_ratio": round(numerical / max(len(filled), 1), 4),
             "figure_caption_on_page": figure_caption_on_page,
-            "nearby_table_caption": nearby_table_caption}
+            "nearby_table_caption": nearby_table_caption,
+            "figure_caption_below": figure_caption_below,
+            "figure_caption_mentions_axis": figure_caption_mentions_axis,
+            "table_caption_below": table_caption_below}
 
 
 def _suspected_graphic(signals: dict[str, Any]) -> bool:
+    # Plot ticks and legends can look like numerical or descriptive cells.
+    if signals["figure_caption_below"] and not signals["table_caption_below"]:
+        if signals["filled_ratio"] <= .17 and not signals["nearby_table_caption"]:
+            return True
+        if signals["filled_ratio"] <= .035 and signals["figure_caption_mentions_axis"]:
+            return True
     # No column-count cutoff: a well-populated 50-column table or a sparse
     # numeric matrix must survive. A caption-labelled sparse categorical table
     # can also be retained. Unlabelled sparse categorical matrices remain an

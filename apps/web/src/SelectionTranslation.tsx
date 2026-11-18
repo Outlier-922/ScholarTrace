@@ -19,6 +19,41 @@ function normalized(text: string) {
   return { value, positions };
 }
 
+function nearest(node: Node, selector: string) {
+  return (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>(selector);
+}
+
+function pointOffset(element: HTMLElement, node: Node, offset: number) {
+  const prefix = element.ownerDocument.createRange();
+  prefix.selectNodeContents(element);
+  prefix.setEnd(node, offset);
+  return Array.from(prefix.toString()).length;
+}
+
+function anchoredSelection(range: Range, blocks: DocumentBlock[]): Anchor | null | undefined {
+  const first = range.startContainer, last = range.endContainer;
+  const left = nearest(first, '[data-selection-block],[data-ocr-block]');
+  const right = nearest(last, '[data-selection-block],[data-ocr-block]');
+  if (!left && !right) return undefined;
+  if (!left || !right) return null;
+  const isStructured = left.dataset.selectionBlock !== undefined;
+  const key = isStructured ? left.dataset.selectionBlock : left.dataset.ocrBlock;
+  const block = blocks.find(item => item.id === key);
+  if (!block || (isStructured ? left !== right : right.dataset.ocrBlock !== key)) return null;
+  const chars = Array.from(block.text);
+  const leftStart = isStructured ? 0 : Number(left.dataset.ocrOffset);
+  const rightStart = isStructured ? 0 : Number(right.dataset.ocrOffset);
+  for (const [element, start] of [[left, leftStart], [right, rightStart]] as const) {
+    const rendered = element.textContent ?? '';
+    if (!Number.isSafeInteger(start) || start < 0 ||
+        chars.slice(start, start + Array.from(rendered).length).join('') !== rendered) return null;
+  }
+  const start = leftStart + pointOffset(left, first, range.startOffset);
+  const end = rightStart + pointOffset(right, last, range.endOffset);
+  if (start >= end || end > chars.length) return null;
+  return { block, start, end, text: chars.slice(start, end).join('') };
+}
+
 export default function SelectionTranslation({ root, documentId, runId, page, blocks, modelConfigured, readOnly, bounds, onSource }: Props) {
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const [selectionError, setSelectionError] = useState('');
@@ -40,24 +75,29 @@ export default function SelectionTranslation({ root, documentId, runId, page, bl
       const selected = normalized(selection.toString()).value.trim();
       if (!selected) return;
       resetRequest();
-      if (selected.length > 1000) { setAnchor(null); setSelectionError('一次最多选1000字符，请缩小选区。'); return; }
+      if (Array.from(selected).length > 1000) { setAnchor(null); setSelectionError('一次最多选1000字符，请缩小选区。'); return; }
       const range = selection.getRangeAt(0);
+      const located = anchoredSelection(range, blocks);
+      if (located !== undefined) {
+        setAnchor(located && located.end - located.start <= 1000 ? located : null);
+        setSelectionError(located === null ? '选区跨越不同原文块，或源坐标不可用。请在同一段落内重新划选。'
+          : located.end - located.start > 1000 ? '一次最多选1000字符，请缩小选区。' : '');
+        return;
+      }
       const paper = container!.querySelector('.pdf-paper');
+      const nativeLayer = paper?.querySelector('.textLayer');
+      if (!nativeLayer?.contains(range.startContainer) || !nativeLayer.contains(range.endContainer)) return;
       const rects = [...range.getClientRects()].filter(rect => rect.width > 0 && rect.height > 0);
       const paperBox = paper?.getBoundingClientRect();
-      const structured = (selection.anchorNode instanceof Element ? selection.anchorNode : selection.anchorNode?.parentElement)?.closest<HTMLElement>('[data-selection-block]');
       const candidates: Anchor[] = [];
       for (const block of blocks) {
-        if (structured && structured.dataset.selectionBlock !== block.id) continue;
-        if (!structured) {
-          if (!paperBox || !paper?.contains(selection.anchorNode) || !paper.contains(selection.focusNode) || !rects.length) continue;
-          const box = bounds(block.bbox);
-          const left = paperBox.left + parseFloat(box.left) / 100 * paperBox.width;
-          const top = paperBox.top + parseFloat(box.top) / 100 * paperBox.height;
-          const right = left + parseFloat(box.width) / 100 * paperBox.width;
-          const bottom = top + parseFloat(box.height) / 100 * paperBox.height;
-          if (!rects.every(rect => { const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2; return x >= left - 4 && x <= right + 4 && y >= top - 4 && y <= bottom + 4; })) continue;
-        }
+        if (!paperBox || !rects.length) continue;
+        const box = bounds(block.bbox);
+        const left = paperBox.left + parseFloat(box.left) / 100 * paperBox.width;
+        const top = paperBox.top + parseFloat(box.top) / 100 * paperBox.height;
+        const right = left + parseFloat(box.width) / 100 * paperBox.width;
+        const bottom = top + parseFloat(box.height) / 100 * paperBox.height;
+        if (!rects.every(rect => { const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2; return x >= left - 4 && x <= right + 4 && y >= top - 4 && y <= bottom + 4; })) continue;
         const source = normalized(block.text), index = source.value.indexOf(selected);
         if (index < 0 || source.value.indexOf(selected, index + 1) >= 0) continue;
         const start = source.positions[index], end = source.positions[index + selected.length - 1] + 1;

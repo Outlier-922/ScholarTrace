@@ -97,6 +97,68 @@ def test_legacy_vertical_group_retained_without_value_propagation():
     assert g['cells'][0]['row_span']==2 and g['cells'][2]['covered_by']==[0,0]
 
 
+def test_ruled_horizontal_span_uses_one_value_and_blocks_single_column_qa():
+    from backend.app.table_qa import cell_evidence
+
+    words = [
+        word('h1','Model',.1,.1), word('h2','Left',.4,.1), word('h3','Right',.75,.1),
+        word('model','A',.1,.3), word('cost','Shared',.60,.3,.13),
+    ]
+    cells = [
+        {'row':1,'column':1,'text':'Shared','bbox':[.35,.27,.95,.38]},
+        {'row':1,'column':2,'text':None,'bbox':None},
+    ]
+    grid = native.build(words,[.05,.05,.95,.5],.2,{'strategy':'lines','cells':cells},[.05,.35,.70,.95])
+    assert grid['rows'] == [['A','Shared',None]]
+    assert grid['cells'][1]['col_span'] == 2 and grid['cells'][1]['word_ids'] == ['cost']
+    assert grid['cells'][2]['covered_by'] == [0,1]
+    assert cell_evidence({'grid':grid}, {}, 0, 1) is None
+    assert cell_evidence({'grid':grid}, {}, 0, 2) is None
+    assert not grid['unassigned']
+    unproven = native.build(words,[.05,.05,.95,.5],.2,{'strategy':'text','cells':cells},[.05,.35,.70,.95])
+    assert unproven['unassigned'] and all('col_span' not in c for c in unproven['cells'])
+
+
+def test_ruled_parent_header_binds_children_even_when_parent_text_is_at_the_left():
+    words = [word('group','Group',.10,.075), word('a','Test',.14,.15), word('b','Other',.62,.15),
+             word('one','1',.25,.26), word('two','2',.75,.26)]
+    cells = [{'row':0,'column':0,'text':'Group','bbox':[.05,.05,.95,.12]},
+             {'row':0,'column':1,'text':None,'bbox':None}]
+    grid = native.build(words,[.05,.05,.95,.5],.2,{'strategy':'lines','cells':cells},[.05,.5,.95])
+    assert [c['label'] for c in grid['columns']] == ['Group / Test','Group / Other']
+    assert grid['header_spans'][0]['word_ids'] == ['group']
+
+
+def test_shared_native_metric_evidence_binds_only_the_parent_heading():
+    from backend.app import table_qa
+
+    words = [word('group','Training Cost',.61,.06,.1), word('model','Model',.08,.095),
+             word('a','Left',.48,.13), word('b','Right',.78,.13),
+             word('name','Base',.08,.25), word('cost','3.0 · 10^{18}',.61,.25,.12)]
+    grid = native.build(words,[.05,.05,.95,.45],.20,{},[.05,.39,.67,.95])
+    source = {'id':'fixed-source','document_id':'doc_test','parse_run_id':'run_test','page':8,'grid':grid}
+    assert table_qa.cell_evidence(source,{},0,1) is None
+    shared = table_qa.cell_evidence(source,{'title':'Original'},0,1,allow_shared=True)
+    assert shared['table_cell']['column_label'] == 'Training Cost'
+    assert shared['table_cell']['col_span'] == 2
+    assert shared['table_cell']['header_word_ids'] == ['group']
+    assert table_qa.cell_evidence(source,{},0,2,allow_shared=True) is None
+    assert table_qa.cell_evidence({**source,'algorithm':'scan-ocr-grid-v1'},{},0,1,allow_shared=True) is None
+
+
+def test_centered_borderless_cost_remains_one_value_across_both_children():
+    from backend.app.table_qa import cell_evidence
+
+    words = [word('group','Cost',.61,.06,.12), word('model','Model',.08,.095),
+             word('a','Left',.48,.13), word('b','Right',.78,.13),
+             word('name','A',.08,.25), word('cost','3.0 · 10^{18}',.61,.25,.12)]
+    grid = native.build(words,[.05,.05,.95,.45],.20,{},[.05,.39,.67,.95])
+    assert grid['rows'] == [['A','3.0 · 10^{18}',None]]
+    assert grid['header_spans'][0]['word_ids'] == ['group']
+    assert grid['cells'][1]['col_span'] == 2 and grid['cells'][2]['covered_by'] == [0,1]
+    assert cell_evidence({'grid':grid}, {}, 0, 1) is None
+
+
 def test_math_product_is_not_split_into_two_metric_cells():
     words=[word('h1','A',.1,.1),word('h2','B',.6,.1),word('b1','2.3',.40,.3,.04),word('dot','·',.46,.3,.015),word('power','10^{19}',.49,.3,.08)]
     g=native.build(words,[.05,.08,.95,.5],.2,{},[.05,.48,.95])

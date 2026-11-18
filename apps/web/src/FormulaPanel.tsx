@@ -11,11 +11,12 @@ interface ScanLayout {
   status: 'ocr_ready' | 'needs_ocr' | 'native';
   items: { bbox: Region; hint: string; label: string | null }[];
 }
-interface Source { id: string; page: number; blocks: DocumentBlock[]; native_supported: boolean; glyphs: unknown[]; warnings: string[]; region?: Region; continuation?: { page: number; region: Region }; }
+interface ContinuationCandidate { region: Region; next_region: Region; }
+interface Source { id: string; page: number; blocks: DocumentBlock[]; native_supported: boolean; native_layout_recoverable?: boolean; glyphs: unknown[]; warnings: string[]; region?: Region; continuation?: { page: number; region: Region }; }
 interface SourceHistory { id: string; created_at: string; block_ids: string[]; region?: Region; continuation_page?: number | null; }
 interface Revision { id: string; latex: string; origin: string; note: string; created_at: string; }
 interface Props { documentId: string; runId: string; page: number; pageTotal: number; rotation?: number; modelConfigured: boolean; readOnly: boolean; onSource: (block: DocumentBlock) => void; onRegion: (bbox: Region, page?: number) => void; }
-const originLabel = (origin: string) => origin === 'scan_ocr_candidate' ? '扫描公式候选' : origin === 'model_candidate' ? '原生字形候选' : '手工修订';
+const originLabel = (origin: string) => ({ scan_ocr_candidate: '扫描公式候选', model_candidate: '原生字形候选', native_layout_candidate: '原 PDF 排版恢复候选' }[origin] ?? '手工修订');
 const canSave = (box: Region | null) => !!box && box[2]-box[0] >= .015 && box[3]-box[1] >= .008;
 
 export default function FormulaPanel({ documentId, runId, page, pageTotal, rotation = 0, modelConfigured, readOnly, onSource, onRegion }: Props) {
@@ -26,6 +27,7 @@ export default function FormulaPanel({ documentId, runId, page, pageTotal, rotat
   const [scan, setScan] = useState(false);
   const [scanReady, setScanReady] = useState(false);
   const [layout, setLayout] = useState<ScanLayout | null>(null);
+  const [continuation, setContinuation] = useState<ContinuationCandidate | null>(null);
   const [region, setRegion] = useState<Region | null>(null);
   const [includeNext, setIncludeNext] = useState(false);
   const [nextRegion, setNextRegion] = useState<Region | null>(null);
@@ -35,13 +37,14 @@ export default function FormulaPanel({ documentId, runId, page, pageTotal, rotat
   const operation = useRef<AbortController | null>(null);
   useEffect(() => {
     operation.current?.abort(); const abort = new AbortController(); operation.current = abort;
-    setBlocks([]); setSources([]); setSource(null); setRevisions([]); setCurrent(null); setTex(''); setNote(''); setIds([]); setRegion(null); setIncludeNext(false); setNextRegion(null); setScan(false); setScanReady(false); setLayout(null); setError(''); setBusy(true);
+    setBlocks([]); setSources([]); setSource(null); setRevisions([]); setCurrent(null); setTex(''); setNote(''); setIds([]); setRegion(null); setIncludeNext(false); setNextRegion(null); setScan(false); setScanReady(false); setLayout(null); setContinuation(null); setError(''); setBusy(true);
     void Promise.all([
-      request<{ items: typeof blocks; scan_ocr_ready: boolean; scan_layout: ScanLayout }>(`/documents/${documentId}/formula-blocks?page=${page}&parse_run_id=${encodeURIComponent(runId)}`, { signal: abort.signal }),
+      request<{ items: typeof blocks; scan_ocr_ready: boolean; scan_layout: ScanLayout; continuation_candidate?: ContinuationCandidate | null }>(`/documents/${documentId}/formula-blocks?page=${page}&parse_run_id=${encodeURIComponent(runId)}`, { signal: abort.signal }),
       request<{ items: typeof sources }>(`/documents/${documentId}/formula-sources?page=${page}&parse_run_id=${encodeURIComponent(runId)}`, { signal: abort.signal }),
     ]).then(([b,s]) => {
       if (!abort.signal.aborted) {
         setBlocks(b.items); setSources(s.items); setScanReady(b.scan_ocr_ready); setLayout(b.scan_layout);
+        setContinuation(b.continuation_candidate ?? null);
       }
     }).catch(cause => { if (!abort.signal.aborted) setError(String(cause)); }).finally(() => { if (!abort.signal.aborted) setBusy(false); });
     return () => { abort.abort(); operation.current?.abort(); };
@@ -93,6 +96,10 @@ export default function FormulaPanel({ documentId, runId, page, pageTotal, rotat
       </button>)}
     </div> : <p>本页未定位到可推荐的公式区域，可手工框选。</p>)}
     {layout?.status === 'needs_ocr' && <p>重新解析并启用 OCR 可定位公式，也可直接手工框选。</p>}
+    {continuation && <button disabled={busy || readOnly} onClick={() => {
+      changeSelection(); setScan(true); setIncludeNext(true);
+      setRegion(continuation.region); setNextRegion(continuation.next_region);
+    }}>核对疑似跨页公式的两处选区</button>}
     {rotation !== 0 && <p>裁图和框选预览按未旋转方向显示。回到原页时，高亮会随页面旋转。</p>}
     <label><input type="checkbox" checked={scan} disabled={busy} onChange={e => { setScan(e.target.checked); changeSelection(); }} />框选原页公式</label>
     {scan && source ? <button disabled={busy || readOnly} onClick={() => {
@@ -136,9 +143,10 @@ export default function FormulaPanel({ documentId, runId, page, pageTotal, rotat
       </> : !source.continuation && <>
         <div>{source.blocks.map((b,i) => <button key={b.id} onClick={() => onSource(b)}>原页核对 · 源块{i+1}</button>)}</div>
         <small>已读取{source.glyphs.length}个原生字形。</small>
-        {source.native_supported ? <button disabled={busy || readOnly || !modelConfigured} onClick={() => void act('model')}>生成 LaTeX 候选</button>
+        {source.native_supported ? <button disabled={busy || readOnly || !(modelConfigured || source.native_layout_recoverable)} onClick={() => void act('model')}>生成 LaTeX 候选</button>
           : <small>可在原页框选公式做本地识别，也可手工录入。</small>}
       </>}
+      {source.continuation && source.native_supported && <button disabled={busy || readOnly || !(modelConfigured || source.native_layout_recoverable)} onClick={() => void act('model')}>用两页原生字形生成 LaTeX 候选</button>}
       {source.warnings.map(w => <p className="formula-note" key={w}>{w}</p>)}
       <label>LaTeX 源码<textarea aria-label="公式LaTeX源码" value={tex} maxLength={4000} disabled={busy || readOnly} onChange={e => setTex(e.target.value)} placeholder="不含$定界符的数学源码" /></label>{preview.error ? <p role="alert" className="research-error">预览未通过：{preview.error}</p> : preview.html && <div className="formula-preview" aria-label="公式渲染预览" dangerouslySetInnerHTML={{ __html: preview.html }} />}
       <p className="formula-note">能渲染不等于与原公式数学等价，请逐个核对符号、上下标和分数范围。</p><label>本次修订说明<input aria-label="公式修订说明" value={note} maxLength={500} disabled={busy || readOnly} onChange={e => setNote(e.target.value)} /></label><button disabled={busy || readOnly || !tex.trim() || !note.trim() || !!preview.error} onClick={() => void act('save')}>另存手工修订（保留旧稿）</button>

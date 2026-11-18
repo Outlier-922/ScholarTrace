@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import re
 import time
 import uuid
 from typing import Literal
@@ -30,12 +31,12 @@ DOCUMENT_RETRIEVAL = {'evidence', 'hybrid_retrieval'}
 DESCRIPTIONS = {
     'evidence': '按 query 进行 BM25 原文检索，可改写查询补查；返回固定版本的页码、内容块、原文和缺失文献。启用生成时沿用结论与数字核对。',
     'hybrid_retrieval': '按 query 进行 BM25、已准备语义索引与 RRF 混合召回，适合词项检索遗漏或跨语言问题；索引缺失会明确报告 BM25 降级，不自动下载模型或创建索引。',
-    'table_qa': '按 query 检索固定版本的原生表格内容块并问答；只返回表格原文，未解析到表格时返回空缺，不用正文冒充表格，不推测单元格关系。启用生成时仍进行结论与数字核对。',
+    'table_qa': '按 query 检索固定版本的原生表格，优先采用已保存的细粒度表格单元格，并返回行、列和原页。指定表号时限制到对应页面；缺证据时留空。启用生成时仍检查来源和数字。',
     'translation': '翻译用户事先选定的段落或处理已确认全文计划。返回原文、译文状态、页码和术语数字检查；不能扩大范围或自行确认全文批次。未启用生成时保留原文。',
     'discovery': '使用用户已确认的查询、提供方和联网方式发现候选文献；受独立书目预算限制。返回书目快照及缓存/失败状态，书目不能当作全文证据，也不自动导入全文。',
     'comparison': '对固定来源和预选维度逐文比较；返回逐维证据与缺失字段，不跨不同实验条件排名；生成关闭时仅候选原文。',
     'graph': '构建固定文献及缓存书目的引用网络，返回节点、边和局部拓扑候选；不联网解析，不将引用关系当作因果或学术结论。',
-    'review': '对固定来源构图并生成带短引文核对的综述；模型关闭、失败或预算不足时仅返回证据提纲和降级状态。',
+    'review': '复用本任务已完成的引用图谱，缺少时才对固定来源构图。生成带逐字引文的综述；模型关闭、失败或预算不足时返回证据提纲与降级状态。',
     'writing': '围绕用户目标创建可编辑研究计划及来源列表；属于计划框架，不能声称实验已完成。',
     'plot': '按用户已确认的 CSV 快照与统计规则绘图，返回图和复现记录；不修改数据、不推测未知统计规则，图不能证明实验真实或因果。',
     'diagram': '根据当前真实执行轨迹生成流程设计草图及复现文件；不是实验结论。',
@@ -66,10 +67,18 @@ def initialize(task, tools, blocked, manual):
                            'depends_on': [], 'status': 'waiting', 'attempts': 0,
                            'result': None, 'artifact_id': str(uuid.uuid5(uuid.UUID(task['id']), name))}
     templates = {key: value for key, value in templates.items() if value['tool'] not in blocked}
+    clauses = re.split(r'[，,。；;\n]', task['goal'], flags=re.I)
+    requested = [step['tool'] for step in original]
+    for name, pattern in (('hybrid_retrieval', r'混合召回|混合检索|hybrid (?:retrieval|search)'),
+                          ('table_qa', r'表格问答|表格核对|表格原文|table (?:qa|question|evidence)')):
+        if name in templates and any(re.search(pattern, part, re.I) and not re.search(
+            r'不要|无需|不需要|别做|do not|without|skip', part, re.I
+        ) for part in clauses):
+            requested.append(name)
     task.update(planner_mode='model_tool_loop', engine='bounded-model-tool-loop-v1',
                 planner_model_calls=0, steps=[], agent={
                     'templates': templates, 'fallback_steps': original,
-                    'required_tools': list(dict.fromkeys(step['tool'] for step in original)),
+                    'required_tools': list(dict.fromkeys(requested)),
                     'decisions': [], 'model_identity': model_client.identity(), 'stopped': False})
     task['translation_only'] = False
     task['warnings'].append('模型逐轮选工具；调度与生成共用模型预算。调度说明不作为科研结论。')
@@ -114,25 +123,45 @@ def observations(task):
     return values
 
 
+def missing_tools(task):
+    completed = [step for step in task['steps'] if step['status'] == 'completed']
+    tools = {step['tool'] for step in completed}
+    if 'hybrid_retrieval' in tools:
+        tools.add('evidence')
+    missing = set(task['agent']['required_tools']) - tools
+    done = {step.get('agent_template', step['id']) for step in completed}
+    if any(step['tool'] == 'translation' and step['id'] not in done for step in task['agent']['fallback_steps']):
+        missing.add('translation')
+    return missing
+
+
+def finish(task):
+    task['agent']['stopped'] = True
+    if missing := missing_tools(task):
+        task['gaps'].append('自主循环停止时尚未完成的请求工具：' + '、'.join(sorted(missing)))
+    latest = next((step.get('result') for step in reversed(task['steps'])
+                   if step['tool'] in DOCUMENT_RETRIEVAL and step['status'] == 'completed'), None)
+    if latest and latest.get('uncovered_documents'):
+        task['gaps'].append('最后一轮原文检索仍有选定文献未命中。')
+    if latest and latest.get('missing_information'):
+        task['gaps'].append('最后一轮回答仍有待填写或核验的字段，见该步骤的覆盖情况。')
+    task['status'] = 'completed_with_gaps' if task['gaps'] else 'completed'
+
+
+def stop_at_budget(task):
+    if missing_tools(task):
+        task['status'] = 'budget_exhausted'
+    else:
+        finish(task)
+        repo.event(task, '按预算完成自主任务', '已执行所有请求工具，预算边界结束，未追加调度请求。')
+
+
 def accept(task, raw):
     decision = Decision.model_validate(raw)
     if decision.action == 'finish':
         if decision.tool is not None or decision.arguments:
             raise ValueError('invalid_finish')
-        task['agent']['stopped'] = True
-        completed = {step['tool'] for step in task['steps'] if step['status'] == 'completed'}
-        if 'hybrid_retrieval' in completed:
-            completed.add('evidence')
-        missing = set(task['agent']['required_tools']) - completed
-        if missing:
-            task['gaps'].append('自主循环停止时尚未完成的请求工具：' + '、'.join(sorted(missing)))
-        latest = next((step.get('result') for step in reversed(task['steps'])
-                       if step['tool'] in DOCUMENT_RETRIEVAL and step['status'] == 'completed'), None)
-        if latest and latest.get('uncovered_documents'):
-            task['gaps'].append('最后一轮原文检索仍有选定文献未命中。')
-        if latest and latest.get('missing_information'):
-            task['gaps'].append('最后一轮回答仍有待填写或核验的字段，见该步骤的覆盖情况。')
-        task['status'] = 'completed_with_gaps' if task['gaps'] else 'completed'
+        finish(task)
     else:
         if decision.tool not in {item['name'] for item in catalog(task)}:
             raise ValueError('tool_not_available')
@@ -182,7 +211,7 @@ async def advance(identity):
         return
     remaining = task['budgets']['max_active_seconds'] - task['usage']['active_seconds']
     if remaining <= 0 or task['usage']['tool_calls'] >= task['budgets']['max_tool_calls']:
-        repo.mutate(identity, lambda value: value.update(status='budget_exhausted'))
+        repo.mutate(identity, stop_at_budget)
         return
     budget = model_client.CallBudget(task['budgets']['max_model_calls'], task['budgets']['max_output_tokens'], **task['usage']['model'])
     if budget.calls < budget.max_calls and budget.reserved_output_tokens + 600 <= budget.max_output_tokens:
@@ -219,11 +248,45 @@ async def advance(identity):
 
 
 def table_retrieve(question, documents):
-    from . import qa, table_qa
-    sources = [source for source in qa._collect_sources(documents) if source.get('block_type') == 'table']
-    evidence = table_qa.rank(question, sources, qa._tokens, 12)
-    return evidence, {'mode': 'table_blocks_bm25', 'used': False,
-                      'reason': '固定版本的原文内容块；表格块不代表单元格结构已核验。'}
+    from . import qa, table_qa, table_refine_store
+
+    number = re.search(r'(?:\btable\s*|表\s*)(\d+[a-z]?)(?![a-z0-9])', question, re.I)
+    original = qa._collect_sources(documents)
+    captions = {}
+    if number:
+        pattern = re.compile(r'^\s*(?:table\s*|表\s*)' + re.escape(number[1]) + r'\s*[:：.．]', re.I)
+        for item in original:
+            if item.get('block_type') == 'table_caption' and pattern.match(item['text']):
+                captions.setdefault(item['document_id'], []).append(item)
+    def on_page(item):
+        return not number or any(c['page'] == item['page'] for c in captions.get(item['document_id'], []))
+
+    selected = []
+    for document in documents:
+        seen = set()
+        for candidate in table_refine_store.history(document['id'], 'source')[:18]:
+            if candidate['parse_run_id'] != document['_retrieval_run'] or not on_page(candidate):
+                continue
+            if table_qa.is_scan(candidate) or not candidate['grid']['rows']:
+                continue
+            box = candidate['bbox']
+            if number and not any(c['page'] == candidate['page'] and -.008 <= box[1] - c['bbox'][3] <= .10
+                                  for c in captions.get(document['id'], [])):
+                continue
+            key = (candidate['page'], *(round(value, 2) for value in box))
+            if key not in seen:
+                seen.add(key)
+                selected.append((candidate, None, None))
+            if len(seen) == 3:
+                break
+    cells, _, details = table_qa.retrieve(question, selected, documents, 12, qa._tokens)
+    if cells:
+        return cells, {**details, 'requested_table':number[1] if number else None,
+                       'reason':'已保存的同版本原生单元格，保留行、列和值的原页位置。'}
+    blocks = [source for source in original if source.get('block_type') == 'table' and on_page(source)]
+    evidence = table_qa.rank(question, blocks, qa._tokens, 12)
+    return evidence, {'mode':'table_blocks_bm25', 'used':False, 'requested_table':number[1] if number else None,
+                      'reason':'未匹配到已重建的同版本单元格；仅返回符合范围的原文表格块。'}
 
 
 def combine_evidence(steps, current, documents, limit):

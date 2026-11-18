@@ -55,7 +55,7 @@ def options(identity:str,page:int=Query(ge=1),parse_run_id:str=Query(min_length=
         meta=b.get('metadata',{});box=list(b['bbox']);header=meta.get('header',{})
         if header.get('external') and header.get('bbox'):
             h=header['bbox'];box=[min(box[0],h[0]),min(box[1],h[1]),max(box[2],h[2]),max(box[3],h[3])];end=h[3]
-        else:end=max((c['bbox'][3] for c in meta.get('cells',[]) if c['row']==0 and c.get('bbox')),default=box[1]+(box[3]-box[1])*.15)
+        else:end=native.header_boundary(meta,box)
         result.append({'block_id':b['id'],'bbox':box,'header_bottom':end,'row_count':meta.get('row_count'),'col_count':meta.get('col_count')})
     return {'items':result,'notice':'原候选可能合并了多行/多列；也可手动输入同页区域及表头下界。'}
 
@@ -133,7 +133,7 @@ def revise(identity:str,body:RevisionRequest):
     if not grid['rows'] or len(rows)!=len(grid['rows']) or len(body.labels)!=len(columns) or any(len(r)!=len(columns) for r in rows) or any(not s.strip() or len(s)>250 for s in body.labels):raise HTTPException(422,'修订须保留原候选行列尺寸，列名不得为空。')
     if sum(len(v or '') for r in rows for v in r)>100000 or any(len(v or '')>1000 for r in rows for v in r):raise HTTPException(422,'单元格或表格文字过长。')
     for c in grid['cells']:
-        if c['covered_by'] and rows[c['row']][c['column']] is not None:raise HTTPException(422,'跨行覆盖的位置须保留为空，不能自动传播数值。')
+        if c['covered_by'] and rows[c['row']][c['column']] is not None:raise HTTPException(422,'合并单元格覆盖的位置须保留为空。')
     if body.parent_id and require(body.parent_id,'revision')['source_id']!=identity:raise HTTPException(422,'父版本不是当前来源。')
     value={k:source[k] for k in ('document_id','sha256','parse_run_id','page','page_geometry','anchor','bbox')}
     changed=[{'row':i,'column':j,'before':grid['rows'][i][j],'after':v} for i,row in enumerate(rows) for j,v in enumerate(row) if v!=grid['rows'][i][j]]

@@ -1,4 +1,4 @@
-from backend.app import parser, reading
+from backend.app import graph, parser, reading
 
 
 def scan(identity, page, *lines, kind="paragraph", level=None):
@@ -70,3 +70,17 @@ def test_two_columns_keep_separate_reference_runs_in_reading_order():
     a, b = parser._references(blocks)
     assert a["marker"] == "7" and "entry seven" in a["text"] and "entry eight" not in a["text"]
     assert b["marker"] == "8" and "entry eight" in b["text"] and "entry seven" not in b["text"]
+
+
+def test_scan_reference_survives_page_and_column_reset_into_graph():
+    blocks = [
+        scan("heading",1,("References",[.11,.10,.23,.116]),kind="heading",level=1),
+        scan("left",1,("[3] First entry in left column.",[.11,.20,.4,.22])),
+        scan("right",1,("[4] A fictional reference title",[.55,.85,.86,.87])),
+        scan("top",2,("followed by the journal and date, 2020.",[.15,.10,.47,.12])),
+        scan("next",2,("[5] Another fictional entry, 2021.",[.11,.15,.42,.17])),
+    ]
+    references = [{**ref,'id':f"ref-{ref['marker']}"} for ref in parser._references(blocks)]
+    unit = next(item for item in graph.bibliography_units({'blocks':blocks,'references':references}) if item['marker']=='4')
+    assert [(part['page'],part['block_id']) for part in unit['sources']] == [(1,'right'),(2,'top')]
+    assert unit['sources'][1]['reference_span'] == {'start':0,'end':len(blocks[3]['text'])}
